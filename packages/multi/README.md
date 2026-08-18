@@ -9,9 +9,12 @@ Host-only infrastructure shared by multi-user domain plugins. Infrastructure pac
 | [`@deepseek-ai/dsh-elasticsearch`](elasticsearch/README.md) | `ctx.elasticsearch` | Elasticsearch client lifecycle and callback-scoped operations |
 | [`@deepseek-ai/dsh-mysql`](mysql/README.md) | `ctx.mysql` | MySQL pool lifecycle and callback-scoped connection leases |
 | [`@deepseek-ai/dsh-redis`](redis/README.md) | `ctx.redis` | Redis client lifecycle and callback-scoped shared-client operations |
+| [`@deepseek-ai/dsh-kafka`](kafka/README.md) | `ctx.kafka` | Kafka broker lifecycle, metadata health, publishing, and subscriptions |
 
 The [Elasticsearch infrastructure reference](../../docs/infrastructure/dsh-elasticsearch.md) maps current ownership and links the proposed projection, isolation, and consistency design.
 
 The [MySQL connection-service decision](../../.agents/notes/implemented/architecture/2026-08-18-mysql-connection-service.md) records the current lifecycle and deliberately deferred database capabilities.
 
 The [dsh-redis infrastructure reference](../../docs/infrastructure/dsh-redis.md) defines the Redis data, authorization, isolation, and deployment rules.
+
+Domain plugins retain ownership of authorization, event schemas, topics, partition keys, and durable state. Infrastructure connectivity does not grant access to tenant data.

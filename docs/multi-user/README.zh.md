@@ -60,6 +60,7 @@ Session 执行环境为模型控制的代码提供更强的安全边界。本地
 
 - [身份与访问控制](identity-and-access.md)定义 principal、认证、授权、管理角色、session 所有权和传输要求。
 - [数据与运行时隔离](data-and-runtime-isolation.md)定义租户感知的持久化、事件日志与审计日志、settings、credentials、资源文件、事件流、缓存和执行隔离。
+- [流式分块保留策略](stream-chunk-retention.md)定义流式响应分块的有界存储与清理规则。
 - [交付计划](delivery-plan.md)安排工作顺序，定义兼容性立场和负向测试覆盖，并列出实现前必须确定的决策。
 - 提议的 `dsh-mysql` 基础设施服务由 identity、会话持久化、settings、audit 和其他关系数据领域共用。
 - [多用户控制平面与数据平面 Agent Note](../../.agents/notes/proposed/architecture/2026-08-18-multi-user-control-and-data-planes.md)记录架构取舍和备选方案。

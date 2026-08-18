@@ -86,5 +86,13 @@ describe('Typert-backed Cordis catalog', () => {
       CORDIS_CATALOG_POLICY,
     )
     expect(persistenceRegion).toContain('### `ctx.mysql` — `Mysql`')
+
+    const kafkaRegion = renderPageRegion(
+      'kafka.md',
+      [...model.services].filter(service => SERVICE_PAGE[service.key] === 'kafka.md'),
+      [...model.events].filter(event => EVENT_SCOPE_PAGE[event.scope] === 'kafka.md'),
+      CORDIS_CATALOG_POLICY,
+    )
+    expect(kafkaRegion).toContain('### `ctx.kafka` — `KafkaService`')
   })
 })

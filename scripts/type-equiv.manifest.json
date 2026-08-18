@@ -1651,6 +1651,21 @@
       "source": "packages/runtime-diagnostics/invariants/src/index.ts"
     },
     {
+      "doc": "docs/subsystems/kafka.md",
+      "symbol": "KafkaHealth",
+      "source": "packages/multi/kafka/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/kafka.md",
+      "symbol": "KafkaPublishMessage",
+      "source": "packages/multi/kafka/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/kafka.md",
+      "symbol": "KafkaSubscribeRequest",
+      "source": "packages/multi/kafka/src/index.ts"
+    },
+    {
       "doc": "docs/subsystems/web-server.md",
       "symbol": "WebRouteKind",
       "source": "packages/host/webserver/src/index.ts"

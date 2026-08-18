@@ -269,6 +269,70 @@ describe('sandbox context façade — inject gate on services', () => {
     expect(harness.ctx.get('mysql')).toBeUndefined()
   })
 
+  it('denies optional lookup of the trusted Host Kafka service', async () => {
+    const harness = await setup()
+    let publishCalls = 0
+    await harness.ctx.plugin({
+      name: 'kafka-test-provider',
+      apply(ctx) {
+        ctx.provide('kafka', {
+          publish() { publishCalls++ },
+        })
+      },
+    })
+
+    const message = await runTouching(harness, `
+      const kafka = ctx.get('kafka')
+      kafka.publish([])
+    `)
+    expect(message).toContain('service "kafka" is restricted to trusted Host plugins')
+    expect(publishCalls).toBe(0)
+  })
+
+  it('denies declared access to the trusted Host Kafka service', async () => {
+    const harness = await setup()
+    await harness.ctx.plugin({
+      name: 'kafka-test-provider',
+      apply(ctx) {
+        ctx.provide('kafka', { binding: 'private-binding' })
+      },
+    })
+
+    const failure = await mount(harness, `
+      return {
+        name: 'kafka-reader',
+        inject: ['kafka'],
+        apply(ctx) { console.log(ctx.kafka.binding) },
+      }
+    `).catch((error: unknown) => error instanceof Error ? error.message : String(error))
+    expect(failure).toContain('service "kafka" is restricted to trusted Host plugins')
+    expect(failure).not.toContain('private-binding')
+  })
+
+  it('denies Kafka provider claims and rejects non-string service names', async () => {
+    const harness = await setup()
+    const failure = await mount(harness, `
+      return {
+        name: 'kafka-impostor',
+        apply(ctx) { ctx.provide('kafka', { publish() {} }) },
+      }
+    `).catch((error: unknown) => error instanceof Error ? error.message : String(error))
+    expect(failure).toContain('service "kafka" is restricted to trusted Host plugins')
+    expect(harness.ctx.get('kafka')).toBeUndefined()
+
+    const lookup = await runTouching(harness, 'ctx.get({ toString() { return \'kafka\' } })')
+    expect(lookup).toContain('ctx.get service name must be a string')
+
+    const provider = await mount(harness, `
+      return {
+        name: 'coercing-kafka-impostor',
+        apply(ctx) { ctx.provide({ toString() { return 'kafka' } }, {}) },
+      }
+    `).catch((error: unknown) => error instanceof Error ? error.message : String(error))
+    expect(provider).toContain('ctx.provide service name must be a string')
+    expect(harness.ctx.get('kafka')).toBeUndefined()
+  })
+
   it('a cross-package consumer must declare the provider — the undeclared path is refused, not left as a zombie tool', async () => {
     // Without declared inject, Cordis cannot park the consumer when its provider stops. The
     // façade refuses access up front instead of leaving a zombie tool.

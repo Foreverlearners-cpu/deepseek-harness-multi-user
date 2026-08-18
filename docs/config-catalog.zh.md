@@ -876,6 +876,58 @@ export interface Config {
 
 来源：[`packages/jobs/jobs-local/src/index.ts:31`](../packages/jobs/jobs-local/src/index.ts)
 
+<a id="deepseek-aidsh-kafka"></a>
+
+## `@deepseek-ai/dsh-kafka`
+
+```ts config-catalog
+/** Kafka transport plugin configuration. */
+export interface Config {
+  /** Name used in health results and classified failures. */
+  binding: string
+  /** Explicit `host:port` bootstrap endpoints; IPv6 hosts use `[address]:port`. */
+  brokers: string[]
+  /** Kafka protocol client id. */
+  clientId: string
+  /** Enable TLS with platform trust roots and server-identity verification. */
+  tls: boolean
+  /** Optional username/password SASL authentication. */
+  sasl?: KafkaSaslConfig
+  /** Per-operation timeout, including startup and health metadata requests. */
+  requestTimeoutMs?: number
+  /** TCP/TLS connection timeout. */
+  connectionTimeoutMs?: number
+  /** Number of client retries for retriable protocol operations. */
+  retries?: number
+  /** Delay between client retries. */
+  retryDelayMs?: number
+  /** Topics that trusted Host plugins may publish or consume. */
+  topics?: string[]
+  /** Consumer groups that trusted Host plugins may join. */
+  consumerGroups?: string[]
+  /** Per-subscription stream buffer size. */
+  consumerHighWaterMark?: number
+}
+
+/** Username/password SASL configuration. */
+export interface KafkaSaslConfig {
+  /** Broker authentication mechanism. */
+  mechanism: KafkaSaslMechanism
+  /** Deployment-supplied SASL username. */
+  username: string
+  /** Deployment-supplied SASL password. */
+  password: string
+}
+
+/** Supported username/password SASL mechanisms. */
+export type KafkaSaslMechanism = Exclude<
+  (typeof SASLMechanisms)[keyof typeof SASLMechanisms],
+  'GSSAPI' | 'OAUTHBEARER'
+>
+```
+
+来源：[`packages/multi/kafka/src/index.ts:57`](../packages/multi/kafka/src/index.ts)
+
 <a id="deepseek-aidsh-llm-deepseek"></a>
 
 ## `@deepseek-ai/dsh-llm-deepseek`

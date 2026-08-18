@@ -60,6 +60,7 @@ The session execution world provides the stronger boundary for model-controlled 
 
 - [Identity and access](identity-and-access.md) defines principals, authentication, authorization, administrative roles, session ownership, and transport requirements.
 - [Data and runtime isolation](data-and-runtime-isolation.md) defines tenant-aware persistence, event and audit logs, settings, credentials, assets, streams, caches, and execution isolation.
+- [Stream chunk retention](stream-chunk-retention.md) defines bounded storage and cleanup for streamed response chunks.
 - [Delivery plan](delivery-plan.md) orders the work, defines compatibility posture and negative test coverage, and names decisions that must be settled before implementation.
 - The proposed `dsh-mysql` infrastructure service is shared by identity, session persistence, settings, audit, and other relational domains.
 - The [multi-user control and data planes Agent Note](../../.agents/notes/proposed/architecture/2026-08-18-multi-user-control-and-data-planes.md) owns the architectural trade-off and alternatives.

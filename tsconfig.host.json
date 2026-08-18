@@ -163,6 +163,7 @@
     { "path": "./packages/identity/anonymous-user-id" },
     { "path": "./packages/multi/elasticsearch" },
     { "path": "./packages/multi/redis" },
+    { "path": "./packages/multi/kafka" },
     { "path": "./packages/session/session-telemetry-otel" },
     { "path": "./packages/core/system-prompt" },
     { "path": "./packages/core/agent" },

@@ -84,6 +84,7 @@ export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
   'cordisInspect',
   'dynamicCordisRunner',
   'elasticsearch',
+  'kafka',
   'mysql',
   'redis',
 ])

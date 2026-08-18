@@ -636,7 +636,12 @@ export function sandboxRegisterTool(ctx: Context, tool: unknown): () => void {
 const CTX_VERBS = new Set(['effect', 'on', 'once', 'provide', 'timeout', 'interval', 'setTimeout', 'setInterval', 'throttle', 'debounce'])
 const TIMER_VERBS = new Set(['timeout', 'interval', 'setTimeout', 'setInterval', 'throttle', 'debounce'])
 /** Services that model-authored dynamic packages can neither consume nor provide. */
-const TRUSTED_HOST_SERVICE_KEYS: ReadonlySet<string> = new Set(['mysql'])
+const TRUSTED_HOST_SERVICE_KEYS: ReadonlySet<string> = new Set([
+  'elasticsearch',
+  'kafka',
+  'mysql',
+  'redis',
+])
 
 /**
  * The tool-registry façade: `register` (marker-guarded) plus READ-ONLY
