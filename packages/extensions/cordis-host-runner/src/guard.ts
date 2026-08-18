@@ -635,6 +635,8 @@ export function sandboxRegisterTool(ctx: Context, tool: unknown): () => void {
  */
 const CTX_VERBS = new Set(['effect', 'on', 'once', 'provide', 'timeout', 'interval', 'setTimeout', 'setInterval', 'throttle', 'debounce'])
 const TIMER_VERBS = new Set(['timeout', 'interval', 'setTimeout', 'setInterval', 'throttle', 'debounce'])
+/** Services that model-authored dynamic packages can neither consume nor provide. */
+const TRUSTED_HOST_SERVICE_KEYS: ReadonlySet<string> = new Set(['kafka'])
 
 /**
  * The tool-registry façade: `register` (marker-guarded) plus READ-ONLY
@@ -718,6 +720,15 @@ function declaredInjects(ctx: Context): Set<string> {
 function sandboxContext(ctx: Context, reportFailure: (error: Error) => void): Context {
   const tools = sandboxTools(ctx)
   const declared = declaredInjects(ctx)
+  const rejectTrustedHostService = (name: string): never => rejectGuard(reportFailure,
+    `service "${name}" is restricted to trusted Host plugins and unavailable to dynamic packages.`,
+  )
+  const requireServiceName = (verb: 'get' | 'provide', value: unknown): string => {
+    if (typeof value !== 'string') {
+      return rejectGuard(reportFailure, `ctx.${verb} service name must be a string.`)
+    }
+    return value
+  }
   // A framework member or an undeclared service — distinguish the two so the
   // error teaches the right fix (declare it in inject vs it is withheld).
   const denyRead = (prop: string): never => {
@@ -736,13 +747,14 @@ function sandboxContext(ctx: Context, reportFailure: (error: Error) => void): Co
   // `get` is optional lookup; property access requires a declaration. `tools`
   // is the façade's own API on either path.
   const readService = (name: string, requireDeclaration: boolean): unknown => {
+    if (TRUSTED_HOST_SERVICE_KEYS.has(name)) return rejectTrustedHostService(name)
     if (name === 'tools') return tools
     if (requireDeclaration && !declared.has(name)) return denyRead(name)
     const service = denyContext(ctx.get(name), name, reportFailure)
     if (service === null || (typeof service !== 'object' && typeof service !== 'function')) return service
     return guardedService(service, name, reportFailure)
   }
-  const get = (name: string): unknown => readService(name, false)
+  const get = (name: unknown): unknown => readService(requireServiceName('get', name), false)
   // The browser half builds the same façade over its own Context
   // (`@deepseek-ai/dsh-cordis-client-runner`, whose CTX_VERBS names this one its
   // twin), and the sameness is the point: a package author meets ONE contract on
@@ -760,6 +772,10 @@ function sandboxContext(ctx: Context, reportFailure: (error: Error) => void): Co
       if (CTX_VERBS.has(prop)) {
         return (...args: unknown[]): unknown => {
           if (TIMER_VERBS.has(prop) && !declared.has('timer')) return denyRead('timer')
+          if (prop === 'provide') {
+            const name = requireServiceName('provide', args[0])
+            if (TRUSTED_HOST_SERVICE_KEYS.has(name)) return rejectTrustedHostService(name)
+          }
           const method = ctx[prop as keyof Context]
           return Reflect.apply(method as (...a: unknown[]) => unknown, ctx, args)
         }
@@ -775,6 +791,7 @@ function sandboxContext(ctx: Context, reportFailure: (error: Error) => void): Co
     // (whether or not currently live). Does not resolve/wrap — no throw.
     has: (_target, prop) => prop === 'tools' || prop === 'get'
       || (typeof prop === 'string'
+        && !TRUSTED_HOST_SERVICE_KEYS.has(prop)
         && ((CTX_VERBS.has(prop) && (!TIMER_VERBS.has(prop) || declared.has('timer'))) || declared.has(prop))),
   }) as unknown as Context
   /* jscpd:ignore-end */

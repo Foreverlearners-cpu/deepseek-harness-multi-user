@@ -17,6 +17,7 @@ npm scope 为 `@deepseek-ai/dsh-*`；Cordis `Service` 子类和函数插件通�
 | [`schedule/`](schedule/README.md) | 仅限会话内的定时后续操作 | 产品：稳定 API |
 | [`feedback/`](feedback/README.md) | 人类反馈 | 产品：稳定 API |
 | [`identity/`](identity/README.md) | 共享匿名身份 | 产品：稳定 API |
+| [`multi/`](multi/README.md) | Host-only 多用户服务器基础设施，包括 Kafka 连接 | 产品：演进中 API |
 | [`llm/`](llm/README.md) | LLM（大语言模型）能力系列：抽象服务 + 提供方适配器 | 产品：稳定 API |
 | [`e2b/`](e2b/README.md) | E2B 提供方 | POC |
 | [`subprocess/`](subprocess/README.md) | 子进程能力系列：Service Definition + 本地进程树提供方 | 产品：稳定 API |

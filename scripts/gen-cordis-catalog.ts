@@ -72,6 +72,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   goals: 'goal.md',
   webServer: 'web-server.md',
   invariants: 'invariants.md',
+  kafka: 'kafka.md',
   llm: 'llm-streaming.md',
   lsp: 'lsp.md',
   messageFeedback: 'feedback.md',
@@ -461,6 +462,18 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   PresetOption: 'permission-presets.md',
   PresetSpec: 'permission-presets.md',
   InvariantInstaller: 'invariants.md',
+  KafkaBindingId: 'kafka.md',
+  KafkaConsumedHeader: 'kafka.md',
+  KafkaConsumedMessage: 'kafka.md',
+  KafkaConsumerGroupId: 'kafka.md',
+  KafkaHealth: 'kafka.md',
+  KafkaPublishedOffset: 'kafka.md',
+  KafkaPublishMessage: 'kafka.md',
+  KafkaSubscribeRequest: 'kafka.md',
+  KafkaSubscription: 'kafka.md',
+  KafkaSubscriptionId: 'kafka.md',
+  KafkaSubscriptionMode: 'kafka.md',
+  KafkaTopic: 'kafka.md',
   WebRoute: 'web-server.md',
   StorageBackend: 'storage.md',
   StorageForms: 'storage.md',
@@ -580,12 +593,19 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   WorkflowResultInfo: 'event-local snapshot is owned by packages/workflow/workflow/src/index.ts',
 }
 
+/** Host services documented for maintainers but hidden from model-authored dynamic packages. */
+export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
+  'cordisInspect',
+  'dynamicCordisRunner',
+  'kafka',
+])
+
 /** Repository data policy consumed by the Cordis catalog projector. */
 export const CORDIS_CATALOG_POLICY: CordisCatalogPolicy = {
   linkedTypePages: LINK_MAP,
   foundationTypeNames: FOUNDATION_TYPE_NAMES,
   typeLinkExemptions: TYPE_LINK_EXEMPTIONS,
-  runtimeServiceExclusions: new Set(['cordisInspect', 'dynamicCordisRunner']),
+  runtimeServiceExclusions: MODEL_HIDDEN_SERVICE_KEYS,
   runtimeServices: [{
     key: 'timer',
     type: 'TimerService',
@@ -805,6 +825,12 @@ export function computeOutputs(): [string, string][] {
     eventScopePage: EVENT_SCOPE_PAGE,
     eventWalkExemptions: EVENT_WALK_EXEMPTIONS,
   })
+  const renderedServiceKeys = new Set(services.map(service => service.key))
+  for (const key of MODEL_HIDDEN_SERVICE_KEYS) {
+    if (!renderedServiceKeys.has(key)) {
+      problems.push(`MODEL_HIDDEN_SERVICE_KEYS names 'ctx.${key}' but the projection discovers no such service; remove the stale classification.`)
+    }
+  }
   if (problems.length > 0) throw new Error(`gen-cordis-catalog: ${problems.length} partition violation(s):\n${problems.map(p => `  ${p}`).join('\n')}`)
 
   const pages = [...new Set([...Object.values(SERVICE_PAGE), ...Object.values(EVENT_SCOPE_PAGE)])].sort()

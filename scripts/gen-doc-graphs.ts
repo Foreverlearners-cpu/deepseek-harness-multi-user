@@ -147,6 +147,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Companion subpaths register owner-local checks; the service owns selection, uniqueness, child fibers, and package-attributed failures.',
   },
   {
+    key: 'kafka',
+    pkg: 'kafka',
+    title: 'Host Kafka connectivity',
+    mode: 'core',
+    consumers: [],
+    note: 'Owns one named Admin client, startup metadata verification, bounded health metadata, classified failures, and scoped shutdown; producer and consumer operations are deferred.',
+  },
+  {
     key: 'typert',
     pkg: 'typert-registry',
     title: 'Runtime type registry',

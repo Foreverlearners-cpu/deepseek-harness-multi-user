@@ -6,7 +6,14 @@ import {
   renderInheritedPage,
   renderPageRegion,
 } from '../src/cordis-catalog.ts'
-import { CORDIS_CATALOG_POLICY, EVENT_SCOPE_PAGE, REGION_BEGIN, REGION_END, SERVICE_PAGE } from '../../../../scripts/gen-cordis-catalog.ts'
+import {
+  CORDIS_CATALOG_POLICY,
+  EVENT_SCOPE_PAGE,
+  MODEL_HIDDEN_SERVICE_KEYS,
+  REGION_BEGIN,
+  REGION_END,
+  SERVICE_PAGE,
+} from '../../../../scripts/gen-cordis-catalog.ts'
 
 const workspaceRoot = resolve(import.meta.dirname, '../../../..')
 
@@ -59,5 +66,23 @@ describe('Typert-backed Cordis catalog', () => {
     expect(byKey.has('headlessIo')).toBe(false)
     expect(byKey.has('dshHomePath')).toBe(false)
     expect(byKey.has('launcherEnvironment')).toBe(false)
+  })
+
+  it('documents model-hidden services without publishing them in the runtime API', { timeout: 480_000 }, () => {
+    const { projector, model } = projection()
+    const serviceKeys = new Set(model.services.map(service => service.key))
+    const runtimeApi = projector.renderRuntimeApi(model)
+    for (const key of MODEL_HIDDEN_SERVICE_KEYS) {
+      expect(serviceKeys.has(key), `ctx.${key} remains in the maintainer catalog`).toBe(true)
+      expect(runtimeApi).not.toContain(`key: '${key}'`)
+    }
+
+    const kafkaRegion = renderPageRegion(
+      'kafka.md',
+      [...model.services].filter(service => SERVICE_PAGE[service.key] === 'kafka.md'),
+      [...model.events].filter(event => EVENT_SCOPE_PAGE[event.scope] === 'kafka.md'),
+      CORDIS_CATALOG_POLICY,
+    )
+    expect(kafkaRegion).toContain('### `ctx.kafka` — `KafkaService`')
   })
 })
