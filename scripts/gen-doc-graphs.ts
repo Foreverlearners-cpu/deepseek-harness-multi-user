@@ -215,6 +215,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Waits for every configured backend, then publishes the domain form as one lifecycle-bound service for typed durable state.',
   },
   {
+    key: 'elasticsearch',
+    pkg: 'elasticsearch',
+    title: 'Elasticsearch search client',
+    mode: 'core',
+    note: 'Owns one official Host client, validates target, authentication, and TLS policy, verifies startup with one bounded ping, and drains admitted operations; domain plugins own indexes, documents, tenant scoping, and rebuild policy.',
+  },
+  {
     key: 'messageFeedback',
     pkg: 'message-feedback',
     title: 'Lifecycle-bound message feedback',

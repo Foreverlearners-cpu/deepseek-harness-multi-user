@@ -585,6 +585,44 @@ export interface Config {
 
 Source: [`packages/e2b/e2b/src/index.ts:43`](../packages/e2b/e2b/src/index.ts)
 
+<a id="deepseek-aidsh-elasticsearch"></a>
+
+## `@deepseek-ai/dsh-elasticsearch`
+
+```ts config-catalog
+/** Elasticsearch connection service configuration. */
+export interface Config {
+  /** Absolute HTTP(S) Elasticsearch node URL without credentials, a query, or a fragment. */
+  node: string
+  /** Optional bootstrap authentication; at most one strategy is accepted. */
+  auth?: ElasticsearchAuthConfig
+  /** SHA-256 CA fingerprint as 64 hex digits or 32 colon-delimited hex bytes. */
+  caFingerprint?: string
+  /** Explicit opt-in for plaintext HTTP, restricted to trusted local deployments; defaults to `false`. */
+  allowInsecureHttp?: boolean
+  /** Official-client retry default; operation callbacks may override it per request. */
+  maxRetries: number
+  /** Official-client request-timeout default in milliseconds; operation callbacks may override it per request. */
+  requestTimeoutMs: number
+  /** Maximum startup and connection-pool ping duration in milliseconds; at most `MAX_TIMER_DELAY_MS`. */
+  pingTimeoutMs: number
+}
+
+/** Elasticsearch authentication fields; exactly one complete strategy may be configured. */
+export interface ElasticsearchAuthConfig {
+  /** Basic-auth username; requires {@link password}. */
+  username?: string
+  /** Basic-auth password; requires {@link username}. */
+  password?: string
+  /** Base64-encoded Elasticsearch API key. */
+  apiKey?: string
+  /** Bearer or service-account token. */
+  bearer?: string
+}
+```
+
+Source: [`packages/multi/elasticsearch/src/index.ts:30`](../packages/multi/elasticsearch/src/index.ts)
+
 <a id="deepseek-aidsh-fs-local"></a>
 
 ## `@deepseek-ai/dsh-fs-local`
