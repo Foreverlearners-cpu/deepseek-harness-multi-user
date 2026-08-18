@@ -1493,6 +1493,22 @@ export type Config = LocalConfig
 
 来源：[`packages/shell/pwsh-sandbox/src/index.ts:40`](../packages/shell/pwsh-sandbox/src/index.ts)
 
+<a id="deepseek-aidsh-redis"></a>
+
+## `@deepseek-ai/dsh-redis`
+
+```ts config-catalog
+/** Redis connection service configuration. */
+export interface Config {
+  /** Standalone `redis:` or `rediss:` URL; Schemastery treats it as a secret. */
+  url: string
+  /** Initial connection and `PING` timeout in milliseconds; defaults to `10000` and must not exceed `2147483647`. */
+  connectTimeoutMs?: number
+}
+```
+
+来源：[`packages/multi/redis/src/index.ts:18`](../packages/multi/redis/src/index.ts)
+
 <a id="deepseek-aidsh-repeat-tool-reminder"></a>
 
 ## `@deepseek-ai/dsh-repeat-tool-reminder`

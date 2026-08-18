@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/multi-user-infrastructure.md
-multi-user-infrastructure.md: fdcb5d094e85adf18213d9292ba9604e9ec8eb5f
-multi-user-infrastructure.zh.md: 0eba8d8274976b5d0fd3e532894ca94fcf7c0b0c
+multi-user-infrastructure.md: 956eb331ab7d43ed51240db5d05395d8918a2aa5
+multi-user-infrastructure.zh.md: fcd68c2f1b9f425b1bcc82f042cde931728ee1bb

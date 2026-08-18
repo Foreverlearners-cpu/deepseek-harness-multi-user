@@ -8,7 +8,10 @@
 |---|---|---|
 | [`@deepseek-ai/dsh-elasticsearch`](elasticsearch/README.md) | `ctx.elasticsearch` | Elasticsearch client 生命周期与 callback-scoped operation |
 | [`@deepseek-ai/dsh-mysql`](mysql/README.md) | `ctx.mysql` | MySQL 连接池生命周期与 callback 作用域的连接租用 |
+| [`@deepseek-ai/dsh-redis`](redis/README.md) | `ctx.redis` | Redis client 生命周期与回调范围内的共享客户端操作 |
 
 [Elasticsearch 基础设施参考](../../docs/infrastructure/dsh-elasticsearch.md)说明当前所有权，并链接拟议的 projection、隔离与一致性设计。
 
 [MySQL 连接服务决策](../../.agents/notes/implemented/architecture/2026-08-18-mysql-connection-service.md)记录了当前生命周期和明确暂缓的数据库能力。
+
+[dsh-redis 基础设施参考](../../docs/infrastructure/dsh-redis.md)定义了 Redis 数据、授权、隔离和部署规则。

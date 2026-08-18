@@ -69,6 +69,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   dynamicCordisRunner: 'extensions.md',
   e2b: 'subprocess.md',
   elasticsearch: 'multi-user-infrastructure.md',
+  redis: 'multi-user-infrastructure.md',
   fs: 'filesystem.md',
   goals: 'goal.md',
   webServer: 'web-server.md',
@@ -571,6 +572,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   JsonValue: 'JSON value union is owned by packages/core/session/src/json.ts',
   KnobState: 'projection unit state fields are owned by packages/interaction/permission-presets/README.md',
   PermissionSelect: 'permissions projection payload is owned by packages/interaction/permission-presets/src/types.ts',
+  RedisClientType: 'external Node Redis client handle is owned by packages/multi/redis/README.md',
   PromptAssembly: 'assembly result is owned by packages/core/system-prompt/README.md',
   MysqlConnection: 'lease façade contract is owned by packages/multi/mysql/README.md',
   PoolConnection: 'external mysql2 driver handle is documented by packages/multi/mysql/README.md',
@@ -591,6 +593,7 @@ export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
   'dynamicCordisRunner',
   'elasticsearch',
   'mysql',
+  'redis',
 ])
 
 /** Repository data policy consumed by the Cordis catalog projector. */

@@ -17,7 +17,7 @@ Groups hold `packages/<group>/<pkg>/`; names stay `@deepseek-ai/dsh-<pkg>`. **Gr
 | [`schedule/`](schedule/README.md) | Session-local scheduled follow-ups | Product — stable API |
 | [`feedback/`](feedback/README.md) | Human feedback | Product — stable API |
 | [`identity/`](identity/README.md) | Shared anonymous identity | Product — stable API |
-| [`multi/`](multi/README.md) | Multi-user server infrastructure shared by persistence and search domain plugins | Product — stable API |
+| [`multi/`](multi/README.md) | Multi-user Host infrastructure for domain services | Product — stable API |
 | [`llm/`](llm/README.md) | LLM capability family: the abstract service + provider adapters | Product — stable API |
 | [`e2b/`](e2b/README.md) | E2B providers | POC |
 | [`subprocess/`](subprocess/README.md) | Subprocess capability family: Service Definition + local process-tree provider | Product — stable API |

@@ -83,7 +83,9 @@ export interface TypeApiEntry {
 export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
   'cordisInspect',
   'dynamicCordisRunner',
+  'elasticsearch',
   'mysql',
+  'redis',
 ])
 
 /** Every harness `ctx.<key>` service, sorted by key. */

@@ -230,6 +230,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns one official Host client, validates target, authentication, and TLS policy, verifies startup with one bounded ping, and drains admitted operations; domain plugins own indexes, documents, tenant scoping, and rebuild policy.',
   },
   {
+    key: 'redis',
+    pkg: 'redis',
+    title: 'Redis command client',
+    mode: 'core',
+    note: 'Owns one Host non-blocking client, disables offline queuing, and drains admitted callbacks; domain plugins own namespaces, TTLs, atomic commands, tenant scoping, and outage policy.',
+  },
+  {
     key: 'messageFeedback',
     pkg: 'message-feedback',
     title: 'Lifecycle-bound message feedback',

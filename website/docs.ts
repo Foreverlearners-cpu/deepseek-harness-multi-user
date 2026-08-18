@@ -307,6 +307,7 @@ const subsystemGroups = [
     ['typert.md', 'Typert', 'Typert'],
     ['client-modules.md', '客户端模块', 'Client modules'],
     ['storage.md', '存储', 'Storage'],
+    ['multi-user-infrastructure.md', '多用户基础设施', 'Multi-user infrastructure'],
     ['workspace.md', '工作区', 'Workspaces'],
     ['settings.md', '用户设置', 'User settings'],
     ['credentials.md', '用户凭据', 'User credentials'],
@@ -394,6 +395,7 @@ const reference = [
     ['adding-an-llm-adapter.md', '新增 LLM Adapter', 'Adding an LLM adapter'],
     ['adding-a-settings-card.md', '新增设置卡片', 'Adding a settings card'],
     ['extension-cookbook.md', '扩展模式', 'Extension patterns'],
+    ['adding-a-host-connection-service.md', '新增 Host 连接服务', 'Adding a Host connection service'],
   ] as const).map(([file, rootLabel, enLabel], order): PairedPage => ({
     source: `docs/cookbook/${file}`,
     route: `reference/cookbook/${file}`,
@@ -408,7 +410,7 @@ const reference = [
     label: { root: '新增 Conversation Node', en: 'Adding a Conversation Node' },
     sidebar: { root: 'zh-reference', en: 'en-reference' },
     section: { root: '开发手册', en: 'Cookbook' },
-    order: 5,
+    order: 6,
   }]),
 ]
 
