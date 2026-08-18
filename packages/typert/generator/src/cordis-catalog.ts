@@ -174,6 +174,7 @@ export class CordisCatalogProjector {
       model.events,
       this.runtimeTypes(services, model.events),
       this.policy.inheritedServices,
+      [...(this.policy.runtimeServiceExclusions ?? [])].sort(),
     )
   }
 
@@ -669,6 +670,7 @@ function renderRuntimeApi(
   events: readonly EventEntry[],
   types: readonly { name: string; declaration: string }[],
   inheritedServices: readonly InheritedEntry[],
+  hiddenServiceKeys: readonly string[],
 ): string {
   const lines: string[] = [
     '/**',
@@ -752,9 +754,16 @@ function renderRuntimeApi(
     '  declaration: string',
     '}',
     '',
+    '/** Service keys omitted from every model-facing runtime inspection. */',
+    'export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([',
+  ]
+  for (const key of hiddenServiceKeys) lines.push(`  ${quote(key)},`)
+  lines.push(
+    '])',
+    '',
     '/** Every harness `ctx.<key>` service, sorted by key. */',
     'export const SERVICE_API: readonly ServiceApiEntry[] = [',
-  ]
+  )
   for (const service of services) {
     lines.push('  {')
     lines.push(`    key: ${quote(service.key)},`)

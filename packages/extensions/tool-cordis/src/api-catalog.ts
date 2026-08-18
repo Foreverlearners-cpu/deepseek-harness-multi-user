@@ -79,6 +79,13 @@ export interface TypeApiEntry {
   declaration: string
 }
 
+/** Service keys omitted from every model-facing runtime inspection. */
+export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
+  'cordisInspect',
+  'dynamicCordisRunner',
+  'mysql',
+])
+
 /** Every harness `ctx.<key>` service, sorted by key. */
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {

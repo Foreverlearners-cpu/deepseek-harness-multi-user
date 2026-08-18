@@ -243,6 +243,30 @@ Both implement the same abstract `SessionPersistence` (locate/create/append/prep
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxmysql--mysql"></a>
+
+### `ctx.mysql` — `Mysql`
+
+MySQL pool service exposed as `ctx.mysql`. Startup acquires one connection and pings the server; failure rejects plugin activation. connection admits work only while the service is active and resets every reusable lease.
+
+```ts cordis-catalog
+/**
+ * Lease one pooled connection for a callback. Admission precedes pool
+ * acquisition, so disposal waits for callbacks already queued for a lease.
+ * The connection is reset, restored to the configured database, and released
+ * after callback settlement, including throws. Failed cleanup destroys it.
+ * The callback receives a façade without pool lifecycle methods or raw driver
+ * state. The façade and prepared statements obtained from it cannot be
+ * returned and reject every operation after callback settlement.
+ * @param callback - database work scoped to this connection lease.
+ * @returns the callback result.
+ * @throws when the service is closing, pool acquisition fails, or the callback rejects.
+ */
+async connection<T>(callback: (connection: MysqlConnection) => T | Promise<T>): Promise<T>
+```
+
+Source: [`packages/multi/mysql/src/index.ts:122`](../../packages/multi/mysql/src/index.ts)
+
 <a id="ctxsessionpersistence--sessionpersistence-abstract-seam"></a>
 
 ### `ctx.sessionPersistence` — `SessionPersistence` (abstract seam)

@@ -89,6 +89,7 @@ const GROUP_ORDER = [
   'session-title',
   'telemetry',
   'storage',
+  'multi',
   'workspace',
   'support',
   'acp',
@@ -169,6 +170,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: ['session-persistence-jsonl', 'session-persistence-sqlite'],
     consumers: ['agent-loop', 'tool-bash', 'hooks-claude-code', 'hooks-codex', 'session-query', 'session-query-sqlite', 'message-feedback'],
     note: 'Backends persist the same SessionEvent vocabulary; apps choose a backend at composition time.',
+  },
+  {
+    key: 'mysql',
+    pkg: 'mysql',
+    title: 'MySQL connection infrastructure',
+    mode: 'core',
+    note: 'The package combines the service definition and mysql2 pool provider; domain persistence consumers remain separate packages.',
   },
   {
     key: 'settings',

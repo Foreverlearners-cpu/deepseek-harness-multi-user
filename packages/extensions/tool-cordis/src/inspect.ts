@@ -12,7 +12,7 @@ import type { ScopeKey } from '@deepseek-ai/dsh-scope'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: resolves `ctx.dynamicCordisRunner` (the registry this report reads).
 import type {} from '@deepseek-ai/dsh-cordis-host-runner'
-import { EVENT_API, INHERITED_CTX_API, SERVICE_API, TYPE_API } from './api-catalog.ts'
+import { EVENT_API, INHERITED_CTX_API, MODEL_HIDDEN_SERVICE_KEYS, SERVICE_API, TYPE_API } from './api-catalog.ts'
 import type { EventApiEntry, InheritedApiEntry, ServiceApiEntry, ServiceApiMethod, TypeApiEntry } from './api-catalog.ts'
 import { FiberState, STATE_LABELS } from './fiber-state.ts'
 
@@ -38,6 +38,7 @@ function liveImpls(ctx: Context): { name: string; fiber: Fiber }[] {
   return Object.getOwnPropertySymbols(store)
     .map(key => store[key])
     .filter((impl): impl is NonNullable<typeof impl> => impl !== undefined)
+    .filter(impl => !MODEL_HIDDEN_SERVICE_KEYS.has(impl.name))
 }
 
 /**
@@ -51,10 +52,10 @@ function plainSummary(summary: string): string {
 }
 
 /**
- * Every service this process provides, joined with the generated catalog: what is
- * RUNNING comes from the store, what each service CAN DO comes from the catalog,
- * and a live service the catalog does not cover stays in the list as reachable
- * with no signatures rather than being dropped.
+ * Every model-visible service this process provides, joined with the generated
+ * catalog: what is RUNNING comes from the store, what each service CAN DO comes
+ * from the catalog, and a visible live service the catalog does not cover stays
+ * in the list with no signatures.
  */
 function liveServices(ctx: Context, api: readonly ServiceApiEntry[]): LiveService[] {
   const catalogued = new Map(api.map(entry => [entry.key, entry]))
@@ -96,7 +97,7 @@ export function withinFiber(fiber: Fiber, root: Fiber): boolean {
 }
 
 /**
- * Service names provided by one mount's fiber subtree.
+ * Model-visible service names provided by one mount's fiber subtree.
  * @param ctx - the runtime whose service registrations are inspected.
  * @param fiber - the root of the mounted fiber subtree.
  * @returns the provided service names in lexical order.
@@ -109,21 +110,21 @@ export function providedServices(ctx: Context, fiber: Fiber): string[] {
 }
 
 /**
- * Services a fiber declared in `inject` that do not exist yet — a settled fiber
- * that is not active is waiting on exactly these (legal cordis semantics: it
- * activates when the service appears).
+ * Model-visible services a fiber declared in `inject` that do not exist yet.
  * @param ctx - the context to resolve service existence against.
  * @param fiber - the fiber whose `inject` declarations are checked.
  * @returns the missing service names, in declaration order.
  */
 export function missingServices(ctx: Context, fiber: Fiber): string[] {
-  return Object.keys(fiber.inject).filter(service => ctx.get(service) === undefined)
+  return Object.keys(fiber.inject)
+    .filter(service => !MODEL_HIDDEN_SERVICE_KEYS.has(service))
+    .filter(service => ctx.get(service) === undefined)
 }
 
 /**
- * The `services` section: every live ctx service with its owning fiber and, when
- * the generated catalog covers it, a one-line summary. The `api` section is the
- * one that carries signatures; this one answers what exists and who provides it.
+ * The `services` section: every model-visible live ctx service with its owning
+ * fiber and, when the generated catalog covers it, a one-line summary. The `api`
+ * section is the one that carries signatures.
  * @param ctx - the runtime to enumerate.
  * @param api - the generated service entries whose summaries annotate the live ones.
  * @returns one line per service, or a single placeholder line when none are provided.
@@ -252,8 +253,9 @@ function serviceLines(
 
 /**
  * Render the generated catalog against the live runtime: live catalogued services with methods,
- * uncatalogued live services with owners, absent loadable services, referenced type shapes, and
- * inherited Context APIs.
+ * visible uncatalogued live services with owners, absent loadable services,
+ * referenced type shapes, and inherited Context APIs. Model-hidden services are
+ * removed before any runtime fact is rendered.
  * @param ctx - the runtime to intersect the catalog with.
  * @param api - generated service entries, replaceable in tests.
  * @param name - exact live service key whose methods should include structured contracts; omitted for the compact catalog.
@@ -285,7 +287,7 @@ export function describeApi(
   if (name === undefined) {
     for (const service of live.filter(candidate => !candidate.catalogued)) {
       lines.push(`- ${service.name} (provided by ${service.owner}) — running, but this catalog has no signature for it;`
-        + ` inject: ['${service.name}'] still reaches it`)
+        + ' Host policy determines dynamic-package access')
     }
     const notRunning = absentServices(ctx, api)
     if (notRunning.length > 0) lines.push(`not running (loadable services with no live provider): ${notRunning.join(', ')}`)

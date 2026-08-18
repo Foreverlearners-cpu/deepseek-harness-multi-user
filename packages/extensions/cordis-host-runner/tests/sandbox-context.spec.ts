@@ -175,6 +175,100 @@ describe('sandbox context façade — inject gate on services', () => {
     `)).resolves.toBeTruthy()
   })
 
+  it('denies optional lookup of the trusted Host MySQL service', async () => {
+    const harness = await setup()
+    let connectionCalls = 0
+    await harness.ctx.plugin({
+      name: 'mysql-test-provider',
+      apply(ctx) {
+        ctx.provide('mysql', {
+          connection() {
+            connectionCalls++
+          },
+        })
+      },
+    })
+
+    const message = await runTouching(harness, `
+      const mysql = ctx.get('mysql')
+      mysql.connection(() => {})
+    `)
+    expect(message).toContain('service "mysql" is restricted to trusted Host plugins')
+    expect(connectionCalls).toBe(0)
+  })
+
+  it('rejects a non-string lookup name before it can coerce to the trusted MySQL key', async () => {
+    const harness = await setup()
+    let connectionCalls = 0
+    await harness.ctx.plugin({
+      name: 'mysql-test-provider',
+      apply(ctx) {
+        ctx.provide('mysql', {
+          connection() {
+            connectionCalls++
+          },
+        })
+      },
+    })
+
+    const message = await runTouching(harness, `
+      const name = { toString() { return 'mysql' } }
+      const mysql = ctx.get(name)
+      mysql.connection(() => {})
+    `)
+    expect(message).toContain('ctx.get service name must be a string')
+    expect(connectionCalls).toBe(0)
+  })
+
+  it('denies declared access to the trusted Host MySQL service and its configuration', async () => {
+    const harness = await setup()
+    await harness.ctx.plugin({
+      name: 'mysql-test-provider',
+      apply(ctx) {
+        ctx.provide('mysql', { config: { password: 'test-only-secret' } })
+      },
+    })
+
+    const failure = await mount(harness, `
+      return {
+        name: 'mysql-reader',
+        inject: ['mysql'],
+        apply(ctx) { console.log(ctx.mysql.config.password) },
+      }
+    `).catch((error: unknown) => error instanceof Error ? error.message : String(error))
+    expect(failure).toContain('service "mysql" is restricted to trusted Host plugins')
+    expect(failure).not.toContain('test-only-secret')
+  })
+
+  it('denies dynamic providers from claiming the trusted Host MySQL service key', async () => {
+    const harness = await setup()
+    const failure = await mount(harness, `
+      return {
+        name: 'mysql-impostor',
+        apply(ctx) { ctx.provide('mysql', { connection() {} }) },
+      }
+    `).catch((error: unknown) => error instanceof Error ? error.message : String(error))
+
+    expect(failure).toContain('service "mysql" is restricted to trusted Host plugins')
+    expect(harness.ctx.get('mysql')).toBeUndefined()
+  })
+
+  it('rejects a non-string service name before it can coerce to a trusted key', async () => {
+    const harness = await setup()
+    const failure = await mount(harness, `
+      return {
+        name: 'coercing-mysql-impostor',
+        apply(ctx) {
+          const name = { toString() { return 'mysql' } }
+          ctx.provide(name, { connection() {} })
+        },
+      }
+    `).catch((error: unknown) => error instanceof Error ? error.message : String(error))
+
+    expect(failure).toContain('ctx.provide service name must be a string')
+    expect(harness.ctx.get('mysql')).toBeUndefined()
+  })
+
   it('a cross-package consumer must declare the provider — the undeclared path is refused, not left as a zombie tool', async () => {
     // Without declared inject, Cordis cannot park the consumer when its provider stops. The
     // façade refuses access up front instead of leaving a zombie tool.
