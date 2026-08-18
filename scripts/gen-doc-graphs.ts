@@ -215,6 +215,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Waits for every configured backend, then publishes the domain form as one lifecycle-bound service for typed durable state.',
   },
   {
+    key: 'redis',
+    pkg: 'redis',
+    title: 'Redis command client',
+    mode: 'core',
+    note: 'Owns one Host non-blocking client, disables offline queuing, and drains admitted callbacks; domain plugins own namespaces, TTLs, atomic commands, tenant scoping, and outage policy.',
+  },
+  {
     key: 'messageFeedback',
     pkg: 'message-feedback',
     title: 'Lifecycle-bound message feedback',

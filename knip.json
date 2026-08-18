@@ -302,6 +302,16 @@
         "tests/**/*.ts"
       ]
     },
+    "packages/multi/redis": {
+      "entry": [
+        "tests/**/*.spec.ts",
+        "tests/**/*.e2e.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ]
+    },
     "packages/context/time-context": {
       "entry": [
         "tests/**/*.spec.ts",
