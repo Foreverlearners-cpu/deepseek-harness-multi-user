@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-18-mysql-connection-service.md
+2026-08-18-mysql-connection-service.md: 37b2b5fb9731d972fe847d4a0d2932985dda84ae
+2026-08-18-mysql-connection-service.zh.md: 0404bc157e9ceec9f8499c99b5a51fe1b936c870

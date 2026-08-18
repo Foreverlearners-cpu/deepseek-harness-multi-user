@@ -1333,6 +1333,32 @@ export interface Config {
 
 来源：[`packages/feedback/message-feedback/src/index.ts:49`](../packages/feedback/message-feedback/src/index.ts)
 
+<a id="deepseek-aidsh-mysql"></a>
+
+## `@deepseek-ai/dsh-mysql`
+
+```ts config-catalog
+/** MySQL connection service configuration. */
+export interface Config {
+  /** MySQL server hostname or IP address. */
+  host: string
+  /** MySQL TCP port; defaults to `3306`. */
+  port?: number
+  /** Bootstrap database user. */
+  user: string
+  /** Bootstrap database password; Schemastery treats this field as a secret. */
+  password: string
+  /** Database selected for every pooled connection. */
+  database: string
+  /** Maximum number of connections in the pool; defaults to `10`. */
+  connectionLimit?: number
+  /** TCP connection-establishment timeout in milliseconds; at most `MAX_TIMER_DELAY_MS`. */
+  connectTimeoutMs?: number
+}
+```
+
+来源：[`packages/multi/mysql/src/index.ts:94`](../packages/multi/mysql/src/index.ts)
+
 <a id="deepseek-aidsh-permission-presets"></a>
 
 ## `@deepseek-ai/dsh-permission-presets`

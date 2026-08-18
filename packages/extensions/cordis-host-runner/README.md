@@ -29,7 +29,7 @@ The registry is process memory and the only source of truth. The session log car
 
 ## Trust stance
 
-The vm sandbox isolates globals but is not a security boundary: Node globals are absent or redirect to Cordis services (`ctx.fs`, `ctx.web`, `ctx.bash`, the timer helpers), and a host half receives a façade without framework internals, yet the services it declares reach the live runtime. Treat a dynamic package like bash access — see the [self-referential toolset Agent Note](../../../.agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md).
+The vm sandbox isolates globals but is not a security boundary: Node globals are absent or redirect to Cordis services (`ctx.fs`, `ctx.web`, `ctx.bash`, the timer helpers), and a host half receives a façade without framework internals, yet allowed services reach the live runtime. Trusted infrastructure services such as `ctx.mysql` are denied by name through declared injection, optional `ctx.get()` lookup, and `ctx.provide()` registration; declaring an injection or provider does not grant access. Treat a dynamic package like bash access — see the [self-referential toolset Agent Note](../../../.agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md).
 
 ## Config
 

@@ -48,6 +48,7 @@ npm scope 为 `@deepseek-ai/dsh-*`；Cordis `Service` 子类和函数插件通�
 | [`settings/`](settings/README.md) | 用户设置 seam + 基于文件的提供方 | 产品：稳定 API |
 | [`credentials/`](credentials/README.md) | 凭据引用 seam + 环境变量优先于 `.env` 的提供方 | 产品：稳定 API |
 | [`storage/`](storage/README.md) | 非会话存储中枢 + 后端 + 领域形式 | 产品：稳定 API |
+| [`multi/`](multi/README.md) | 多用户领域持久化使用的仅限 Host 数据基础设施 | 产品：演进中 API |
 | [`workspace/`](workspace/README.md) | Workspace 实体 | 产品：稳定 API |
 | [`sdk/`](sdk/README.md) | 进程外运行时 SDK：JSON-RPC 协议、TypeScript 客户端和服务器插件 | 产品：稳定 API |
 | [`acp/`](acp/README.md) | 仅面向自动化的 ACP（Agent Client Protocol）服务器 | 产品：稳定 API |

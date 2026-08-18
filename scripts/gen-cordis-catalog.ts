@@ -76,6 +76,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   llm: 'llm-streaming.md',
   lsp: 'lsp.md',
   messageFeedback: 'feedback.md',
+  mysql: 'persistence.md',
   permissionPresets: 'permission-presets.md',
   planMode: 'plan.md',
   terminals: 'terminal.md',
@@ -571,6 +572,8 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   KnobState: 'projection unit state fields are owned by packages/interaction/permission-presets/README.md',
   PermissionSelect: 'permissions projection payload is owned by packages/interaction/permission-presets/src/types.ts',
   PromptAssembly: 'assembly result is owned by packages/core/system-prompt/README.md',
+  MysqlConnection: 'lease façade contract is owned by packages/multi/mysql/README.md',
+  PoolConnection: 'external mysql2 driver handle is documented by packages/multi/mysql/README.md',
   RequestRunId: 'dynamic-package payload contract is owned by packages/extensions/cordis-host-runner/src/types.ts',
   RpcReceipt: 'carrier-layer receipt is owned by packages/host/apiproxy/src/api/rpc.ts',
   Sandbox: 'external E2B SDK handle is owned by packages/e2b/e2b/README.md',
@@ -582,12 +585,20 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   WorkflowResultInfo: 'event-local snapshot is owned by packages/workflow/workflow/src/index.ts',
 }
 
+/** Host services documented for maintainers but hidden from model-authored dynamic packages. */
+export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
+  'cordisInspect',
+  'dynamicCordisRunner',
+  'elasticsearch',
+  'mysql',
+])
+
 /** Repository data policy consumed by the Cordis catalog projector. */
 export const CORDIS_CATALOG_POLICY: CordisCatalogPolicy = {
   linkedTypePages: LINK_MAP,
   foundationTypeNames: FOUNDATION_TYPE_NAMES,
   typeLinkExemptions: TYPE_LINK_EXEMPTIONS,
-  runtimeServiceExclusions: new Set(['cordisInspect', 'dynamicCordisRunner', 'elasticsearch']),
+  runtimeServiceExclusions: MODEL_HIDDEN_SERVICE_KEYS,
   runtimeServices: [{
     key: 'timer',
     type: 'TimerService',
@@ -807,6 +818,12 @@ export function computeOutputs(): [string, string][] {
     eventScopePage: EVENT_SCOPE_PAGE,
     eventWalkExemptions: EVENT_WALK_EXEMPTIONS,
   })
+  const renderedServiceKeys = new Set(services.map(service => service.key))
+  for (const key of MODEL_HIDDEN_SERVICE_KEYS) {
+    if (!renderedServiceKeys.has(key)) {
+      problems.push(`MODEL_HIDDEN_SERVICE_KEYS names 'ctx.${key}' but the projection discovers no such service; remove the stale classification.`)
+    }
+  }
   if (problems.length > 0) throw new Error(`gen-cordis-catalog: ${problems.length} partition violation(s):\n${problems.map(p => `  ${p}`).join('\n')}`)
 
   const pages = [...new Set([...Object.values(SERVICE_PAGE), ...Object.values(EVENT_SCOPE_PAGE)])].sort()
