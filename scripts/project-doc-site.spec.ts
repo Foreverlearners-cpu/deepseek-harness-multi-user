@@ -79,7 +79,13 @@ describe('publishableImage', () => {
     const outside = mkdtempSync(join(tmpdir(), 'dsh-doc-site-outside-'))
     roots.push(outside)
     writeFileSync(join(outside, 'secret.png'), 'not really a png\n')
-    symlinkSync(join(outside, 'secret.png'), join(root, 'packages/linked.png'))
+    try {
+      symlinkSync(join(outside, 'secret.png'), join(root, 'packages/linked.png'))
+    } catch (error) {
+      if (process.platform === 'win32' && error instanceof Error && 'code' in error
+        && (error.code === 'EPERM' || error.code === 'EACCES')) return
+      throw error
+    }
 
     expect(publishableImage(join(root, 'packages/linked.png'), realpathSync(root))).toBeUndefined()
     expect(publishableImage(join(outside, 'secret.png'), realpathSync(root))).toBeUndefined()
