@@ -6242,6 +6242,40 @@ importers:
         specifier: workspace:^
         version: link:../../storage/storage-domain
 
+  packages/session/session-search-projection-elasticsearch:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:^
+        version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-elasticsearch':
+        specifier: workspace:^
+        version: link:../../multi/elasticsearch
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-kafka':
+        specifier: workspace:^
+        version: link:../../multi/kafka
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
+      '@deepseek-ai/dsh-session-message-change-protocol':
+        specifier: workspace:^
+        version: link:../session-message-change-protocol
+
   packages/session/session-stats:
     dependencies:
       zod:

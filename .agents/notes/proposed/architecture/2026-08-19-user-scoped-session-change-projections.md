@@ -16,10 +16,10 @@ The first delivery omits the MySQL-to-Kafka producer. Tests publish fixed events
 
 Add `@deepseek-ai/dsh-session-message-change-protocol`, a pure wire library under `packages/session/session-message-change-protocol`. It owns a strict, content-free `session.message.changed` event, binary encoding and decoding, and the deterministic Kafka partition key. It registers no Cordis service and performs no I/O.
 
-Two later single-purpose Consumers use the protocol:
+Two single-purpose Consumers use the protocol:
 
 - `@deepseek-ai/dsh-session-cache-invalidation-redis` subscribes through `ctx.kafka`, derives one deployment/user/session cache key, and deletes it through `ctx.redis`. Both `upsert` and `delete` invalidate the complete cached context. Cache refill remains with the session read owner.
-- `@deepseek-ai/dsh-session-search-projection-elasticsearch` subscribes through an independent group, reads the identified complete message through `ctx.sessionQuery`, and indexes it through `ctx.elasticsearch`. A deletion writes a versioned tombstone rather than discarding ordering evidence.
+- `@deepseek-ai/dsh-session-search-projection-elasticsearch` is the shipped Host Consumer: it subscribes through an independent group, reads the identified complete message through `sessionCompleteMessageQuery`, and indexes it through `ctx.elasticsearch`. A deletion writes a versioned tombstone rather than discarding ordering evidence. The [Elasticsearch Consumer note](../../implemented/architecture/2026-08-20-session-search-projection-elasticsearch.md) owns that implementation.
 
 The protocol applies only where one deployment composition, Kafka topic, Redis target, and Elasticsearch write target belong to one tenant or another physically isolated administrative domain. `userId` identifies the private session owner inside that deployment. A shared multi-tenant transport or data target still requires explicit `tenantId` scope under the broader [multi-user control and data planes](2026-08-18-multi-user-control-and-data-planes.md) and [tenant-scoped Elasticsearch](2026-08-18-tenant-scoped-elasticsearch-search-projections.md) proposals. This note does not supersede either proposal.
 
@@ -90,7 +90,7 @@ The Redis and Elasticsearch packages remain separate so their dependencies, fail
 - Package exports use existing `SessionId` and `MessageId` brands and brand every remaining opaque cross-boundary id.
 - Package documentation states zero direct model-token and KV-cache effects, its single-tenant deployment precondition, and the absence of producer or Consumer behavior.
 - Later Redis tests prove exact user/session invalidation, duplicate safety, failed-handler non-commit, and quiescent disposal.
-- Later Elasticsearch tests prove authoritative source reads, user/message identity matching, complete-message-only indexing, source-sequence ordering, tombstones, failed-handler non-commit, and pre-query user filtering in the eventual search Consumer.
+- Elasticsearch Consumer tests prove authoritative source reads, user/message identity matching, complete-message-only indexing, source-sequence ordering, tombstones, and failed-handler non-commit. Pre-query user filtering remains with the eventual search Consumer.
 - A test-only Loader composition publishes fixed events through the real package entry path; test producers never enter shipped bundles, and projection Consumers remain opt-in until their acceptance paths pass.
 
 ## Risks

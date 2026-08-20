@@ -1851,6 +1851,32 @@ export interface Config {
 
 来源：[`packages/context/session-reference/src/config.ts:11`](../packages/context/session-reference/src/config.ts)
 
+<a id="deepseek-aidsh-session-search-projection-elasticsearch"></a>
+
+## `@deepseek-ai/dsh-session-search-projection-elasticsearch`
+
+需要：`kafka` · `elasticsearch` · `sessionCompleteMessageQuery`
+
+```ts config-catalog
+/** Explicit deployment settings; the plugin supplies no hidden defaults. */
+export interface Config {
+  /** Kafka topic authorized on `ctx.kafka`. */
+  topic: string
+  /** Independent consumer group authorized on `ctx.kafka`. */
+  groupId: string
+  /** Complete Kafka-value byte limit passed to `decodeSessionMessageChange`. */
+  maxBytes: number
+  /** Existing Elasticsearch index whose mapping this plugin validates. */
+  index: string
+  /** Kafka start mode used when the group has no committed offset. */
+  mode: KafkaSubscriptionMode
+}
+```
+
+依赖：[`KafkaSubscriptionMode`](subsystems/kafka.md)
+
+来源：[`packages/session/session-search-projection-elasticsearch/src/index.ts:68`](../packages/session/session-search-projection-elasticsearch/src/index.ts)
+
 <a id="deepseek-aidsh-session-telemetry-otel"></a>
 
 ## `@deepseek-ai/dsh-session-telemetry-otel`

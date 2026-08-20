@@ -51,11 +51,11 @@ The invalidation Consumer does not read MySQL and does not refill Redis. Active 
 
 ## Elasticsearch projection
 
-For `upsert`, the projection Consumer reads the event at `(sessionId, sourceSeq)` through `ctx.sessionQuery`, verifies the authoritative user and message identities, extracts only complete user or assistant visible text, and writes one message document. The document stores user, session, message, role, visible content, source time, source sequence, and deletion state.
+For `upsert`, `@deepseek-ai/dsh-session-search-projection-elasticsearch` reads the complete message at `(sessionId, sourceSeq)` through the required `sessionCompleteMessageQuery` service, verifies the authoritative user and message identities, takes only complete user or assistant visible text, and writes one message document. The document stores user, session, message, role, visible content, source time, source sequence, and deletion state. Document `_id` is the SHA-256 hex of the JSON tuple `[userId, messageId]`. Startup compares required mapping field types and never mutates the index.
 
 For `delete`, the Consumer writes a higher-version tombstone containing identity, sequence, and `deleted: true`. Search excludes tombstones. A later search API supplies the authenticated `userId` predicate before Elasticsearch executes; post-query filtering is forbidden.
 
-Elasticsearch remains rebuildable from MySQL and the session log. Index creation, aliases, mappings, generation rebuild, tombstone cleanup, search API, and result presentation are owned outside the wire protocol package.
+Elasticsearch remains rebuildable from MySQL and the session log. Index creation, aliases, mapping updates, generation rebuild, tombstone cleanup, search API, and result presentation are owned outside this Consumer.
 
 ## Delivery, failure, and lifecycle
 
@@ -67,6 +67,6 @@ Disposal stops polling and waits for the active handler and borrowed dependency 
 
 ## First delivery scope
 
-The first package is `@deepseek-ai/dsh-session-message-change-protocol`, a pure library that owns event types, strict encoding and decoding, brands not owned by existing session or message packages, byte-bound enforcement, and Kafka key derivation. It creates no Cordis service and performs no I/O.
+`@deepseek-ai/dsh-session-message-change-protocol` is the pure wire library: event types, strict encoding and decoding, brands not owned by existing session or message packages, byte-bound enforcement, and Kafka key derivation. It creates no Cordis service and performs no I/O.
 
-The Redis and Elasticsearch Consumers, their test producer, cache read-through behavior, producer capture, search API, retries, dead-letter handling, projection rebuild, and default bundle assembly require separate package reviews.
+`@deepseek-ai/dsh-session-search-projection-elasticsearch` is the opt-in Elasticsearch Consumer. It is absent from shipped product bundles. Redis invalidation, a MySQL `sessionCompleteMessageQuery` provider, the test producer, cache read-through, producer capture, search API, retries, dead-letter handling, projection rebuild, and default bundle assembly remain separate work.

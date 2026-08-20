@@ -51,11 +51,11 @@ value 不包含消息文本、推理、失败的部分输出、缓存键、索�
 
 ## Elasticsearch projection
 
-对于 `upsert`，投影消费方通过 `ctx.sessionQuery` 读取 `(sessionId, sourceSeq)` 处的事件，验证权威用户和消息身份，只提取完整用户或 assistant 可见文本，并写入一篇消息文档。文档存储用户、会话、消息、角色、可见内容、源时间、源序号和删除状态。
+对于 `upsert`，`@deepseek-ai/dsh-session-search-projection-elasticsearch` 通过必需的 `sessionCompleteMessageQuery` 服务读取 `(sessionId, sourceSeq)` 处的完整消息，验证权威用户和消息身份，只取完整用户或 assistant 可见文本，并写入一篇消息文档。文档存储用户、会话、消息、角色、可见内容、源时间、源序号和删除状态。文档 `_id` 是 JSON tuple `[userId, messageId]` 的 SHA-256 十六进制。启动时比较必需映射字段类型，从不修改索引。
 
 对于 `delete`，消费方写入一项更高版本的墓碑，其中包含身份、序号和 `deleted: true`。搜索排除墓碑。后续搜索 API 在 Elasticsearch 执行前提供已认证 `userId` 谓词；禁止查询后过滤。
 
-Elasticsearch 保持可从 MySQL 和会话日志重建。索引创建、别名、映射、代际重建、墓碑清理、搜索 API 和结果展示均由线协议包以外的所有者负责。
+Elasticsearch 保持可从 MySQL 和会话日志重建。索引创建、别名、映射更新、代际重建、墓碑清理、搜索 API 和结果展示均由此消费方以外的所有者负责。
 
 ## Delivery, failure, and lifecycle
 
@@ -63,10 +63,10 @@ Elasticsearch 保持可从 MySQL 和会话日志重建。索引创建、别名�
 
 首批消费方采用 fail-stop。非法事件和依赖失败会拒绝 handler、保留未提交 offset，并停止该订阅。恢复操作重新挂载插件。重试 topic、死信队列、自动跳过有害记录、健康管理和无人值守恢复均延后。
 
-dispose 会停止拉取，并等待活跃 handler 和借用的依赖 callback 结算后再关闭订阅。日志省略所有者 id、资源 id、缓存键、查询正文、文档和消息内容。
+dispose（资源释放）会停止拉取，并等待活跃 handler 和借用的依赖 callback 结算后再关闭订阅。日志省略所有者 id、资源 id、缓存键、查询正文、文档和消息内容。
 
 ## First delivery scope
 
-首个包是 `@deepseek-ai/dsh-session-message-change-protocol`，它是一项纯库，负责事件类型、严格编码与解码、既有会话或消息包未负责的品牌类型、字节限制执行，以及 Kafka key 派生。它不创建 Cordis 服务，也不执行 I/O。
+`@deepseek-ai/dsh-session-message-change-protocol` 是纯线协议库：事件类型、严格编码与解码、既有会话或消息包未负责的品牌类型、字节限制执行，以及 Kafka key 派生。它不创建 Cordis 服务，也不执行 I/O。
 
-Redis 与 Elasticsearch 消费方、它们的测试生产者、缓存 read-through 行为、生产者捕获、搜索 API、重试、死信处理、投影重建和默认组合包装配需要单独进行包评审。
+`@deepseek-ai/dsh-session-search-projection-elasticsearch` 是 opt-in Elasticsearch 消费方。它不出现在随产品交付的 bundle 中。Redis 失效、MySQL `sessionCompleteMessageQuery` 提供方、测试生产者、缓存 read-through、生产者捕获、搜索 API、重试、死信处理、投影重建和默认组合包装配仍是单独工作。

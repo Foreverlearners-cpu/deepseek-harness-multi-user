@@ -136,6 +136,7 @@
     { "path": "./packages/typert/loader" },
     { "path": "./packages/session/session-persistence" },
     { "path": "./packages/session/session-message-change-protocol" },
+    { "path": "./packages/session/session-search-projection-elasticsearch" },
     { "path": "./packages/session/session-checkpoint-policy" },
     { "path": "./packages/session/session-persistence-jsonl" },
     { "path": "./packages/session/session-persistence-sqlite" },

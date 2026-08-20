@@ -34,6 +34,7 @@
 | 包 | 职责 |
 |---|---|
 | [`session-message-change-protocol/`](session-message-change-protocol/README.md) | 用户级完整消息变更的严格 Kafka 编解码器和分区键 |
+| [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | 从该事件把完整消息索引进 Elasticsearch 的 opt-in Host 消费方 |
 
 ## 标题
 

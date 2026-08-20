@@ -270,6 +270,7 @@ flowchart TD
     pkg_session_persistence_sqlite["session-persistence-sqlite"]
     pkg_session_projection["session-projection"]
     pkg_session_projection_cache["session-projection-cache"]
+    pkg_session_search_projection_elasticsearch["session-search-projection-elasticsearch"]
     pkg_session_stats["session-stats"]
     pkg_session_telemetry["session-telemetry"]
     pkg_session_telemetry_otel["session-telemetry-otel"]
@@ -589,6 +590,12 @@ flowchart TD
   pkg_session_projection_cache --> pkg_session_persistence
   pkg_session_projection_cache --> pkg_session_projection
   pkg_session_projection_cache --> pkg_storage_domain
+  pkg_session_search_projection_elasticsearch --> pkg_elasticsearch
+  pkg_session_search_projection_elasticsearch --> pkg_invariants
+  pkg_session_search_projection_elasticsearch --> pkg_kafka
+  pkg_session_search_projection_elasticsearch --> pkg_llm
+  pkg_session_search_projection_elasticsearch --> pkg_session
+  pkg_session_search_projection_elasticsearch --> pkg_session_message_change_protocol
   pkg_session_stats --> pkg_invariants
   pkg_session_stats --> pkg_llm
   pkg_session_stats --> pkg_session
@@ -1534,6 +1541,7 @@ flowchart TD
 | [`session-persistence-jsonl`](../packages/session/session-persistence-jsonl) | `session` | [`invariants`](../packages/runtime-diagnostics/invariants), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence) |
 | [`session-persistence-sqlite`](../packages/session/session-persistence-sqlite) | `session` | [`invariants`](../packages/runtime-diagnostics/invariants), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence) |
 | [`session-projection-cache`](../packages/session/session-projection-cache) | `session` | [`invariants`](../packages/runtime-diagnostics/invariants), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`session-projection`](../packages/session/session-projection), [`storage-domain`](../packages/storage/storage-domain) |
+| [`session-search-projection-elasticsearch`](../packages/session/session-search-projection-elasticsearch) | `session` | [`elasticsearch`](../packages/multi/elasticsearch), [`invariants`](../packages/runtime-diagnostics/invariants), [`kafka`](../packages/multi/kafka), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-message-change-protocol`](../packages/session/session-message-change-protocol) |
 | [`session-stats`](../packages/session/session-stats) | `session` | [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection) |
 | [`session-telemetry`](../packages/session/session-telemetry) | `session` | [`agent`](../packages/core/agent), [`invariants`](../packages/runtime-diagnostics/invariants), [`session`](../packages/core/session) |
 | [`session-title`](../packages/session/session-title) | `session` | [`brand`](../packages/util/brand), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection) |

@@ -34,6 +34,7 @@ Defines content-free durable identities shared by out-of-process cache and searc
 | Package | Role |
 |---|---|
 | [`session-message-change-protocol/`](session-message-change-protocol/README.md) | Strict Kafka codec and partition key for user-scoped complete-message changes |
+| [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | Opt-in Host Consumer that indexes complete messages from that event into Elasticsearch |
 
 ## Titles
 

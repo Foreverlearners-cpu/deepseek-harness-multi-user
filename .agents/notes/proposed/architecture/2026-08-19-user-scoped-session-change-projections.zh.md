@@ -16,10 +16,10 @@ Status: proposed
 
 新增 `@deepseek-ai/dsh-session-message-change-protocol`，这是位于 `packages/session/session-message-change-protocol` 的纯线协议库。它负责一项严格、不含内容的 `session.message.changed` 事件、二进制编码与解码，以及确定性的 Kafka 分区键。它不注册 Cordis 服务，也不执行 I/O。
 
-后续两个单一职责消费方使用该协议：
+两个单一职责消费方使用该协议：
 
 - `@deepseek-ai/dsh-session-cache-invalidation-redis` 通过 `ctx.kafka` 订阅，派生一项部署／用户／会话缓存键，并通过 `ctx.redis` 删除它。`upsert` 与 `delete` 都会使完整上下文缓存失效。缓存回填仍由会话读取所有者负责。
-- `@deepseek-ai/dsh-session-search-projection-elasticsearch` 通过独立消费组订阅，经 `ctx.sessionQuery` 读取已标识的完整消息，并通过 `ctx.elasticsearch` 建立索引。删除操作写入带版本的墓碑，而不是丢弃顺序证据。
+- `@deepseek-ai/dsh-session-search-projection-elasticsearch` 是已交付的 Host 消费方：它通过独立消费组订阅，经 `sessionCompleteMessageQuery` 读取已标识的完整消息，并通过 `ctx.elasticsearch` 建立索引。删除操作写入带版本的墓碑，而不是丢弃顺序证据。[Elasticsearch 消费方说明](../../implemented/architecture/2026-08-20-session-search-projection-elasticsearch.md)负责该实现。
 
 该协议只适用于一个部署组合、Kafka topic、Redis 目标和 Elasticsearch 写入目标属于一个租户或另一个物理隔离管理域的场景。`userId` 标识该部署内私有会话的所有者。共享的多租户传输或数据目标仍须遵循更广泛的[多用户控制面与数据面](2026-08-18-multi-user-control-and-data-planes.md)和[租户级 Elasticsearch](2026-08-18-tenant-scoped-elasticsearch-search-projections.md)提案，携带显式 `tenantId` scope。本说明不取代任一提案。
 
@@ -55,7 +55,7 @@ Kafka 采用至少一次交付。传输层只在等待的消费方 handler 成�
 
 首批消费方采用 fail-stop：格式错误的记录以及 Redis、源查询或 Elasticsearch 失败会拒绝 handler、保留未提交 offset，并停止该订阅。恢复操作重新挂载插件并重新交付记录。重试 topic、死信队列、自动跳过有害记录、投影重建和消费方健康管理属于独立工作。
 
-dispose 会停止拉取，并等待已接纳 handler 以及借用的 Redis 或 Elasticsearch callback 结算后再关闭订阅。日志可以关联有界传输位置和 `eventId`；它们省略 `userId`、`sessionId`、`messageId`、缓存键、查询正文、文档正文和消息内容。
+dispose（资源释放）会停止拉取，并等待已接纳 handler 以及借用的 Redis 或 Elasticsearch callback 结算后再关闭订阅。日志可以关联有界传输位置和 `eventId`；它们省略 `userId`、`sessionId`、`messageId`、缓存键、查询正文、文档正文和消息内容。
 
 ## Data ownership and security
 
@@ -90,7 +90,7 @@ Redis 与 Elasticsearch 包保持分离，使其依赖、失败策略、生命�
 - 包导出使用现有 `SessionId` 和 `MessageId` 品牌类型，并为每个剩余的不透明跨边界 id 建立品牌类型。
 - 包文档说明模型 token 和 KV Cache 均无直接影响、单租户部署前提，以及不存在生产者或消费方行为。
 - 后续 Redis 测试证明精确的用户／会话失效、重复安全、失败 handler 不提交，以及完全停稳的 dispose。
-- 后续 Elasticsearch 测试证明权威源读取、用户／消息身份匹配、只索引完整消息、源序号排序、墓碑、失败 handler 不提交，以及后续搜索消费方在查询前进行用户过滤。
+- Elasticsearch 消费方测试证明权威源读取、用户／消息身份匹配、只索引完整消息、源序号排序、墓碑，以及失败 handler 不提交。查询前用户过滤仍由最终搜索消费方负责。
 - 测试专用 Loader 组合通过真实包入口发布固定事件；测试生产者永远不进入出厂组合包，投影消费方在其验收路径通过前保持可选。
 
 ## Risks
