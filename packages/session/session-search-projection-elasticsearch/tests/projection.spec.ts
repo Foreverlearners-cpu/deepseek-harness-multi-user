@@ -358,7 +358,7 @@ describe('session search projection Elasticsearch Consumer', () => {
     expect(kafka.closed).toBe(false)
     expect(kafka.committed).toBe(0)
 
-    gate.resolve()
+    gate.resolve(undefined)
     await disposing
     await delivered
     expect(kafka.closed).toBe(true)

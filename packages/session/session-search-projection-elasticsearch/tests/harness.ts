@@ -191,7 +191,7 @@ export class FakeElasticsearch {
 }
 
 interface FakeElasticsearchClient {
-  indices: { getMapping(): Promise<Record<string, { mappings: { properties: Record<string, { type: string }> } }>> }
+  indices: { getMapping(): Promise<unknown> }
   index(params: {
     index: string
     id: string
