@@ -27,6 +27,14 @@
 | [`session-projection-cache/`](session-projection-cache/README.md) | 持久化并恢复投影检查点 | `ctx.sessionProjectionCache` |
 | [`session-stats/`](session-stats/README.md) | 提供全日志会话计数与墙钟时间（`sessionStats` 单元） | 注册到 `ctx.sessionProjections` |
 
+## 外部投影协议
+
+定义由进程外缓存与搜索投影共享的不含内容持久身份。
+
+| 包 | 职责 |
+|---|---|
+| [`session-message-change-protocol/`](session-message-change-protocol/README.md) | 用户级完整消息变更的严格 Kafka 编解码器和分区键 |
+
 ## 标题
 
 从会话日志派生持久会话标题，并支持可选的模型驱动提供方。

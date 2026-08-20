@@ -27,6 +27,14 @@ Serves current, log-derived per-session state to client carriers.
 | [`session-projection-cache/`](session-projection-cache/README.md) | Persists and restores projection checkpoints | `ctx.sessionProjectionCache` |
 | [`session-stats/`](session-stats/README.md) | Serves whole-log conversation counts and wall times (`sessionStats` unit) | registers on `ctx.sessionProjections` |
 
+## External projection protocol
+
+Defines content-free durable identities shared by out-of-process cache and search projections.
+
+| Package | Role |
+|---|---|
+| [`session-message-change-protocol/`](session-message-change-protocol/README.md) | Strict Kafka codec and partition key for user-scoped complete-message changes |
+
 ## Titles
 
 Derives durable session titles from the session log, with an optional model-backed provider.
