@@ -23,8 +23,20 @@ import {
 } from './session-export.ts'
 
 export type * from './api/index.ts'
-export { RpcId } from './api/rpc.ts'
+export { RpcId, SECURITY_DENIED_RPC_ID } from './api/rpc.ts'
 export { toFetchHandler } from './fetch/handler.ts'
+export {
+  API_PROXY_ROUTE_PERMISSIONS,
+  apiProxyPermission,
+  ApiProxySecurityError,
+} from './fetch/security.ts'
+export type {
+  ApiProxyRoute,
+  ApiProxySecurityCode,
+  ApiProxySecurityLease,
+  ApiProxySecurityOptions,
+  ApiProxySecurityRequest,
+} from './fetch/security.ts'
 export { AbstractApiClient, InProcessApiClient } from './fetch/client.ts'
 export type { IApiClient } from './fetch/client.ts'
 export { createApiProxy } from './api-proxy.ts'

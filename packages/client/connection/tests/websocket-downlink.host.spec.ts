@@ -1,6 +1,7 @@
 import { once } from 'node:events'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import type {
@@ -12,6 +13,7 @@ import { WebSocketDownlinks } from '../src/websocket-downlink.ts'
 
 type MuxSource = (signal: AbortSignal) => AsyncIterable<RpcRequest<MuxFrame>>
 type HostSource = (signal: AbortSignal) => AsyncIterable<RpcRequest<HostFrame>>
+type DownlinkLease = NonNullable<Parameters<WebSocketDownlinks['handleMux']>[3]>
 
 const running: (() => Promise<void>)[] = []
 
@@ -39,15 +41,19 @@ function api(mux: MuxSource, host: HostSource): ApiProxy {
   } as ApiProxy
 }
 
-async function serve(downlinks: WebSocketDownlinks): Promise<{
+async function serve(
+  downlinks: WebSocketDownlinks,
+  leaseFor: (pathname: string) => DownlinkLease | undefined = () => undefined,
+): Promise<{
   origin: string
   close: () => Promise<void>
 }> {
   const server = createServer()
   server.on('upgrade', (request, socket, head) => {
     const pathname = new URL(request.url ?? '/', 'http://dsh.internal').pathname
-    if (pathname === MUX_EVENTS_PATH) downlinks.handleMux(request, socket, head)
-    else if (pathname === HOST_EVENTS_PATH) downlinks.handleHost(request, socket, head)
+    const lease = leaseFor(pathname)
+    if (pathname === MUX_EVENTS_PATH) downlinks.handleMux(request, socket, head, lease)
+    else if (pathname === HOST_EVENTS_PATH) downlinks.handleHost(request, socket, head, lease)
     else socket.destroy()
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -131,6 +137,91 @@ describe('WebSocket downlinks', () => {
     })
   })
 
+  it('revokes one socket with 1008, releases once, and leaves the acceptor available', async () => {
+    const sourceSignals: AbortSignal[] = []
+    const mux = vi.fn((signal: AbortSignal) => {
+      sourceSignals.push(signal)
+      return idle<MuxFrame>(signal)
+    })
+    const firstAbort = new AbortController()
+    const secondAbort = new AbortController()
+    const firstRelease = vi.fn()
+    const secondRelease = vi.fn()
+    const leases: DownlinkLease[] = [
+      { signal: firstAbort.signal, release: firstRelease },
+      { signal: secondAbort.signal, release: secondRelease },
+    ]
+    const downlinks = new WebSocketDownlinks(api(mux, idle))
+    const host = await serve(downlinks, pathname => pathname === MUX_EVENTS_PATH ? leases.shift() : undefined)
+    running.push(host.close)
+
+    const revoked = new WebSocket(`${host.origin}${MUX_EVENTS_PATH}`)
+    await once(revoked, 'open')
+    await vi.waitFor(() => { expect(mux).toHaveBeenCalledTimes(1) })
+    const revokedClosed = once(revoked, 'close')
+    firstAbort.abort(new Error('policy changed'))
+    const [code, reason] = await revokedClosed as [number, Buffer]
+    expect(code).toBe(1008)
+    expect(String(reason)).toBe('authorization revoked')
+    await vi.waitFor(() => {
+      expect(sourceSignals[0]?.aborted).toBe(true)
+      expect(firstRelease).toHaveBeenCalledTimes(1)
+    })
+
+    const fresh = new WebSocket(`${host.origin}${MUX_EVENTS_PATH}`)
+    await once(fresh, 'open')
+    await vi.waitFor(() => { expect(mux).toHaveBeenCalledTimes(2) })
+    expect(sourceSignals[1]?.aborted).toBe(false)
+    expect(secondAbort.signal.aborted).toBe(false)
+    const freshClosed = once(fresh, 'close')
+    fresh.close()
+    await freshClosed
+    await vi.waitFor(() => { expect(secondRelease).toHaveBeenCalledTimes(1) })
+    expect(firstRelease).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not open a source for a lease already revoked before upgrade', async () => {
+    const leaseAbort = new AbortController()
+    leaseAbort.abort(new Error('already stale'))
+    const release = vi.fn()
+    const mux = vi.fn((signal: AbortSignal) => idle<MuxFrame>(signal))
+    const downlinks = new WebSocketDownlinks(api(mux, idle))
+    const host = await serve(downlinks, pathname => pathname === MUX_EVENTS_PATH
+      ? { signal: leaseAbort.signal, release }
+      : undefined)
+    running.push(host.close)
+
+    const socket = new WebSocket(`${host.origin}${MUX_EVENTS_PATH}`)
+    const [code, reason] = await once(socket, 'close') as [number, Buffer]
+    expect(code).toBe(1008)
+    expect(String(reason)).toBe('authorization revoked')
+    expect(mux).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases an owned lease when WebSocket negotiation throws synchronously', async () => {
+    const release = vi.fn()
+    const downlinks = new WebSocketDownlinks(api(idle, idle))
+    const server = (downlinks as unknown as {
+      server: { handleUpgrade: (...args: unknown[]) => void }
+    }).server
+    const handleUpgrade = vi.spyOn(server, 'handleUpgrade').mockImplementation(() => {
+      throw new Error('upgrade failed')
+    })
+
+    expect(() => {
+      downlinks.handleMux(
+        {} as Parameters<WebSocketDownlinks['handleMux']>[0],
+        new PassThrough(),
+        Buffer.alloc(0),
+        { signal: new AbortController().signal, release },
+      )
+    }).toThrow('upgrade failed')
+    expect(release).toHaveBeenCalledTimes(1)
+    handleUpgrade.mockRestore()
+    await downlinks.close()
+  })
+
   it('rejects client messages because upstream remains HTTP', async () => {
     let aborted = false
     const downlinks = new WebSocketDownlinks(api(
@@ -169,7 +260,7 @@ describe('WebSocket downlinks', () => {
     const closed = once(socket, 'close')
     expect((await failure).payload).toEqual({
       type: 'stream/error',
-      error: { code: 'internal', message: 'Error: mux source failed', details: {} },
+      error: { code: 'internal', message: 'handler failure', details: {} },
     })
     await closed
   })

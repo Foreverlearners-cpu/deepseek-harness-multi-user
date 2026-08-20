@@ -12,7 +12,7 @@ import type { ApiProxy, MuxFrame, HostFrame } from '../api/index.ts'
 import { sessionLogQuerySchema } from '../api/downloads.schema.ts'
 import type { RequestPayload, ResponseValue, RpcMethodMap } from '../api/rpc-map.ts'
 import type { ClientRequest, RpcError, RpcRequest, RpcResponse, ServerRequest, ServerResponse } from '../api/rpc.ts'
-import { RpcId } from '../api/rpc.ts'
+import { RpcId, SECURITY_DENIED_RPC_ID } from '../api/rpc.ts'
 import type { Wire } from '../api/rpc.schema.ts'
 import { clientRequestSchema, clientResponseSchema } from '../api/rpc.schema.ts'
 import {
@@ -70,6 +70,13 @@ import {
   subagentListRequestSchema,
   subagentPromptRequestSchema,
 } from '../api/subagents.schema.ts'
+import {
+  API_PROXY_ROUTE_PERMISSIONS,
+  ApiProxySecurityError,
+  type ApiProxyRoute,
+  type ApiProxySecurityLease,
+  type ApiProxySecurityOptions,
+} from './security.ts'
 
 /**
  * Unary dispatch table, keyed by (and compiler-locked to) RpcMethodMap: a map row without a
@@ -187,7 +194,8 @@ async function handleUnary<K extends keyof RpcMethodMap>(
     return fullResponse(await route.invoke(api, { rpcId: message.rpcId, payload: payload.data }, signal))
   } catch (error: unknown) {
     // The impl never throws business errors; reaching here means the implementation itself crashed — 500, carrier layer.
-    return new Response(`handler failure: ${String(error)}`, { status: 500 })
+    void error
+    return new Response('handler failure', { status: 500 })
   }
 }
 
@@ -196,38 +204,91 @@ function fullFrame(narrow: RpcRequest<MuxFrame | HostFrame>): ServerRequest {
   return { type: 'server-request', rpcId: narrow.rpcId, method: narrow.payload.type, payload: narrow.payload }
 }
 
+interface StreamLifetime {
+  readonly signal: AbortSignal
+  abort(reason?: unknown): void
+  release(): void
+}
+
+function streamLifetime(signals: readonly AbortSignal[]): StreamLifetime {
+  const controller = new AbortController()
+  const listeners = new Map<AbortSignal, () => void>()
+  const release = (): void => {
+    for (const [signal, listener] of listeners) signal.removeEventListener('abort', listener)
+    listeners.clear()
+  }
+  for (const signal of signals) {
+    if (signal.aborted) {
+      controller.abort(signal.reason)
+      break
+    }
+    const listener = (): void => { controller.abort(signal.reason) }
+    listeners.set(signal, listener)
+    signal.addEventListener('abort', listener, { once: true })
+  }
+  return {
+    signal: controller.signal,
+    abort: (reason) => { controller.abort(reason) },
+    release,
+  }
+}
+
 /**
- * Wrap a frame stream as an SSE Response; stops when req.signal aborts. An
- * impl throw mid-stream emits one stream/error frame and then closes.
+ * Wrap a frame source as an SSE Response. Request cancellation and an optional
+ * authorization lease share one lifetime; revocation closes cleanly instead
+ * of masquerading as an internal source failure.
  */
-function sseResponse(frames: AsyncIterable<RpcRequest<MuxFrame | HostFrame>>): Response {
+function sseResponse(
+  open: (signal: AbortSignal) => AsyncIterable<RpcRequest<MuxFrame | HostFrame>>,
+  requestSignal: AbortSignal,
+  lease?: ApiProxySecurityLease,
+): Response {
   const encoder = new TextEncoder()
+  const lifetime = streamLifetime(lease === undefined
+    ? [requestSignal]
+    : [requestSignal, lease.signal])
+  let released = false
+  const release = (): void => {
+    if (released) return
+    released = true
+    lifetime.release()
+    lease?.release()
+  }
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
+        if (lifetime.signal.aborted) return
         // Send an SSE comment line on open so clients/proxies see a live channel (the host
         // stream has no baseline frames and would otherwise emit zero bytes while idle;
         // a comment line is not a frame, so client frame parsing skips it naturally).
         controller.enqueue(encoder.encode(': connected\n\n'))
-        for await (const narrow of frames) {
+        for await (const narrow of open(lifetime.signal)) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(fullFrame(narrow))}\n\n`))
         }
       } catch (error: unknown) {
         // Mid-stream impl failure → one stream/error frame, then close: the client must see
         // the failure instead of a silent end (which reads as a normal disconnect). A fresh
         // rpcId is minted — this is a server-initiated push like any other frame.
-        const failure: MuxFrame | HostFrame = { type: 'stream/error', error: { code: 'internal', message: String(error), details: {} } }
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(fullFrame({ rpcId: RpcId(randomUUID()), payload: failure }))}\n\n`))
-        } catch {
-          // Consumer already cancelled the stream: enqueue-after-cancel is the
-          // only reachable error, and there is no one left to tell.
+        if (!lifetime.signal.aborted) {
+          void error
+          const failure: MuxFrame | HostFrame = { type: 'stream/error', error: { code: 'internal', message: 'handler failure', details: {} } }
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(fullFrame({ rpcId: RpcId(randomUUID()), payload: failure }))}\n\n`))
+          } catch {
+            // Consumer already cancelled the stream: enqueue-after-cancel is the
+            // only reachable error, and there is no one left to tell.
+          }
         }
       } finally {
+        release()
         try {
           controller.close()
         } catch { /* already cancelled by the consumer: a double close is the only reachable error */ }
       }
+    },
+    cancel(reason) {
+      lifetime.abort(reason)
+      release()
     },
   })
   return new Response(stream, {
@@ -238,9 +299,90 @@ function sseResponse(frames: AsyncIterable<RpcRequest<MuxFrame | HostFrame>>): R
 /**
  * Wraps an ApiProxy into a pure fetch function (isomorphic point: feed the returned fetch straight to InProcessApiClient).
  * @param api - the host-side ApiProxy implementation.
+ * @param options - Optional carrier security adapter.
  * @returns an object holding `fetch(Request)`; paths outside /api/ return 404.
  */
-export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
+export function toFetchHandler(api: ApiProxy, options: { security?: ApiProxySecurityOptions } = {}): { fetch: typeof fetch } {
+  const security = options.security
+  interface SecurityGrant {
+    readonly input: {
+      readonly request: Request
+      readonly route: ApiProxyRoute
+      readonly permission: string
+      readonly call: unknown
+    }
+    readonly decision: unknown
+  }
+
+  function securityDenial(
+    route: ApiProxyRoute,
+    code: 'unauthenticated' | 'permission-denied',
+    direct: boolean,
+    rpcId?: RpcId,
+  ): Response {
+    if (direct) return Response.json({ error: code }, { status: code === 'unauthenticated' ? 401 : 403 })
+    return errorResponse(rpcId ?? SECURITY_DENIED_RPC_ID, code === 'unauthenticated'
+      ? { code, message: code, details: {} }
+      : { code, message: code, details: { permission: API_PROXY_ROUTE_PERMISSIONS[route] } })
+  }
+
+  async function secure(
+    request: Request,
+    route: ApiProxyRoute,
+    direct = false,
+    rpcId?: RpcId,
+  ): Promise<SecurityGrant | Response | undefined> {
+    if (security === undefined) return undefined
+    let call: unknown
+    try {
+      call = await security.authenticate(request)
+    } catch {
+      return securityDenial(route, 'unauthenticated', direct, rpcId)
+    }
+    const securityRequest = {
+      request,
+      route,
+      permission: API_PROXY_ROUTE_PERMISSIONS[route],
+      call,
+    }
+    try {
+      const decision = await security.authorize(securityRequest)
+      return { input: securityRequest, decision }
+    } catch (error: unknown) {
+      const code = error instanceof ApiProxySecurityError ? error.code : 'permission-denied'
+      return securityDenial(route, code, direct, rpcId)
+    }
+  }
+
+  async function assertCurrent(
+    grant: SecurityGrant | undefined,
+    direct = false,
+    rpcId?: RpcId,
+  ): Promise<Response | undefined> {
+    if (grant === undefined || security?.assertCurrent === undefined) return undefined
+    try {
+      await security.assertCurrent(grant.input, grant.decision)
+      return undefined
+    } catch (error: unknown) {
+      const code = error instanceof ApiProxySecurityError ? error.code : 'permission-denied'
+      return securityDenial(grant.input.route, code, direct, rpcId)
+    }
+  }
+
+  async function openLease(
+    grant: SecurityGrant | undefined,
+    direct = false,
+    rpcId?: RpcId,
+  ): Promise<ApiProxySecurityLease | Response | undefined> {
+    if (grant === undefined || security?.openLease === undefined) return undefined
+    try {
+      return await security.openLease(grant.input, grant.decision)
+    } catch (error: unknown) {
+      const code = error instanceof ApiProxySecurityError ? error.code : 'permission-denied'
+      return securityDenial(grant.input.route, code, direct, rpcId)
+    }
+  }
+
   return {
     // Signature matches global fetch: the isomorphic point hands this function to InProcessApiClient as its transport aspect,
     // Clients call in (url, init) form — normalize to Request before handling.
@@ -252,18 +394,42 @@ export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
       // No-envelope read channels (SSE GET streams + host-only download):
       // physical routes that answer directly, without a wire envelope.
       if (path === '/api/events.mux' && req.method === 'GET') {
-        return sseResponse(api.events.mux({ rpcId: RpcId(randomUUID()), payload: {} }, req.signal))
+        const secured = await secure(req, 'events.mux', true)
+        if (secured instanceof Response) return secured
+        const stale = await assertCurrent(secured, true)
+        if (stale !== undefined) return stale
+        const lease = await openLease(secured, true)
+        if (lease instanceof Response) return lease
+        return sseResponse(
+          signal => api.events.mux({ rpcId: RpcId(randomUUID()), payload: {} }, signal),
+          req.signal,
+          lease,
+        )
       }
       if (path === '/api/events.host' && req.method === 'GET') {
-        return sseResponse(api.events.host({ rpcId: RpcId(randomUUID()), payload: {} }, req.signal))
+        const secured = await secure(req, 'events.host', true)
+        if (secured instanceof Response) return secured
+        const stale = await assertCurrent(secured, true)
+        if (stale !== undefined) return stale
+        const lease = await openLease(secured, true)
+        if (lease instanceof Response) return lease
+        return sseResponse(
+          signal => api.events.host({ rpcId: RpcId(randomUUID()), payload: {} }, signal),
+          req.signal,
+          lease,
+        )
       }
       if (path === '/api/session.export' && (req.method === 'GET' || req.method === 'HEAD')) {
+        const secured = await secure(req, 'session.export', true)
+        if (secured instanceof Response) return secured
         // Query params are a different boundary from the POST envelope, but
         // the request still casts its brands only through the domain schema.
         const parsed = sessionLogQuerySchema.safeParse(Object.fromEntries(url.searchParams))
         if (!parsed.success) {
           return new Response('missing or invalid sessionId query parameter', { status: 400 })
         }
+        const stale = await assertCurrent(secured, true)
+        if (stale !== undefined) return stale
         const response = await api.downloads.sessionLog(parsed.data, req.signal)
         if (req.method === 'GET') return response
         await response.body?.cancel()
@@ -285,6 +451,19 @@ export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
         return new Response('content type must be application/json', { status: 415 })
       }
 
+      const route: ApiProxyRoute | undefined = path === '/api/respond'
+        ? 'respond'
+        : methodFor(path.slice('/api/'.length))
+      if (route === undefined) return new Response('not found', { status: 404 })
+
+      // Authenticate and authorize while the original Request body is still
+      // owned by the carrier.  The security Provider may inspect headers,
+      // credentials, or the request signal; a denied caller must not get a
+      // payload parse oracle and must never reach a domain handler.
+      const respond = route === 'respond'
+      const secured = await secure(req, route, respond, SECURITY_DENIED_RPC_ID)
+      if (secured instanceof Response) return secured
+
       let body: unknown
       try {
         body = await req.json()
@@ -296,10 +475,12 @@ export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
       if (path === '/api/respond') {
         const parsed = clientResponseSchema.safeParse(body)
         if (!parsed.success) return Response.json({ accepted: false, reason: 'bad-response' })
+        const stale = await assertCurrent(secured, true, parsed.data.rpcId)
+        if (stale !== undefined) return stale
         return Response.json(await api.respond(parsed.data))
       }
 
-      const method = methodFor(path.slice('/api/'.length))
+      const method = route === 'respond' ? undefined : route
       if (method === undefined) return new Response('not found', { status: 404 })
 
       const envelope = clientRequestSchema.safeParse(body)
@@ -314,6 +495,8 @@ export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
       if (message.method !== method) {
         return errorResponse(message.rpcId, { code: 'bad-request', message: `method "${message.method}" does not match path "${method}"`, details: { issues: [] } })
       }
+      const stale = await assertCurrent(secured, false, message.rpcId)
+      if (stale !== undefined) return stale
       return handleUnary(api, method, message, req.signal)
     },
   }

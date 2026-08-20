@@ -38,7 +38,9 @@ interface TypertLookupDefinition {
 
 ## 调用 descriptor
 
-`InvocationDescriptor` 是本地反射信息，不是 wire message。Host 与消费方构建会生成彼此对应的 descriptor；请求只发送 endpoint 与具名 `args`。strict codec 携带生成的 schema，SRC codec 则在不恢复结构类型的前提下强制要求 JSON 安全值。取消通过带外 carrier signal 表达：它在业务参数之后注入，绝不进入 `args`。
+`InvocationDescriptor` 是本地反射信息，不是 wire message。Host 与消费方构建会生成彼此对应的 descriptor；请求只发送 endpoint 与具名 `args`。每个 `@Remote(options)` 和 `@RemoteScope(key, options)` 声明都要提供 options 对象：`access: 'authenticated'` 选择仅身份访问，`permission` 则选择权限访问。裸 decorator 和字符串 alias 均不合法。authenticated descriptor 要求有效的 Host-issued call，但不含 `authorization` metadata，也不会把 call 注入业务方法。permission descriptor 携带 `authorization`；其 Host 方法必须把非可选的 `call: AuthenticatedCall` 声明为首参，生成过程会从 Client 签名和 wire `args` 中移除它。
+
+`access` 是必填的闭合判别字段。生成、加载和注册会拒绝缺失或未知值、携带 `authorization` 的 authenticated descriptor，以及缺少匹配授权 metadata 的 permission descriptor。strict descriptor 与 live marker 还必须在 access、permission、endpoint alias 及 direct/scoped invocation 上一致。Gateway 会在检查参数前校验 Host-issued call；permission 授权则在具名参数精确校验、业务 lookup provider 解析以及 RemoteScope Context identity、Context 或 scoped receiver 解析之前完成。allow decision 会在即将调用方法前再次校验。无效 descriptor 或已撤回的 strict definition 绝不会回退到 authenticated 或 SRC 执行。取消仍通过带外 carrier signal 表达：它在业务参数之后注入，绝不进入 `args`。
 
 ```ts type-equiv
 /** Codec attached to one invocation parameter or result. */
@@ -73,45 +75,24 @@ interface InvocationParameterDescriptor {
 
 ```ts type-equiv
 /** Carrier-independent description of one exported method invocation. */
-interface InvocationDescriptor {
-  /** Globally stable generated identity. */
-  readonly id: string
-  /** Cordis service key owning the method. */
-  readonly service: string
-  /** Wire namespace, defaulting to the service key. */
-  readonly namespace: string
-  /** Public instance method name. */
-  readonly method: string
-  /** Service member invoked when the exported method name is an alias. */
-  readonly implementation?: string
-  /** Receiver selection mode. */
-  readonly invocation:
-    | { readonly kind: 'direct' }
-    | {
-      readonly kind: 'context'
-      readonly context: string
-      readonly wire: string
-      readonly codec: TypertCodec
+type InvocationDescriptor = InvocationDescriptorBase & (
+  | {
+    /** A valid Host-issued authenticated call is sufficient. */
+    readonly access: 'authenticated'
+    readonly authorization?: never
+  }
+  | {
+    /** Product authorization is required before dispatch. */
+    readonly access: 'permission'
+    /** Host-only authorization and call-context injection. */
+    readonly authorization: {
+      /** Product permission required before argument validation or lookup. */
+      readonly permission: string
+      /** Reserved first Host parameter omitted from the wire and Client signature. */
+      readonly callParameter: 'call'
     }
-  /** Optional consuming-Context projection for one direct lookup parameter. */
-  readonly scope?: {
-    /** Context kind whose Client binder supplies the identity. */
-    readonly context: string
-    /** Lookup parameter wire field replaced by the Context identity. */
-    readonly wire: string
   }
-  /** Ordered business parameters. */
-  readonly parameters: readonly InvocationParameterDescriptor[]
-  /** Transport cancellation injected after business parameters instead of entering wire args. */
-  readonly cancellation?: {
-    /** Reserved final Host method parameter. */
-    readonly parameter: 'signal'
-  }
-  /** Codec for the resolved method result. */
-  readonly result: TypertCodec
-  /** Source declaration used only for diagnostics. */
-  readonly sourceLocation?: InvocationSourceLocation
-}
+)
 ```
 
 ## Typert 注册表
@@ -137,19 +118,19 @@ interface TypertRemoteNamespaceMap {}
 
 ## Host Gateway
 
-Connection 会先解码 carrier envelope，再调用 `ctx.typertGateway`。请求将精确的具名 wire 字段与 carrier 的取消 signal 分开携带；基础设施与边界失败使用 Gateway 的进程内错误分类体系，普通异常由 RPC 适配器归并为传输层的 `internal` 错误码，lookup 策略通过 `TypertLookupFailure` 携带的既有 RPC error 则原样返回。
+Connection 会先解码 carrier envelope，再调用 `ctx.typertGateway`。请求将精确的具名 wire 字段与认证 call、取消 signal 分开携带；基础设施与边界失败使用 Gateway 的进程内错误分类体系，普通异常由 RPC 适配器归并为传输层的 `internal` 错误码，lookup 策略通过 `TypertLookupFailure` 携带的既有 RPC error 则原样返回。
 
 ```ts type-equiv
 /** One Remote method request after a carrier has decoded its envelope. */
 interface InvokeRemoteRequest {
+  /** Host-issued caller identity supplied out of band and never decoded from `args`. */
+  readonly call: AuthenticatedCall
   /** Remote namespace selected by the generated descriptor. */
   readonly namespace: string
   /** Exported Service method name. */
   readonly method: string
   /** Named wire values; fields must exactly match the descriptor. */
   readonly args: Readonly<Record<string, unknown>>
-  /** Carrier or direct-caller cancellation injected only into cancellation-aware methods. */
-  readonly signal?: AbortSignal
 }
 ```
 
@@ -314,7 +295,7 @@ toJSONSchema(key: string, params?: z.core.ToJSONSchemaParams): z.core.JSONSchema
 
 Types: [TypertContribution](invariants.md) · [TypertFace](invariants.md) · [TypertPackageFilter](invariants.md) · [TypertPackageRecord](invariants.md) · [TypertSchemaFilter](invariants.md) · [TypertSchemaRecord](invariants.md)
 
-Source: [`packages/typert/registry/src/service.ts:446`](../../packages/typert/registry/src/service.ts)
+Source: [`packages/typert/registry/src/service.ts:465`](../../packages/typert/registry/src/service.ts)
 
 <a id="ctxtypertgateway--typertgatewayservice"></a>
 
@@ -327,10 +308,12 @@ Resolve strict generated definitions or conservative SRC markers against current
  * Invoke one live Remote method through strict generated reflection or SRC markers.
  * @param request - decoded endpoint and exact named wire arguments.
  * @returns the validated business result.
- * @throws {@link TypertGatewayError} for dispatch, provider, or boundary failures; lookup-policy and business errors retain identity.
+ * @throws {@link AuthenticationError} for an invalid call.
+ * @throws {@link TypertGatewayError} for dispatch, provider, or boundary failures.
+ * Lookup-policy and business errors retain identity.
  */
 async invoke(request: InvokeRemoteRequest): Promise<unknown>
 ```
 
-Source: [`packages/api/gateway/src/index.ts:90`](../../packages/api/gateway/src/index.ts)
+Source: [`packages/api/gateway/src/index.ts:109`](../../packages/api/gateway/src/index.ts)
 <!-- END GENERATED cordis-surface -->

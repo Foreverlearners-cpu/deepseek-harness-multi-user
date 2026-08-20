@@ -33,6 +33,22 @@
     - id: typert-loader
       name: '@deepseek-ai/dsh-typert-loader'
 
+    # Local profiles authenticate through an explicit synthetic identity. A
+    # server composition replaces this row with a real Authentication Provider.
+    - id: authentication
+      name: '@deepseek-ai/dsh-authentication-local'
+      config:
+        principalId: local-user
+        tenantId: local-tenant
+        membershipId: local-membership
+
+    # Account authorization is independent from sandbox and approval policy.
+    # Local profiles explicitly trust the local principal for registered actions.
+    - id: authorization
+      name: '@deepseek-ai/dsh-authorization-static'
+      config:
+        mode: trusted-local
+
     - id: typert-gateway
       name: '@deepseek-ai/dsh-api-gateway'
 

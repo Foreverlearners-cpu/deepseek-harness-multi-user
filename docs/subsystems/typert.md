@@ -38,7 +38,9 @@ interface TypertLookupDefinition {
 
 ## Invocation descriptors
 
-An `InvocationDescriptor` is local reflection, not a wire message. Host and consumer builds generate corresponding descriptors; the request sends only the endpoint and named `args`. Strict codecs carry generated schemas, while SRC codecs enforce JSON-safe values without structural type recovery. Cancellation is an out-of-band carrier signal injected after business parameters and never enters `args`.
+An `InvocationDescriptor` is local reflection, not a wire message. Host and consumer builds generate corresponding descriptors; the request sends only the endpoint and named `args`. Every `@Remote(options)` and `@RemoteScope(key, options)` declaration supplies an options object: `access: 'authenticated'` selects identity-only access, while `permission` selects permission access. Bare decorators and string aliases are invalid. An authenticated descriptor requires a valid Host-issued call but has no `authorization` metadata and does not inject the call into the business method. A permission descriptor carries `authorization`; its Host method declares a non-optional first `call: AuthenticatedCall`, which generation removes from the Client signature and wire `args`.
+
+`access` is a required closed discriminant. Generation, loading, and registration reject a missing or unknown value, an authenticated descriptor with `authorization`, or a permission descriptor without matching authorization metadata. Strict descriptors and live markers must also agree on access, permission, endpoint alias, and direct or scoped invocation. Gateway validates the Host-issued call before inspecting arguments, and permission authorization completes before exact argument validation, business lookup-provider resolution, and RemoteScope Context identity, Context, or scoped-receiver resolution. The allow decision is checked again immediately before invocation. No invalid descriptor or withdrawn strict definition falls back to authenticated or SRC execution. Cancellation remains an out-of-band carrier signal injected after business parameters and never enters `args`.
 
 ```ts type-equiv
 /** Codec attached to one invocation parameter or result. */
@@ -73,45 +75,24 @@ interface InvocationParameterDescriptor {
 
 ```ts type-equiv
 /** Carrier-independent description of one exported method invocation. */
-interface InvocationDescriptor {
-  /** Globally stable generated identity. */
-  readonly id: string
-  /** Cordis service key owning the method. */
-  readonly service: string
-  /** Wire namespace, defaulting to the service key. */
-  readonly namespace: string
-  /** Public instance method name. */
-  readonly method: string
-  /** Service member invoked when the exported method name is an alias. */
-  readonly implementation?: string
-  /** Receiver selection mode. */
-  readonly invocation:
-    | { readonly kind: 'direct' }
-    | {
-      readonly kind: 'context'
-      readonly context: string
-      readonly wire: string
-      readonly codec: TypertCodec
+type InvocationDescriptor = InvocationDescriptorBase & (
+  | {
+    /** A valid Host-issued authenticated call is sufficient. */
+    readonly access: 'authenticated'
+    readonly authorization?: never
+  }
+  | {
+    /** Product authorization is required before dispatch. */
+    readonly access: 'permission'
+    /** Host-only authorization and call-context injection. */
+    readonly authorization: {
+      /** Product permission required before argument validation or lookup. */
+      readonly permission: string
+      /** Reserved first Host parameter omitted from the wire and Client signature. */
+      readonly callParameter: 'call'
     }
-  /** Optional consuming-Context projection for one direct lookup parameter. */
-  readonly scope?: {
-    /** Context kind whose Client binder supplies the identity. */
-    readonly context: string
-    /** Lookup parameter wire field replaced by the Context identity. */
-    readonly wire: string
   }
-  /** Ordered business parameters. */
-  readonly parameters: readonly InvocationParameterDescriptor[]
-  /** Transport cancellation injected after business parameters instead of entering wire args. */
-  readonly cancellation?: {
-    /** Reserved final Host method parameter. */
-    readonly parameter: 'signal'
-  }
-  /** Codec for the resolved method result. */
-  readonly result: TypertCodec
-  /** Source declaration used only for diagnostics. */
-  readonly sourceLocation?: InvocationSourceLocation
-}
+)
 ```
 
 ## Typert registry
@@ -137,19 +118,19 @@ interface TypertRemoteNamespaceMap {}
 
 ## Host Gateway
 
-Connection decodes its carrier envelope before calling `ctx.typertGateway`. The request carries exact named wire fields and the carrier's cancellation signal separately; infrastructure and boundary failures use the Gateway's in-process error taxonomy, ordinary exceptions are folded by the RPC adapter into the transport's `internal` error code, and existing RPC errors carried by lookup policy through `TypertLookupFailure` are returned unchanged.
+Connection decodes its carrier envelope before calling `ctx.typertGateway`. The request carries exact named wire fields and the authenticated call and cancellation signal separately; infrastructure and boundary failures use the Gateway's in-process error taxonomy, ordinary exceptions are folded by the RPC adapter into the transport's `internal` error code, and existing RPC errors carried by lookup policy through `TypertLookupFailure` are returned unchanged.
 
 ```ts type-equiv
 /** One Remote method request after a carrier has decoded its envelope. */
 interface InvokeRemoteRequest {
+  /** Host-issued caller identity supplied out of band and never decoded from `args`. */
+  readonly call: AuthenticatedCall
   /** Remote namespace selected by the generated descriptor. */
   readonly namespace: string
   /** Exported Service method name. */
   readonly method: string
   /** Named wire values; fields must exactly match the descriptor. */
   readonly args: Readonly<Record<string, unknown>>
-  /** Carrier or direct-caller cancellation injected only into cancellation-aware methods. */
-  readonly signal?: AbortSignal
 }
 ```
 
@@ -314,7 +295,7 @@ toJSONSchema(key: string, params?: z.core.ToJSONSchemaParams): z.core.JSONSchema
 
 Types: [TypertContribution](invariants.md) · [TypertFace](invariants.md) · [TypertPackageFilter](invariants.md) · [TypertPackageRecord](invariants.md) · [TypertSchemaFilter](invariants.md) · [TypertSchemaRecord](invariants.md)
 
-Source: [`packages/typert/registry/src/service.ts:446`](../../packages/typert/registry/src/service.ts)
+Source: [`packages/typert/registry/src/service.ts:465`](../../packages/typert/registry/src/service.ts)
 
 <a id="ctxtypertgateway--typertgatewayservice"></a>
 
@@ -327,10 +308,12 @@ Resolve strict generated definitions or conservative SRC markers against current
  * Invoke one live Remote method through strict generated reflection or SRC markers.
  * @param request - decoded endpoint and exact named wire arguments.
  * @returns the validated business result.
- * @throws {@link TypertGatewayError} for dispatch, provider, or boundary failures; lookup-policy and business errors retain identity.
+ * @throws {@link AuthenticationError} for an invalid call.
+ * @throws {@link TypertGatewayError} for dispatch, provider, or boundary failures.
+ * Lookup-policy and business errors retain identity.
  */
 async invoke(request: InvokeRemoteRequest): Promise<unknown>
 ```
 
-Source: [`packages/api/gateway/src/index.ts:90`](../../packages/api/gateway/src/index.ts)
+Source: [`packages/api/gateway/src/index.ts:109`](../../packages/api/gateway/src/index.ts)
 <!-- END GENERATED cordis-surface -->

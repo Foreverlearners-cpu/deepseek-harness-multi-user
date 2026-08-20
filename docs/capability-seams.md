@@ -7,6 +7,15 @@ A service can be a core spine service, a swappable capability seam, or a bundle/
 
 ```mermaid
 flowchart LR
+  pkg_authentication["authentication"]
+  svc_authentication["ctx.authentication<br/>Verified Host call identity"]
+  pkg_authentication_local["authentication-local"]
+  pkg_connection["connection"]
+  pkg_api_gateway["api-gateway"]
+  pkg_authorization["authorization"]
+  svc_authorization["ctx.authorization<br/>Default-deny action policy"]
+  pkg_authorization_static["authorization-static"]
+  pkg_plugin_inventory["plugin-inventory"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -38,7 +47,6 @@ flowchart LR
   pkg_typert_registry["typert-registry"]
   svc_typert["ctx.typert<br/>Runtime type registry"]
   pkg_typert_loader["typert-loader"]
-  pkg_api_gateway["api-gateway"]
   svc_typertGateway["ctx.typertGateway<br/>Typert Host invocation gateway"]
   svc_sessionPersistence["ctx.sessionPersistence<br/>Durable session persistence seam"]
   pkg_session_persistence_jsonl["session-persistence-jsonl"]
@@ -185,7 +193,6 @@ flowchart LR
   pkg_directory_picker_browse["directory-picker-browse"]
   pkg_webserver["webserver"]
   svc_webServer["ctx.webServer<br/>HTTP route registration"]
-  pkg_connection["connection"]
   pkg_modules["modules"]
   pkg_hmr["hmr"]
   svc_clientModules["ctx.clientModules<br/>Client plugin graph host"]
@@ -211,6 +218,10 @@ flowchart LR
   pkg_approval --> svc_approval
   pkg_attachment --> svc_attachments
   pkg_attachment_local --> svc_attachments
+  pkg_authentication --> svc_authentication
+  pkg_authentication_local --> svc_authentication
+  pkg_authorization --> svc_authorization
+  pkg_authorization_static --> svc_authorization
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
   pkg_code_runtime --> svc_codeRuntime
@@ -317,6 +328,12 @@ flowchart LR
   svc_approval --> pkg_tools
   svc_attachments --> pkg_host_runtime
   svc_attachments --> pkg_llm_pi_ai
+  svc_authentication --> pkg_api_gateway
+  svc_authentication --> pkg_authorization
+  svc_authentication --> pkg_connection
+  svc_authorization --> pkg_api_gateway
+  svc_authorization --> pkg_connection
+  svc_authorization --> pkg_plugin_inventory
   svc_clientModules --> pkg_hmr
   svc_codeRuntime --> pkg_tools
   svc_compaction --> pkg_compaction_basic
@@ -423,6 +440,8 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.authentication` | `seam` | [`authentication`](../packages/identity/authentication) | [`authentication-local`](../packages/identity/authentication-local) | `connection`, [`api-gateway`](../packages/api/gateway), [`authorization`](../packages/identity/authorization) | - | Transport adapters submit carrier-owned evidence; the active Provider exclusively mints immutable calls accepted by downstream authorization. |
+| `ctx.authorization` | `seam` | [`authorization`](../packages/identity/authorization) | [`authorization-static`](../packages/identity/authorization-static) | `connection`, [`api-gateway`](../packages/api/gateway), `plugin-inventory` | - | Domains register stable actions; the Provider evaluates authenticated calls and publishes policy versions that enforcement points re-check before use. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | `host-runtime`, [`llm-pi-ai`](../packages/llm/llm-pi-ai) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Owns isolated per-session replay folds; pressure consumers share immutable revisioned measurements. |

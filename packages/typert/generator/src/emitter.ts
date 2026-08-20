@@ -278,6 +278,7 @@ export class FaceModelEmitter {
       `  service: ${quote(invocation.service)},`,
       `  namespace: ${quote(invocation.namespace)},`,
       `  method: ${quote(invocation.method)},`,
+      `  access: ${quote(invocation.access)},`,
     ]
     if (invocation.implementation !== undefined) {
       lines.push(`  implementation: ${quote(invocation.implementation)},`)
@@ -316,6 +317,12 @@ export class FaceModelEmitter {
       lines.push('    },')
     })
     lines.push('  ],')
+    if (invocation.authorization !== undefined) {
+      lines.push('  authorization: {')
+      lines.push(`    permission: ${quote(invocation.authorization.permission)},`)
+      lines.push("    callParameter: 'call',")
+      lines.push('  },')
+    }
     if (invocation.cancellation !== undefined) {
       lines.push("  cancellation: { parameter: 'signal' },")
     }

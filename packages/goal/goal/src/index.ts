@@ -273,7 +273,7 @@ export class GoalService extends TypertRemoteService {
    * @param request - at least one replacement field.
    * @returns the edited view.
    */
-  @Remote('edit')
+  @Remote({ access: 'authenticated', exportName: 'edit' })
   edit(agent: Agent, ref: GoalRef, request: EditGoalRequest): GoalView {
     const cache = this.prepareMutation(agent)
     const current = this.expectCurrent(cache, ref)
@@ -295,7 +295,7 @@ export class GoalService extends TypertRemoteService {
    * @param ref - expected current revision.
    * @returns the paused view.
    */
-  @Remote('pause')
+  @Remote({ access: 'authenticated', exportName: 'pause' })
   pause(agent: Agent, ref: GoalRef): GoalView {
     return this.transition(agent, ref, 'pause', ['active'], 'paused', 'disarmed')
   }
@@ -307,7 +307,7 @@ export class GoalService extends TypertRemoteService {
    * @param ref - expected current revision.
    * @returns the active view.
    */
-  @Remote('resume')
+  @Remote({ access: 'authenticated', exportName: 'resume' })
   resume(agent: Agent, ref: GoalRef): GoalView {
     const cache = this.prepareMutation(agent)
     const current = this.expectCurrent(cache, ref)
@@ -333,7 +333,7 @@ export class GoalService extends TypertRemoteService {
    * @param ref - expected current revision.
    * @returns the completed view.
    */
-  @Remote('complete')
+  @Remote({ access: 'authenticated', exportName: 'complete' })
   complete(agent: Agent, ref: GoalRef): GoalView {
     return this.transition(
       agent,
@@ -373,7 +373,7 @@ export class GoalService extends TypertRemoteService {
    * @param ref - expected current revision.
    * @returns the tombstone ref whose revision is one past the cleared snapshot.
    */
-  @Remote('clear')
+  @Remote({ access: 'authenticated', exportName: 'clear' })
   clear(agent: Agent, ref: GoalRef): GoalRef {
     const cache = this.prepareMutation(agent)
     const current = this.expectCurrent(cache, ref)
@@ -582,7 +582,7 @@ export class GoalService extends TypertRemoteService {
    * @param request - objective and optional round cap.
    * @returns the created Goal identity.
    */
-  @Remote('create')
+  @Remote({ access: 'authenticated', exportName: 'create' })
   remoteExportCreate(agent: Agent, request: CreateGoalRequest): CreateGoalResult {
     const view = this.create(agent, request)
     return { ref: { id: view.id, revision: view.revision } }

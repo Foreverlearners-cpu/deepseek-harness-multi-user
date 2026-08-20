@@ -67,6 +67,7 @@ function invocation(id = '@fixture/remote#goals/create'): InvocationDescriptor {
     service: 'goals',
     namespace: 'goals',
     method: 'create',
+    access: 'authenticated',
     invocation: { kind: 'direct' },
     parameters: [{
       name: 'request',
@@ -209,17 +210,20 @@ describe('TypertRegistry', () => {
     ctx.typert.local.subscribe((change) => { changes.push(`${change.kind}:${change.key}`) })
 
     expect(ctx.typert.local.hasSeen('goals/create')).toBe(false)
+    expect(ctx.typert.local.revision('goals/create')).toBe(0)
     const dispose = ctx.typert.register(contribution)
 
     expect(typertEndpoint(descriptor)).toBe('goals/create')
     expect(ctx.typert.local.get('goals/create')).toBe(descriptor)
     expect(ctx.typert.local.hasSeen('goals/create')).toBe(true)
+    expect(ctx.typert.local.revision('goals/create')).toBe(1)
     expect(ctx.typert.local.list()).toEqual([descriptor])
     expect(changes).toEqual(['local:goals/create'])
 
     await dispose()
     expect(ctx.typert.local.list()).toEqual([])
     expect(ctx.typert.local.hasSeen('goals/create')).toBe(true)
+    expect(ctx.typert.local.revision('goals/create')).toBe(2)
     expect(ctx.typert.getPackage('@deepseek-ai/dsh-tools')).toBeUndefined()
     expect(changes).toEqual(['local:goals/create', 'local:goals/create'])
   })
@@ -321,6 +325,8 @@ describe('TypertRegistry', () => {
     const ctx = await makeCtx()
     const object = { id: 'agent-1' }
     const scoped = ctx.extend()
+    expect(ctx.typert.lookups.revision('fixture')).toBe(0)
+    expect(ctx.typert.contexts.hostRevision('registryFixture')).toBe(0)
     const disposeLookup = ctx.typert.lookups.register('fixture', {
       parameter: 'agent',
       wire: 'agentId',
@@ -337,6 +343,8 @@ describe('TypertRegistry', () => {
       identity: candidate => candidate === scoped ? object.id : undefined,
     })
 
+    expect(ctx.typert.lookups.revision('fixture')).toBe(1)
+    expect(ctx.typert.contexts.hostRevision('registryFixture')).toBe(1)
     expect(ctx.typert.lookups.get('fixture')?.resolve('agent-1')).toBe(object)
     expect(ctx.typert.lookups.definitions()).toEqual([{
       key: 'fixture',
@@ -351,6 +359,8 @@ describe('TypertRegistry', () => {
     await Promise.all([disposeClient(), disposeHost(), disposeLookup()])
     expect(ctx.typert.lookups.keys()).toEqual([])
     expect(ctx.typert.lookups.definitions()).toHaveLength(1)
+    expect(ctx.typert.lookups.revision('fixture')).toBe(2)
+    expect(ctx.typert.contexts.hostRevision('registryFixture')).toBe(2)
     expect(ctx.typert.contexts.getHost('registryFixture')).toBeUndefined()
     expect(ctx.typert.contexts.getClient('registryFixture')).toBeUndefined()
   })
@@ -359,9 +369,11 @@ describe('TypertRegistry', () => {
     const ctx = await makeCtx()
     const fallback = { id: 'fallback' }
     const configured = { id: 'configured' }
+    expect(ctx.typert.lookups.revision('fixture')).toBe(0)
     const disposeResolver = ctx.typert.lookups.configure('fixture', async id =>
       id === configured.id ? configured : undefined)
 
+    expect(ctx.typert.lookups.revision('fixture')).toBe(1)
     expect(ctx.typert.lookups.get('fixture')).toBeUndefined()
     const disposeProvider = ctx.typert.lookups.register('fixture', {
       parameter: 'agent',
@@ -370,10 +382,12 @@ describe('TypertRegistry', () => {
       wireTypeSymbol: '@fixture/session#SessionId',
       resolve: id => id === fallback.id ? fallback : undefined,
     })
+    expect(ctx.typert.lookups.revision('fixture')).toBe(2)
     await expect(ctx.typert.lookups.get('fixture')?.resolve('configured')).resolves.toBe(configured)
     expect(() => ctx.typert.lookups.configure('fixture', () => undefined)).toThrow('already configured')
 
     await disposeProvider()
+    expect(ctx.typert.lookups.revision('fixture')).toBe(3)
     expect(ctx.typert.lookups.get('fixture')).toBeUndefined()
     const disposeReloadedProvider = ctx.typert.lookups.register('fixture', {
       parameter: 'agent',
@@ -382,41 +396,51 @@ describe('TypertRegistry', () => {
       wireTypeSymbol: '@fixture/session#SessionId',
       resolve: id => id === fallback.id ? fallback : undefined,
     })
+    expect(ctx.typert.lookups.revision('fixture')).toBe(4)
     await expect(ctx.typert.lookups.get('fixture')?.resolve('configured')).resolves.toBe(configured)
 
     await disposeResolver()
+    expect(ctx.typert.lookups.revision('fixture')).toBe(5)
     expect(ctx.typert.lookups.get('fixture')?.resolve('fallback')).toBe(fallback)
     await disposeReloadedProvider()
+    expect(ctx.typert.lookups.revision('fixture')).toBe(6)
   })
 
   it('configures an asynchronous Host Context resolver independently of provider load order', async () => {
     const ctx = await makeCtx()
     const fallback = ctx.extend()
     const configured = ctx.extend()
+    expect(ctx.typert.contexts.hostRevision('registryFixture')).toBe(0)
     const disposeResolver = ctx.typert.contexts.configureHost('registryFixture', async id =>
       id === 'configured' ? configured : undefined)
 
+    expect(ctx.typert.contexts.hostRevision('registryFixture')).toBe(1)
     expect(ctx.typert.contexts.getHost('registryFixture')).toBeUndefined()
     const disposeProvider = ctx.typert.contexts.registerHost('registryFixture', {
       wire: 'agentId',
       wireTypeSymbol: '@fixture/session#SessionId',
       resolve: id => id === 'fallback' ? fallback : undefined,
     })
+    expect(ctx.typert.contexts.hostRevision('registryFixture')).toBe(2)
     await expect(ctx.typert.contexts.getHost('registryFixture')?.resolve('configured')).resolves.toBe(configured)
     expect(() => ctx.typert.contexts.configureHost('registryFixture', () => undefined)).toThrow('already configured')
 
     await disposeProvider()
+    expect(ctx.typert.contexts.hostRevision('registryFixture')).toBe(3)
     expect(ctx.typert.contexts.getHost('registryFixture')).toBeUndefined()
     const disposeReloadedProvider = ctx.typert.contexts.registerHost('registryFixture', {
       wire: 'agentId',
       wireTypeSymbol: '@fixture/session#SessionId',
       resolve: id => id === 'fallback' ? fallback : undefined,
     })
+    expect(ctx.typert.contexts.hostRevision('registryFixture')).toBe(4)
     await expect(ctx.typert.contexts.getHost('registryFixture')?.resolve('configured')).resolves.toBe(configured)
 
     await disposeResolver()
+    expect(ctx.typert.contexts.hostRevision('registryFixture')).toBe(5)
     expect(ctx.typert.contexts.getHost('registryFixture')?.resolve('fallback')).toBe(fallback)
     await disposeReloadedProvider()
+    expect(ctx.typert.contexts.hostRevision('registryFixture')).toBe(6)
   })
 
   it('publishes provider changes, rejects duplicate providers, and disposes subscriptions', async () => {
@@ -497,6 +521,35 @@ describe('TypertRegistry', () => {
         ...invocation(),
         cancellation: { parameter: 'abort' } as unknown as { readonly parameter: 'signal' },
       }, 'cancellation parameter'],
+      [{
+        ...invocation(),
+        access: 'permission',
+        authorization: { permission: '', callParameter: 'call' },
+      } as unknown as InvocationDescriptor, 'authorization permission must be nonempty'],
+      [{
+        ...invocation(),
+        access: 'permission',
+        authorization: { permission: 'fixture:read', callParameter: 'context' } as unknown as {
+          readonly permission: string
+          readonly callParameter: 'call'
+        },
+      } as unknown as InvocationDescriptor, 'authorization call parameter must be "call"'],
+      [{
+        ...invocation(),
+        access: undefined,
+      } as unknown as InvocationDescriptor, 'access must be "authenticated" or "permission"'],
+      [{
+        ...invocation(),
+        access: 'future',
+      } as unknown as InvocationDescriptor, 'access must be "authenticated" or "permission"'],
+      [{
+        ...invocation(),
+        authorization: { permission: 'fixture:read', callParameter: 'call' },
+      } as unknown as InvocationDescriptor, 'authenticated access must not declare authorization'],
+      [{
+        ...invocation(),
+        access: 'permission',
+      } as unknown as InvocationDescriptor, 'permission access requires authorization'],
       [{
         ...invocation(),
         parameters: [

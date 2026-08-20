@@ -9,6 +9,15 @@
 
 ```mermaid
 flowchart LR
+  pkg_authentication["authentication"]
+  svc_authentication["ctx.authentication<br/>Verified Host call identity"]
+  pkg_authentication_local["authentication-local"]
+  pkg_connection["connection"]
+  pkg_api_gateway["api-gateway"]
+  pkg_authorization["authorization"]
+  svc_authorization["ctx.authorization<br/>Default-deny action policy"]
+  pkg_authorization_static["authorization-static"]
+  pkg_plugin_inventory["plugin-inventory"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -40,7 +49,6 @@ flowchart LR
   pkg_typert_registry["typert-registry"]
   svc_typert["ctx.typert<br/>Runtime type registry"]
   pkg_typert_loader["typert-loader"]
-  pkg_api_gateway["api-gateway"]
   svc_typertGateway["ctx.typertGateway<br/>Typert Host invocation gateway"]
   svc_sessionPersistence["ctx.sessionPersistence<br/>Durable session persistence seam"]
   pkg_session_persistence_jsonl["session-persistence-jsonl"]
@@ -187,7 +195,6 @@ flowchart LR
   pkg_directory_picker_browse["directory-picker-browse"]
   pkg_webserver["webserver"]
   svc_webServer["ctx.webServer<br/>HTTP route registration"]
-  pkg_connection["connection"]
   pkg_modules["modules"]
   pkg_hmr["hmr"]
   svc_clientModules["ctx.clientModules<br/>Client plugin graph host"]
@@ -213,6 +220,10 @@ flowchart LR
   pkg_approval --> svc_approval
   pkg_attachment --> svc_attachments
   pkg_attachment_local --> svc_attachments
+  pkg_authentication --> svc_authentication
+  pkg_authentication_local --> svc_authentication
+  pkg_authorization --> svc_authorization
+  pkg_authorization_static --> svc_authorization
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
   pkg_code_runtime --> svc_codeRuntime
@@ -319,6 +330,12 @@ flowchart LR
   svc_approval --> pkg_tools
   svc_attachments --> pkg_host_runtime
   svc_attachments --> pkg_llm_pi_ai
+  svc_authentication --> pkg_api_gateway
+  svc_authentication --> pkg_authorization
+  svc_authentication --> pkg_connection
+  svc_authorization --> pkg_api_gateway
+  svc_authorization --> pkg_connection
+  svc_authorization --> pkg_plugin_inventory
   svc_clientModules --> pkg_hmr
   svc_codeRuntime --> pkg_tools
   svc_compaction --> pkg_compaction_basic
@@ -425,6 +442,8 @@ flowchart LR
 
 | ctx 键 | 角色 | 所属包 | 实现 | 直接消费方 | 配套插件 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.authentication` | `seam` | [`authentication`](../packages/identity/authentication) | [`authentication-local`](../packages/identity/authentication-local) | `connection`, [`api-gateway`](../packages/api/gateway), [`authorization`](../packages/identity/authorization) | - | 传输适配器提交由 carrier 拥有的证据；当前 Provider 独占签发可被下游授权接受的不可变调用。 |
+| `ctx.authorization` | `seam` | [`authorization`](../packages/identity/authorization) | [`authorization-static`](../packages/identity/authorization-static) | `connection`, [`api-gateway`](../packages/api/gateway), `plugin-inventory` | - | 领域注册稳定操作；Provider 评估已认证调用并发布策略版本，执行点在使用前重新校验该版本。 |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | `host-runtime`, [`llm-pi-ai`](../packages/llm/llm-pi-ai) | - | 宿主会在会话事件之前提交已接受的图片；提供方适配器将已授权的持久引用解析为提供方原生内容。 |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | 适配器注册提供方实现；agent loop（智能体循环）与压缩功能调用提供方无关的流服务。 |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | 拥有按会话隔离的回放折叠区；压力消费方共享不可变且带修订版本的测量结果。 |

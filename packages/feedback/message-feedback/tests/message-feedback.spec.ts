@@ -47,9 +47,9 @@ describe('MessageFeedbackService public contract', () => {
     expect(binding.serviceKey).toBe('messageFeedback')
     expect(binding.namespace).toBe('messageFeedback')
     expect(remoteMethods(ctx.messageFeedback)).toEqual([
-      { method: 'list', invocation: { kind: 'direct' } },
-      { method: 'put', invocation: { kind: 'direct' } },
-      { method: 'delete', invocation: { kind: 'direct' } },
+      { method: 'list', invocation: { kind: 'direct' }, access: 'authenticated' },
+      { method: 'put', invocation: { kind: 'direct' }, access: 'authenticated' },
+      { method: 'delete', invocation: { kind: 'direct' }, access: 'authenticated' },
     ])
   })
 

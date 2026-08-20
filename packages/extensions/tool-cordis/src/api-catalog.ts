@@ -395,6 +395,70 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'authentication',
+    summary: 'Provider base that exclusively mints immutable authenticated calls.',
+    description: 'Provider base that exclusively mints immutable authenticated calls.',
+    methods: [
+      {
+        signature: 'readonly localOnly: boolean = false',
+        description: 'Whether this Provider is restricted to an explicitly local composition. Network-capable Providers keep the default `false`; local synthetic Providers override it so transport adapters can fail closed when a deployment declares non-loopback authorities.',
+        parameters: [],
+      },
+      {
+        signature: 'async authenticate(attempt: AuthenticationAttempt): Promise<AuthenticatedCall>',
+        description: 'Verify carrier evidence and mint a call bound to its request, channel, and cancellation signal. Provider-owned objects are copied before freezing.',
+        parameters: [{ name: 'attempt', description: 'Trusted transport input, never a business payload.' }],
+        returns: 'A privately issued immutable call.',
+        throws: ['{@link AuthenticationError} or a Provider-specific verification failure.'],
+      },
+      {
+        signature: 'owns(value: unknown): value is AuthenticatedCall',
+        description: 'Check that a call was issued by this live Provider instance.',
+        parameters: [{ name: 'value', description: 'Candidate call.' }],
+        returns: 'Whether this Provider minted the exact call object.',
+      },
+    ],
+  },
+  {
+    key: 'authorization',
+    summary: 'Provider base owning default denial and live permission definitions.',
+    description: 'Provider base owning default denial and live permission definitions.',
+    methods: [
+      {
+        signature: 'async decide(request: AuthorizationRequest): Promise<AuthorizationDecision>',
+        description: 'Decide one registered action. Invalid calls, expired credentials, unknown permissions, Provider failures, and policy changes during evaluation deny.',
+        parameters: [{ name: 'request', description: 'Complete trusted authorization input.' }],
+        returns: 'Normalized decision carrying the policy version used.',
+      },
+      {
+        signature: 'async require(request: AuthorizationRequest): Promise<AuthorizationAllowDecision>',
+        description: 'Require one action and retain any bounded obligations on success.',
+        parameters: [{ name: 'request', description: 'Complete trusted authorization input.' }],
+        returns: 'Allow decision.',
+        throws: ['{@link AuthorizationDeniedError} for every denial.'],
+      },
+      {
+        signature: 'assertCurrent( request: AuthorizationRequest, decision: AuthorizationAllowDecision, ): void',
+        description: 'Re-validate an allow decision immediately before consuming it.\n\nAuthorization often crosses asynchronous lookup boundaries. A decision therefore cannot be treated as a durable capability: credentials may expire and the Provider policy or permission definition may be replaced while a Gateway is resolving arguments. Consumers call this method at each execution boundary and stop on a typed denial when the decision is no longer valid.',
+        parameters: [{ name: 'request', description: 'The same authenticated action request used for `require`.' }, { name: 'decision', description: 'The allow decision being consumed.' }],
+        throws: ['{@link AuthorizationDeniedError} when the call or policy is stale.'],
+      },
+      {
+        signature: 'openLease( request: AuthorizationRequest, decision: AuthorizationAllowDecision, ): AuthorizationLease',
+        description: 'Keep a previously allowed decision live across a long-running operation. The returned signal aborts on caller cancellation, credential expiry, policy/catalog invalidation, or Provider disposal. Consumers must release the lease when their operation ends.',
+        parameters: [{ name: 'request', description: 'The same authenticated request used for `require`.' }, { name: 'decision', description: 'Current allow decision being consumed.' }],
+        returns: 'Revocable authorization lifetime.',
+        throws: ['{@link AuthorizationDeniedError} when the decision is already stale.'],
+      },
+      {
+        signature: 'isCurrent(version: PolicyVersion): boolean',
+        description: 'Compare a previously observed version with the live Provider policy.',
+        parameters: [{ name: 'version', description: 'Previously observed policy version.' }],
+        returns: 'Whether it is still current.',
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index tap.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index tap. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
@@ -466,7 +530,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the exact effect disposer that unregisters this definition.',
       },
       {
-        signature: '@Remote list(agent: Agent): readonly CommandDescriptor[]',
+        signature: '@Remote({ access: \'authenticated\' }) list(agent: Agent): readonly CommandDescriptor[]',
         description: 'List the effective immutable command descriptors for one agent.',
         parameters: [{ name: 'agent', description: 'exact receiving agent and scoped-layer key.' }],
         returns: 'name-sorted descriptors after scoped shadowing.',
@@ -478,7 +542,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the scoped shadow or global definition.',
       },
       {
-        signature: '@Remote async execute( agent: Agent, line: string, signal: AbortSignal, ): Promise<CommandExecution | undefined>',
+        signature: '@Remote({ access: \'authenticated\' }) async execute( agent: Agent, line: string, signal: AbortSignal, ): Promise<CommandExecution | undefined>',
         description: 'Parse and execute a known command without sending it to the model.\n\nA resolved command\'s lifecycle is logged: `command/run` is appended before the handler is invoked and `command/done` after settlement (a thrown or aborted handler settles as `kind: \'error\'`). Both are direct log-only appends — no turn wraps them, and persistence drains them at ordinary checkpoints. Admission misses (syntax or unknown name) log nothing — they never entered a handler. A `command/run` append failure fails the execution loud; a `command/done` append failure on the handler-failure path is contained so the handler\'s own error stays the reported failure.',
         parameters: [{ name: 'agent', description: 'exact receiving agent.' }, { name: 'line', description: 'complete slash-command line.' }, { name: 'signal', description: 'cancellation signal owned by the UI request.' }],
         returns: 'the settled execution (result + lifecycle pairing id), or `undefined` when syntax or name does not resolve.',
@@ -682,25 +746,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the created live view.',
       },
       {
-        signature: '@Remote(\'edit\') edit(agent: Agent, ref: GoalRef, request: EditGoalRequest): GoalView',
+        signature: '@Remote({ access: \'authenticated\', exportName: \'edit\' }) edit(agent: Agent, ref: GoalRef, request: EditGoalRequest): GoalView',
         description: 'Edit objective and/or round cap without changing phase.',
         parameters: [{ name: 'agent', description: 'owning live agent.' }, { name: 'ref', description: 'expected current revision.' }, { name: 'request', description: 'at least one replacement field.' }],
         returns: 'the edited view.',
       },
       {
-        signature: '@Remote(\'pause\') pause(agent: Agent, ref: GoalRef): GoalView',
+        signature: '@Remote({ access: \'authenticated\', exportName: \'pause\' }) pause(agent: Agent, ref: GoalRef): GoalView',
         description: 'Pause an active goal and disarm automatic continuation.',
         parameters: [{ name: 'agent', description: 'owning live agent.' }, { name: 'ref', description: 'expected current revision.' }],
         returns: 'the paused view.',
       },
       {
-        signature: '@Remote(\'resume\') resume(agent: Agent, ref: GoalRef): GoalView',
+        signature: '@Remote({ access: \'authenticated\', exportName: \'resume\' }) resume(agent: Agent, ref: GoalRef): GoalView',
         description: 'Resume and arm a stopped goal, or rearm an active goal after a session-start edge, while its round budget still has capacity.',
         parameters: [{ name: 'agent', description: 'owning live agent.' }, { name: 'ref', description: 'expected current revision.' }],
         returns: 'the active view.',
       },
       {
-        signature: '@Remote(\'complete\') complete(agent: Agent, ref: GoalRef): GoalView',
+        signature: '@Remote({ access: \'authenticated\', exportName: \'complete\' }) complete(agent: Agent, ref: GoalRef): GoalView',
         description: 'Mark a current non-complete goal complete and disarm it.',
         parameters: [{ name: 'agent', description: 'owning live agent.' }, { name: 'ref', description: 'expected current revision.' }],
         returns: 'the completed view.',
@@ -712,13 +776,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the blocked view with its durable reason.',
       },
       {
-        signature: '@Remote(\'clear\') clear(agent: Agent, ref: GoalRef): GoalRef',
+        signature: '@Remote({ access: \'authenticated\', exportName: \'clear\' }) clear(agent: Agent, ref: GoalRef): GoalRef',
         description: 'Clear the current goal while retaining a durable tombstone and history.',
         parameters: [{ name: 'agent', description: 'owning live agent.' }, { name: 'ref', description: 'expected current revision.' }],
         returns: 'the tombstone ref whose revision is one past the cleared snapshot.',
       },
       {
-        signature: '@Remote(\'create\') remoteExportCreate(agent: Agent, request: CreateGoalRequest): CreateGoalResult',
+        signature: '@Remote({ access: \'authenticated\', exportName: \'create\' }) remoteExportCreate(agent: Agent, request: CreateGoalRequest): CreateGoalResult',
         description: 'Create one Goal through the remote boundary.',
         parameters: [{ name: 'agent', description: 'exact live Agent resolved from the wire identity.' }, { name: 'request', description: 'objective and optional round cap.' }],
         returns: 'the created Goal identity.',
@@ -903,19 +967,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Storage-domain sidecar service. It inspects persisted Session history and never creates or resumes an Agent or Session.',
     methods: [
       {
-        signature: '@Remote(\'list\') async list(request: MessageFeedbackListRequest): Promise<MessageFeedbackListResult>',
+        signature: '@Remote({ access: \'authenticated\', exportName: \'list\' }) async list(request: MessageFeedbackListRequest): Promise<MessageFeedbackListResult>',
         description: 'Read feedback belonging to the current persisted Session lifecycle. A stale row from a reused Session id is invisible.',
         parameters: [{ name: 'request', description: 'Session identity to inspect and list.' }],
         returns: 'current immutable items or `session-not-found`.',
       },
       {
-        signature: '@Remote(\'put\') put(request: MessageFeedbackPutRequest): Promise<MessageFeedbackPutResult>',
+        signature: '@Remote({ access: \'authenticated\', exportName: \'put\' }) put(request: MessageFeedbackPutRequest): Promise<MessageFeedbackPutResult>',
         description: 'Create or replace feedback for one derived append-origin assistant message. Every request must match the addressed item\'s current version; a matching no-op returns the stored item without changing its revision.',
         parameters: [{ name: 'request', description: 'target, desired value, and observed item version.' }],
         returns: 'the committed item or an explicit business failure.',
       },
       {
-        signature: '@Remote(\'delete\') delete(request: MessageFeedbackDeleteRequest): Promise<MessageFeedbackDeleteResult>',
+        signature: '@Remote({ access: \'authenticated\', exportName: \'delete\' }) delete(request: MessageFeedbackDeleteRequest): Promise<MessageFeedbackDeleteResult>',
         description: 'Delete one feedback item. Absence is successful regardless of the supplied version; an existing item requires an exact version match.',
         parameters: [{ name: 'request', description: 'Session, message, and observed item version.' }],
         returns: 'the stable absent postcondition, or an explicit failure.',
@@ -2015,7 +2079,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Invoke one live Remote method through strict generated reflection or SRC markers.',
         parameters: [{ name: 'request', description: 'decoded endpoint and exact named wire arguments.' }],
         returns: 'the validated business result.',
-        throws: ['{@link TypertGatewayError} for dispatch, provider, or boundary failures; lookup-policy and business errors retain identity.'],
+        throws: ['{@link AuthenticationError} for an invalid call.', '{@link TypertGatewayError} for dispatch, provider, or boundary failures. Lookup-policy and business errors retain identity.'],
       },
     ],
   },
@@ -2292,6 +2356,22 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Ask composed answerers for one decision.',
     description: 'Ask composed answerers for one decision. Return an outcome to claim the request or call `next()`; failure yields the fail-closed default. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.',
     parameters: [{ name: 'req', description: 'the pending decision (agent, tool identity, reason, signal).' }],
+  },
+  {
+    name: 'authorization/decision',
+    mode: 'emit',
+    signature: '\'authorization/decision\'(record: AuthorizationDecisionRecord): void',
+    summary: 'One normalized decision without resource contents or role-policy internals.',
+    description: 'One normalized decision without resource contents or role-policy internals.',
+    parameters: [{ name: 'record', description: 'Safe decision record for audit Consumers.' }],
+  },
+  {
+    name: 'authorization/invalidated',
+    mode: 'emit',
+    signature: '\'authorization/invalidated\'(next: PolicyVersion, previous: PolicyVersion): void',
+    summary: 'Committed permission-catalog or Provider-policy invalidation.',
+    description: 'Committed permission-catalog or Provider-policy invalidation.',
+    parameters: [{ name: 'next', description: 'Current version after the commit.' }, { name: 'previous', description: 'Version invalidated by the commit.' }],
   },
   {
     name: 'commands/change',
@@ -2728,6 +2808,94 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AttachmentId',
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
+  },
+  {
+    name: 'AuthenticatedCall',
+    declaration: 'export interface AuthenticatedCall extends VerifiedAuthentication {\n    readonly [AUTHENTICATED_CALL]: true;\n    readonly requestId: AuthenticationRequestId;\n    readonly channel: AuthenticationChannel;\n    readonly signal: AbortSignal;\n}',
+  },
+  {
+    name: 'AuthenticatedPrincipal',
+    declaration: 'export type AuthenticatedPrincipal = {\n    readonly kind: \'user\';\n    readonly id: UserId;\n} | {\n    readonly kind: \'service-account\';\n    readonly id: ServiceAccountId;\n} | {\n    readonly kind: \'local\';\n    readonly id: LocalPrincipalId;\n};',
+  },
+  {
+    name: 'AuthenticatedScope',
+    declaration: 'export type AuthenticatedScope = {\n    readonly kind: \'tenant\';\n    readonly tenantId: TenantId;\n    readonly membershipId: MembershipId;\n} | {\n    readonly kind: \'platform\';\n    readonly operatorGrantId: OperatorGrantId;\n};',
+  },
+  {
+    name: 'AuthenticationAttempt',
+    declaration: 'export type AuthenticationAttempt = {\n    [Channel in AuthenticationChannel]: {\n        readonly requestId: AuthenticationRequestId;\n        readonly channel: Channel;\n        readonly evidence: AuthenticationEvidenceMap[Channel] & {\n            readonly kind: Channel;\n        };\n        readonly signal: AbortSignal;\n    };\n}[AuthenticationChannel];',
+  },
+  {
+    name: 'AuthenticationChannel',
+    declaration: 'export type AuthenticationChannel = Extract<keyof AuthenticationEvidenceMap, string>;',
+  },
+  {
+    name: 'AuthenticationEvidenceMap',
+    declaration: 'export interface AuthenticationEvidenceMap {\n    http: {\n        readonly kind: \'http\';\n        readonly request: Request;\n    };\n    \'in-process\': {\n        readonly kind: \'in-process\';\n    };\n}',
+  },
+  {
+    name: 'AuthenticationMethod',
+    declaration: 'export type AuthenticationMethod = Branded<\'AuthenticationMethod\'>;',
+  },
+  {
+    name: 'AuthenticationRequestId',
+    declaration: 'export type AuthenticationRequestId = Branded<\'AuthenticationRequestId\'>;',
+  },
+  {
+    name: 'AuthorizationAllowDecision',
+    declaration: 'export interface AuthorizationAllowDecision {\n    readonly effect: \'allow\';\n    readonly policyVersion: PolicyVersion;\n    readonly obligations: readonly AuthorizationObligation[];\n}',
+  },
+  {
+    name: 'AuthorizationDecision',
+    declaration: 'export type AuthorizationDecision = AuthorizationAllowDecision | AuthorizationDenyDecision;',
+  },
+  {
+    name: 'AuthorizationDecisionRecord',
+    declaration: 'export interface AuthorizationDecisionRecord {\n    readonly requestId?: AuthenticationRequestId;\n    readonly channel?: AuthenticationChannel;\n    readonly principalKind?: AuthenticatedCall[\'principal\'][\'kind\'];\n    readonly permission: PermissionCode;\n    readonly effect: AuthorizationDecision[\'effect\'];\n    readonly reason?: AuthorizationDenialReason;\n    readonly policyVersion: PolicyVersion;\n}',
+  },
+  {
+    name: 'AuthorizationDenialReason',
+    declaration: 'export type AuthorizationDenialReason = \'unauthenticated\' | \'credential-expired\' | \'permission-unregistered\' | \'provider-denied\' | \'provider-failed\' | \'principal-unsupported\' | \'policy-stale\';',
+  },
+  {
+    name: 'AuthorizationDenyDecision',
+    declaration: 'export interface AuthorizationDenyDecision {\n    readonly effect: \'deny\';\n    readonly policyVersion: PolicyVersion;\n    readonly reason: AuthorizationDenialReason;\n    readonly publicError: AuthorizationPublicError;\n    readonly obligations: readonly AuthorizationObligation[];\n}',
+  },
+  {
+    name: 'AuthorizationEnvironment',
+    declaration: 'export type AuthorizationEnvironment = Readonly<{\n    [K in keyof AuthorizationEnvironmentMap]?: AuthorizationEnvironmentMap[K];\n}>;',
+  },
+  {
+    name: 'AuthorizationEnvironmentMap',
+    declaration: 'export interface AuthorizationEnvironmentMap {\n}',
+  },
+  {
+    name: 'AuthorizationLease',
+    declaration: 'export interface AuthorizationLease {\n    readonly signal: AbortSignal;\n    release(): void;\n}',
+  },
+  {
+    name: 'AuthorizationObligation',
+    declaration: 'export type AuthorizationObligation = {\n    [K in keyof AuthorizationObligationMap]: Readonly<{\n        kind: K;\n    } & AuthorizationObligationMap[K]>;\n}[keyof AuthorizationObligationMap];',
+  },
+  {
+    name: 'AuthorizationObligationMap',
+    declaration: 'export interface AuthorizationObligationMap {\n}',
+  },
+  {
+    name: 'AuthorizationPublicError',
+    declaration: 'export interface AuthorizationPublicError {\n    readonly code: \'UNAUTHENTICATED\' | \'FORBIDDEN\';\n}',
+  },
+  {
+    name: 'AuthorizationRequest',
+    declaration: 'export interface AuthorizationRequest {\n    readonly call: AuthenticatedCall;\n    readonly permission: PermissionCode;\n    readonly resource?: AuthorizationResource;\n    readonly environment?: AuthorizationEnvironment;\n}',
+  },
+  {
+    name: 'AuthorizationResource',
+    declaration: 'export type AuthorizationResource = {\n    [K in keyof AuthorizationResourceMap]: Readonly<{\n        kind: K;\n    } & AuthorizationResourceMap[K]>;\n}[keyof AuthorizationResourceMap];',
+  },
+  {
+    name: 'AuthorizationResourceMap',
+    declaration: 'export interface AuthorizationResourceMap {\n}',
   },
   {
     name: 'BackendRegistry',
@@ -3183,19 +3351,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'InvocationDescriptor',
-    declaration: 'export interface InvocationDescriptor {\n    readonly id: string;\n    readonly service: string;\n    readonly namespace: string;\n    readonly method: string;\n    readonly implementation?: string;\n    readonly invocation: {\n        readonly kind: \'direct\';\n    } | {\n        readonly kind: \'context\';\n        readonly context: string;\n        readonly wire: string;\n        readonly codec: TypertCodec;\n    };\n    readonly scope?: {\n        readonly context: string;\n        readonly wire: string;\n    };\n    readonly parameters: readonly InvocationParameterDescriptor[];\n    readonly cancellation?: {\n        readonly parameter: \'signal\';\n    };\n    readonly result: TypertCodec;\n    readonly sourceLocation?: InvocationSourceLocation;\n}',
-  },
-  {
-    name: 'InvocationParameterDescriptor',
-    declaration: 'export interface InvocationParameterDescriptor {\n    readonly name: string;\n    readonly wire: string;\n    readonly source: \'json\' | \'lookup\';\n    readonly lookup?: string;\n    readonly codec: TypertCodec;\n    readonly acceptsUndefined?: true;\n}',
-  },
-  {
-    name: 'InvocationSourceLocation',
-    declaration: 'export interface InvocationSourceLocation {\n    readonly file: string;\n    readonly line: number;\n    readonly column: number;\n}',
+    declaration: 'export type InvocationDescriptor = InvocationDescriptorBase & ({\n    readonly access: \'authenticated\';\n    readonly authorization?: never;\n} | {\n    readonly access: \'permission\';\n    readonly authorization: {\n        readonly permission: string;\n        readonly callParameter: \'call\';\n    };\n});',
   },
   {
     name: 'InvokeRemoteRequest',
-    declaration: 'export interface InvokeRemoteRequest {\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n    readonly signal?: AbortSignal;\n}',
+    declaration: 'export interface InvokeRemoteRequest {\n    readonly call: AuthenticatedCall;\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n}',
   },
   {
     name: 'JobDoneListener',
@@ -3334,6 +3494,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export class LlmRuntime extends Service {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
+    name: 'LocalPrincipalId',
+    declaration: 'export type LocalPrincipalId = Branded<\'LocalPrincipalId\'>;',
+  },
+  {
     name: 'LspHover',
     declaration: 'export interface LspHover {\n    readonly contents: string;\n    readonly range?: LspRange;\n}',
   },
@@ -3376,6 +3540,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ManualCompactAgentContext',
     declaration: 'export interface ManualCompactAgentContext extends CompactionAgentContext {\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n}',
+  },
+  {
+    name: 'MembershipId',
+    declaration: 'export type MembershipId = Branded<\'MembershipId\'>;',
   },
   {
     name: 'Message',
@@ -3490,8 +3658,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface OneShotSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'one-shot\';\n    readonly label?: string;\n}',
   },
   {
+    name: 'OperatorGrantId',
+    declaration: 'export type OperatorGrantId = Branded<\'OperatorGrantId\'>;',
+  },
+  {
+    name: 'PermissionCode',
+    declaration: 'export type PermissionCode = Branded<\'PermissionCode\'>;',
+  },
+  {
     name: 'PermissionSelect',
     declaration: 'export interface PermissionSelect {\n    options: PresetOption[];\n    currentValue: string;\n}',
+  },
+  {
+    name: 'PolicyVersion',
+    declaration: 'export type PolicyVersion = Branded<\'PolicyVersion\'>;',
   },
   {
     name: 'PostToolDecision',
@@ -3655,7 +3835,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RpcErrorDetailsMap',
-    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        reason: string;\n    };\n    \'agent-preset-locked\': {\n        sessionId: SessionId;\n        agentPreset: string;\n    };\n    \'agent-preset-conflict\': {\n        sessionId: SessionId;\n        requestedPreset: string;\n        existingPreset?: string;\n    };\n    \'agent-preset-not-found\': {\n        agentPreset: string;\n      /* …truncated — full shape in source */',
+    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'unauthenticated\': {};\n    \'permission-denied\': {\n        permission: string;\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        reason: string;\n    };\n    \'agent-preset-locked\': {\n        sessionId: SessionId;\n        agentPreset: string;\n    };\n    \'agent-preset-conflict\': {\n        sessionId: SessionId;\n        requestedPreset: string;\n        existingP /* …truncated — full shape in source */',
   },
   {
     name: 'RpcId',
@@ -3740,6 +3920,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ServerResponse',
     declaration: 'export interface ServerResponse {\n    type: \'server-response\';\n    rpcId: RpcId;\n    result: RpcResult<unknown>;\n}',
+  },
+  {
+    name: 'ServiceAccountId',
+    declaration: 'export type ServiceAccountId = Branded<\'ServiceAccountId\'>;',
   },
   {
     name: 'SessionAvailability',
@@ -4262,6 +4446,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type TableValueOf<S extends DomainSpec, N extends keyof S[\'tables\']> = S[\'tables\'][N] extends DomainTableSpec<string, infer V> ? V : never;',
   },
   {
+    name: 'TenantId',
+    declaration: 'export type TenantId = Branded<\'TenantId\'>;',
+  },
+  {
     name: 'TerminalBackend',
     declaration: 'export interface TerminalBackend {\n    readonly type: string;\n    spawn(spec: TerminalBackendSpawnSpec): Promise<TerminalBackendSession>;\n}',
   },
@@ -4482,10 +4670,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TurnEndReasonMap {\n    completed: {\n        kind: \'completed\';\n    };\n    aborted: {\n        kind: \'aborted\';\n        reason: TurnEndCancelCause;\n    };\n    blocked: {\n        kind: \'blocked\';\n    };\n    error: {\n        kind: \'error\';\n        error: LlmFailure;\n    };\n    \'max-tokens\': {\n        kind: \'max-tokens\';\n    };\n    interrupted: {\n        kind: \'interrupted\';\n    };\n}',
   },
   {
-    name: 'TypertCodec',
-    declaration: 'export type TypertCodec = {\n    readonly mode: \'strict\';\n    readonly typeSymbol: string;\n    readonly schema: TypertSchema;\n} | {\n    readonly mode: \'src-json\';\n};',
-  },
-  {
     name: 'TypertContribution',
     declaration: 'export interface TypertContribution {\n    readonly package: string;\n    readonly face: TypertFace;\n    readonly schemas: readonly TypertSchema[];\n    readonly model: TypertPackageModel;\n    readonly invocations: readonly InvocationDescriptor[];\n}',
   },
@@ -4542,12 +4726,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TypertTypeModel {\n    readonly name: string;\n    readonly declaration: string;\n}',
   },
   {
+    name: 'UserId',
+    declaration: 'export type UserId = Branded<\'UserId\'>;',
+  },
+  {
     name: 'UserMessage',
     declaration: 'export interface UserMessage extends Message {\n    readonly role: \'user\';\n}',
   },
   {
     name: 'UserQuestionProvider',
     declaration: 'export interface UserQuestionProvider {\n    ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer>;\n}',
+  },
+  {
+    name: 'VerifiedAuthentication',
+    declaration: 'export interface VerifiedAuthentication {\n    readonly principal: AuthenticatedPrincipal;\n    readonly method: AuthenticationMethod;\n    readonly scope: AuthenticatedScope;\n    readonly expiresAt?: number;\n}',
   },
   {
     name: 'WebBootEntry',

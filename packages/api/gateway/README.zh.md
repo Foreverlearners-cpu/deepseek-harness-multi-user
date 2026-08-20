@@ -2,17 +2,27 @@
 
 [English](README.md) | 中文
 
-为 Host 与 Client 两侧的 Cordis 环境提供 Typert RPC endpoint。Host 入口提供 `ctx.typertGateway`，`@deepseek-ai/dsh-api-gateway/client` 则提供 `ctx.remote`；两者使用同一份生成的 `InvocationDescriptor` 约定，并将业务选择交给 API Remotes，将传输、请求关联、信任和响应封装交给 Connection。
+为 Host 与 Client 两侧的 Cordis 环境提供 Typert RPC endpoint。Host 入口提供 `ctx.typertGateway`，`@deepseek-ai/dsh-api-gateway/client` 则提供 `ctx.remote`；两者使用同一份生成的 `InvocationDescriptor` 约定，并将业务选择交给 API Remotes，将传输、请求关联、信任和响应封装交给 Connection。每个 Remote 都显式选择 authenticated 或 permission access。受 permission 保护的 Remote 接收仅限 Host 的 `AuthenticatedCall`；call 身份绝不进入 Client 签名或 wire payload。
 
 ## Host 服务：`TypertGatewayService`（ctx key：`typertGateway`）
 
-每次调用时，`ctx.typertGateway.invoke()` 都会解析当前的描述符和 Cordis 服务，校验具名参数是否完全匹配，解析已注册的对象或 Context 身份标识，调用公开的业务方法，并校验其结果。业务服务继承 [`dsh-typert-protocol`](../../typert/protocol/README.md) 的 `TypertRemoteService`，并用 `@Remote` 或 `@RemoteScope` 标记方法；已有其他基类时仍可改用 `bindTypertRemote()`。
+每次调用时，`ctx.typertGateway.invoke()` 都会解析当前的描述符和 Cordis 服务，校验具名参数是否完全匹配，解析已注册的对象或 Context 身份标识，调用公开的业务方法，并校验其结果。业务服务继承 [`dsh-typert-protocol`](../../typert/protocol/README.md) 的 `TypertRemoteService`，并用 `@Remote(options)` 或 `@RemoteScope(key, options)` 标记方法；每个 options 对象都要显式声明 access，已有其他基类时仍可改用 `bindTypertRemote()`。
 
 严格模式从 `ctx.typert.local` 读取生成的调用描述符。查找参数使用 `ctx.typert.lookups` 中当前有效的 resolver：业务包注册稳定声明与默认策略，Host 组合可用 effect-scoped `configure()` 覆盖解析行为；`@RemoteScope` 则通过已注册的 Host Context 提供方解析其接收者。SRC 模式是开发阶段的回退路径，适用于从未具备严格定义的端点；它解析简单参数名，并且只允许非查找参数使用可安全表示为 JSON 的值。已观测到的严格定义一旦撤回，系统会直接报错，而不会降低校验强度。
 
 Connection 可用时，Host 入口会在 Connection 共享的 `/api` FetchHandler 上注册 trusted-host interceptor。Connection 把这个复合 handler 交给 HTTP bridge；handler 将已认领 endpoint 分发给 Gateway，未认领 endpoint 则交给 API Proxy。直接调用 `invoke()` 会保留业务错误；`TypertGatewayError` 可区分分发、绑定、提供方、查找、Context、参数和编解码器各自负责的故障。resolver 可以用 `TypertLookupFailure` 携带既有 RPC error，使冷恢复失败或 ownership fence 等策略拒绝保持原错误码。
 
 支持取消的 Remote 方法会把 `signal: AbortSignal` 声明为最后一个 Host 参数。signal 是 descriptor 元数据，而不是 wire 参数：Connection 将它提供给 Gateway，Gateway 则在已解码的业务参数之后注入它。SRC 识别这个保留的末位参数名，严格生成还要求它具有全局 `AbortSignal` 类型。
+
+## 授权边界
+
+`@Remote({ access: 'authenticated' })` 和 `@RemoteScope(key, { access: 'authenticated' })` 要求有效的 Host-issued call，但不检查动作权限；它们不携带 `authorization` metadata，也不会把 call 注入业务方法。`permission` option 会为任一 decorator 选择 permission access。对应 Host 方法必须把非可选的 `call: AuthenticatedCall` 声明为首参；Typert 会在 `InvocationDescriptor` 中记录权限和保留参数，再从 Client 签名及 wire `args` 中移除 `call`。裸 decorator 和字符串 alias 均不合法。
+
+Connection 会在调用 handler 前用 Host 持有的原始 `Request` 完成认证。Gateway 会在检查 descriptor 或参数前校验该 call，再于具名参数精确校验、业务 lookup provider 解析以及 RemoteScope Context identity、Context 或 scoped receiver 解析之前完成 permission 授权。缺失或未知的 descriptor access、无效的 access/authorization 组合，或者 strict descriptor 与 live marker 不一致时都会拒绝，不会回退到 authenticated 或 SRC 执行。marker 和 descriptor 必须在 access、permission、endpoint alias 及 direct/scoped invocation 上一致。
+
+allow decision 不是持久 capability。Gateway 会在 lookup 前及方法即将执行前分别调用 `authorization.assertCurrent(request, decision)`；因此，异步 lookup 期间发生 Provider 替换、凭证过期、权限撤回或 policy version 变化时，会默认拒绝，而不会消费陈旧权限。
+
+`AuthenticationError` 映射为 `unauthenticated`；`AuthorizationDeniedError` 在策略拒绝时映射为 `permission-denied`。后者的 RPC details 只包含权限码；凭证、角色和策略内部信息留在 Host 内。暴露 Remote 的领域包负责拥有并注册对应的权限定义。Client Context binder 提供 scope identity 只是为了便利，而不是授权：raw RPC 可以直接填写该 identity，因此受 permission 保护的 scoped 方法仍要使用注入的 call 执行其领域拥有的 owner、tenant 或 resource 检查。
 
 ## Client 服务：`ClientRemote`（ctx key：`remote`）
 
@@ -34,7 +44,8 @@ Connection 可用时，Host 入口会在 Connection 共享的 `/api` FetchHandle
 
 ## 已知限制与延期工作
 
-- Connection 适配器将普通分发故障和业务异常映射为 RPC 的 `internal` 代码，且不附带详细信息；`TypertLookupFailure` 携带的 lookup 策略错误会原样返回。结构化的 `TypertGatewayError` 类别仅供同进程调用方使用。
+- Connection 适配器将普通分发故障和业务异常映射为 RPC 的 `internal` 代码、稳定的 `handler failure` 消息且不附带详细信息；`TypertLookupFailure` 携带的 lookup 策略错误会原样返回。结构化的 `TypertGatewayError` 类别仅供同进程调用方使用。
+- 声明为 `access: 'authenticated'` 的 Remote 有意只执行身份校验。暴露动作或作用域资源的领域仍需拥有自己的权限码及 owner、tenant 或 resource 检查。
 - SRC 模式仅支持名称唯一的标识符参数，不支持解构、默认值或剩余参数。它只校验值能否安全表示为 JSON，不校验生成的业务类型，也绝不会推断可选字段。
 - Client 侧只能挂载严格模式生成的贡献项。SRC 标记不具备 Client 编解码器或类型投影。
 - 该包只分发一元方法。增量会话数据通过同一个 Connection 上独立的具名流协议传输。

@@ -2,17 +2,41 @@
 
 import type { Context, FiberState } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
+import type { AuthenticatedCall } from '@deepseek-ai/dsh-authentication'
+import { permissionCode, type PermissionDefinition } from '@deepseek-ai/dsh-authorization'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 // Typert-generated ./typert and ./remote artifacts import Zod at runtime.
 import type {} from 'zod'
 import type {
   PluginEntryId,
   PluginFiberPhase,
+  PluginInventoryDiscoverySnapshot,
   PluginInventoryEntry,
   PluginInventorySnapshot,
 } from './types.ts'
 
 export type * from './types.ts'
+
+/** Permission to learn which Loader entries exist. */
+export const PLUGIN_DISCOVER_PERMISSION = permissionCode('plugin:discover')
+/** Permission to read package names, enablement, and runtime phases. */
+export const PLUGIN_METADATA_READ_PERMISSION = permissionCode('plugin:metadata-read')
+
+/** Permission definitions owned by this domain package. */
+export const PLUGIN_INVENTORY_PERMISSIONS: readonly PermissionDefinition[] = Object.freeze([
+  Object.freeze({
+    code: PLUGIN_DISCOVER_PERMISSION,
+    owner: '@deepseek-ai/dsh-host-plugin-inventory',
+    description: 'Discover configured plugin entry identities.',
+    disclosure: 'discovery',
+  }),
+  Object.freeze({
+    code: PLUGIN_METADATA_READ_PERMISSION,
+    owner: '@deepseek-ai/dsh-host-plugin-inventory',
+    description: 'Read configured plugin package and runtime metadata.',
+    disclosure: 'metadata',
+  }),
+])
 
 /** Brand an existing Loader-tree entry id at the owning boundary. */
 function pluginEntryId(value: string): PluginEntryId {
@@ -41,20 +65,40 @@ const FIBER_PHASE = {
 
 /** Remote-only service exposing the Loader's current non-group entry state. */
 export class PluginInventoryGateway extends TypertRemoteService {
-  static inject = ['loader']
+  static inject = ['loader', 'authorization']
 
   constructor(ctx: Context) {
     super(ctx, 'pluginInventory')
+    for (const definition of PLUGIN_INVENTORY_PERMISSIONS) {
+      ctx.authorization.permissions.register(definition)
+    }
+  }
+
+  /**
+   * Project only configured entry identities.
+   * @param call - Host-issued caller identity injected outside Remote wire arguments.
+   * @returns Current non-group Loader entry ids in Loader order.
+   */
+  @Remote({ exportName: 'discover', permission: 'plugin:discover' })
+  async discover(call: AuthenticatedCall): Promise<PluginInventoryDiscoverySnapshot> {
+    await this.ctx.authorization.require({ call, permission: PLUGIN_DISCOVER_PERMISSION })
+    return {
+      entries: [...this.ctx.loader.entries()]
+        .filter(entry => !entry.options.group)
+        .map(entry => ({ entryId: pluginEntryId(entry.id) })),
+    }
   }
 
   /**
    * Read the Loader directly on every call. Cordis's internal plugin/status
    * events already maintain Entry.fiber and Fiber.state, so a second cache
    * would only add another lifecycle truth to keep synchronized.
+   * @param call - Host-issued caller identity injected outside Remote wire arguments.
    * @returns Current non-group Loader entries in Loader order.
    */
-  @Remote('list')
-  list(): PluginInventorySnapshot {
+  @Remote({ exportName: 'list', permission: 'plugin:metadata-read' })
+  async list(call: AuthenticatedCall): Promise<PluginInventorySnapshot> {
+    await this.ctx.authorization.require({ call, permission: PLUGIN_METADATA_READ_PERMISSION })
     const entries: PluginInventoryEntry[] = []
     for (const entry of this.ctx.loader.entries()) {
       if (entry.options.group) continue

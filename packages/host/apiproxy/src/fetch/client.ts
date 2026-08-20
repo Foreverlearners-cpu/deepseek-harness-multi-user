@@ -9,7 +9,7 @@ import type { z } from 'zod'
 import type { ApiProxy, HostFrame, MuxFrame } from '../api/index.ts'
 import type { RequestPayload, ResponseValue, RpcMethodMap } from '../api/rpc-map.ts'
 import type { ClientRequest, ClientResponse, RpcMessage, RpcReceipt, RpcRequest, RpcResponse, ServerRequest } from '../api/rpc.ts'
-import { RpcId } from '../api/rpc.ts'
+import { RpcId, SECURITY_DENIED_RPC_ID } from '../api/rpc.ts'
 import type { Wire } from '../api/rpc.schema.ts'
 import { rpcReceiptSchema, serverRequestSchema, serverResponseSchema } from '../api/rpc.schema.ts'
 import { hostFrameSchema, muxFrameSchema } from '../api/events.schema.ts'
@@ -341,7 +341,9 @@ export abstract class AbstractApiClient implements IApiClient {
     const response = await this.postJson(`/api/${method}`, message, signal, timeoutPolicy)
     const full = serverResponseSchema.parse(await response.json())
     this.onEnvelope(full)
-    if (full.rpcId !== message.rpcId) throw new Error(`rpcId mismatch for ${method}: sent ${message.rpcId}, got ${full.rpcId}`)
+    if (full.rpcId !== message.rpcId && !isPreParseSecurityDenial(full)) {
+      throw new Error(`rpcId mismatch for ${method}: sent ${message.rpcId}, got ${full.rpcId}`)
+    }
     if (!full.result.ok) return { rpcId: full.rpcId, result: full.result }
     // Second-level S→C parse: the ok value must match the method's Value schema (mirror of the
     // handler's request-payload parse). The cast collapses the Wire<> widening, same as the handler side.
@@ -510,6 +512,15 @@ export abstract class AbstractApiClient implements IApiClient {
     const response = await this.postJson('/api/respond', message, signal)
     return rpcReceiptSchema.parse(await response.json())
   }
+}
+
+function isPreParseSecurityDenial(
+  response: ReturnType<typeof serverResponseSchema.parse>,
+): boolean {
+  return response.rpcId === SECURITY_DENIED_RPC_ID
+    && !response.result.ok
+    && (response.result.error.code === 'unauthenticated'
+      || response.result.error.code === 'permission-denied')
 }
 
 /**

@@ -32,7 +32,7 @@ export class GoalService extends TypertRemoteService {
     super(ctx, 'goals')
   }
 
-  @Remote('create')
+  @Remote({ access: 'authenticated', exportName: 'create' })
   createForClient(
     agent: Agent,
     request: CreateGoalRequest,
@@ -42,7 +42,7 @@ export class GoalService extends TypertRemoteService {
     return this.create(agent, request)
   }
 
-  @RemoteScope('agent', 'current')
+  @RemoteScope('agent', { access: 'authenticated', exportName: 'current' })
   currentForClient(): CreateGoalResult {
     return { accepted: true }
   }

@@ -80,7 +80,7 @@ export type {
 } from './rpc.ts'
 
 // ---- Errors and ids ----
-export { RpcId, transportError } from './rpc.ts'
+export { RpcId, SECURITY_DENIED_RPC_ID, transportError } from './rpc.ts'
 export type { RpcError, RpcErrorCode, RpcErrorDetailsMap, RpcResult } from './rpc.ts'
 export {
   clientRequestSchema,

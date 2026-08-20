@@ -256,7 +256,7 @@ export class CommandRuntime extends TypertRemoteService {
    * @param agent - exact receiving agent and scoped-layer key.
    * @returns name-sorted descriptors after scoped shadowing.
    */
-  @Remote
+  @Remote({ access: 'authenticated' })
   list(agent: Agent): readonly CommandDescriptor[] {
     return Object.freeze([...this.view(agent).values()]
       .map(command => command.descriptor)
@@ -293,7 +293,7 @@ export class CommandRuntime extends TypertRemoteService {
    * @returns the settled execution (result + lifecycle pairing id), or
    *   `undefined` when syntax or name does not resolve.
    */
-  @Remote
+  @Remote({ access: 'authenticated' })
   async execute(
     agent: Agent,
     line: string,

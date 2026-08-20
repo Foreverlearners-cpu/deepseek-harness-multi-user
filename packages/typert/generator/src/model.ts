@@ -124,8 +124,7 @@ export interface InvocationParameterModel {
   readonly boundary: RemoteBoundaryModel
 }
 
-/** One strictly analyzed Host method exported through Typert Gateway. */
-export interface InvocationModel {
+interface InvocationModelBase {
   readonly id: string
   readonly service: string
   readonly namespace: string
@@ -150,6 +149,18 @@ export interface InvocationModel {
   readonly result: RemoteBoundaryModel
   readonly location: SourceLocation
 }
+
+/** One strictly analyzed Host method exported through Typert Gateway. */
+export type InvocationModel = InvocationModelBase & (
+  | { readonly access: 'authenticated'; readonly authorization?: never }
+  | {
+    readonly access: 'permission'
+    readonly authorization: {
+      readonly permission: string
+      readonly callParameter: 'call'
+    }
+  }
+)
 
 /** Business semantics discovered in one package on one face. */
 export interface PackageModel {

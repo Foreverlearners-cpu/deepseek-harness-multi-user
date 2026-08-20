@@ -127,7 +127,7 @@ register(definition: CommandDefinition): () => void
  * @param agent - exact receiving agent and scoped-layer key.
  * @returns name-sorted descriptors after scoped shadowing.
  */
-@Remote list(agent: Agent): readonly CommandDescriptor[]
+@Remote({ access: 'authenticated' }) list(agent: Agent): readonly CommandDescriptor[]
 
 /**
  * Resolve one effective command definition.
@@ -156,7 +156,7 @@ find(agent: Agent, name: string): CommandDefinition | undefined
  * @returns the settled execution (result + lifecycle pairing id), or
  *   `undefined` when syntax or name does not resolve.
  */
-@Remote async execute( agent: Agent, line: string, signal: AbortSignal, ): Promise<CommandExecution | undefined>
+@Remote({ access: 'authenticated' }) async execute( agent: Agent, line: string, signal: AbortSignal, ): Promise<CommandExecution | undefined>
 ```
 
 Types: [Agent](core.md)

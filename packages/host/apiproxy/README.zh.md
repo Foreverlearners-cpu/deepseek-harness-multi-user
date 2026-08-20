@@ -18,9 +18,19 @@ Settings 分节中的 `reasoningEffort` 在 agent-default-model 插件配置中�
 
 ## 约定层（`/api`）
 
-协议消息组成一个四象限可辨识联合：发起方 × 请求／响应，与物理通道解耦。四种消息分别是 `ClientRequest`（POST `/api/<method>` 的请求体）、`ServerResponse`（该 POST 的响应体）、`ServerRequest`（SSE（Server-Sent Events）帧）和 `ClientResponse`（POST `/api/respond` 的请求体）。响应始终回显对应请求的 `rpcId`，绝不签发新值。方法的参数与返回值结构只存在于领域接口签名（`SessionsApi`、`HostApi`、`EventsApi`）中；`RpcMethodMap` 注册方法，其他所有位置均通过 `RequestPayload<K>`／`ResponseValue<K>` 派生。Zod schema 以 `satisfies z.ZodType<Wire<T>>` 锚定类型，并分两层解析：先解析信封，再解析业务载荷，随后按方法分发。业务错误由 `RpcResult` 的错误分支承载（`RpcErrorDetailsMap` 封闭错误码集合）；HTTP 状态只表达载体层结果。每个 `/api` POST 都必须声明 `application/json` 媒体类型——否则在分发前即以 415 拒绝，因此跨站「简单请求」（浏览器不经 CORS 预检就会发出）永远无法盲目执行有副作用的方法。
+协议消息组成一个四象限可辨识联合：发起方 × 请求／响应，与物理通道解耦。四种消息分别是 `ClientRequest`（POST `/api/<method>` 的请求体）、`ServerResponse`（该 POST 的响应体）、`ServerRequest`（SSE（Server-Sent Events）帧）和 `ClientResponse`（POST `/api/respond` 的请求体）。解析后，响应始终回显对应请求的 `rpcId`，绝不签发新值；唯一例外是在 Host 获准读取不可信 body 前就被认证或授权拒绝时使用保留的 `security-denied` sentinel。Client 只在错误为 `unauthenticated` 或 `permission-denied` 时接受该 sentinel。方法的参数与返回值结构只存在于领域接口签名（`SessionsApi`、`HostApi`、`EventsApi`）中；`RpcMethodMap` 注册方法，其他所有位置均通过 `RequestPayload<K>`／`ResponseValue<K>` 派生。Zod schema 以 `satisfies z.ZodType<Wire<T>>` 锚定类型，并分两层解析：先解析信封，再解析业务载荷，随后按方法分发。业务错误由 `RpcResult` 的错误分支承载（`RpcErrorDetailsMap` 封闭错误码集合）；HTTP 状态只表达载体层结果。每个 `/api` POST 都必须声明 `application/json` 媒体类型——否则在分发前即以 415 拒绝，因此跨站「简单请求」（浏览器不经 CORS 预检就会发出）永远无法盲目执行有副作用的方法。
 
 分层与协议决策记录在 [GUI 分层与 RPC 协议 RFC](../../../.agents/notes/implemented/architecture/2026-07-19-gui-layering-and-rpc-protocol.md) 中；浏览器侧消费架构记录在 [Web 客户端架构 RFC](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.md) 中。
+
+## 身份认证与路径授权
+
+生产 Host adapter 会为这套 API 加载请求认证和路径权限栅栏。它在仍持有原始 HTTP 或 upgrade `Request` 时完成认证，并在读取 body、解析 envelope、解析 Session、打开导出或创建事件 source 之前执行。生成的不可变 `AuthenticatedCall` 通过带外参数传递，绝不从 RPC JSON 接受。浏览器信任／回环栅栏仍是独立的可达性约束，因此 `trustedHosts` 不是身份 grant。
+
+路径目录由 `src/fetch/security.ts` 持有，包含 session、subagent、workspace、plugin/preset、skill、goal、settings、credentials、LLM、host/native、event、response 和 export 操作的稳定权限。流和非 RPC surface 也有明确条目：`events.mux` -> `api:events-mux`、`events.host` -> `api:events-host`、`session.export` -> `api:session-export`、`respond` -> `api:respond`。Preset 路径使用显式的 `api:agent-preset-list`、`api:agent-preset-use`、`api:agent-preset-metadata-read`、`api:agent-preset-write` 与 `api:agent-preset-native` 权限，不归入泛化的 plugin 权限。该目录保护入口；资源可见性和 projection 过滤仍由领域负责，本包不声称提供通用 resource filtering 引擎。
+
+同一道栅栏会在 WebSocket upgrade 时、创建事件 source 前执行，也会同时覆盖 session export 的 `HEAD` 与 `GET`。拒绝会映射为 `unauthenticated` 或 `permission-denied`，不暴露 credential、角色策略或 Provider 内部诊断。意外的 unary、SSE 与 WebSocket source 故障只暴露稳定的 `handler failure` 文本。`/api/respond` 返回的是 carrier receipt 而不是 `ServerResponse`，因此解析前安全拒绝使用 HTTP 401/403，而不是 RPC sentinel。未传 security option 的 `toFetchHandler(api)` 仍是传输／协议测试 helper；生产 Connection 组合必须提供 security adapter。
+
+security seam 可以通过 `openLease()` 延伸已接受的流决策。生产 adapter 使用 `AuthorizationLease` 实现该接口；调用取消、凭证过期、策略或权限目录失效、以及 Authorization Provider 释放都会中止它的 signal。受保护的 SSE 路由会在最终新鲜度检查之后、创建事件 source 之前打开租约；如果打开租约时发现决策已经过期，路由会返回 401/403，且不创建 source。流存续期间，handler 会合并 request 与租约 signal，把合并后的 signal 传给 source，在撤销时干净关闭而不伪造 `handler failure` 帧，并在 source 完成或消费方取消时调用 `release()`。Connection 会把同一租约约定交给 WebSocket 下行，由 upgrade 后的下行负责释放。
 
 首个回答认领待处理请求之前，系统会对照该请求校验问题响应。多选题的回答项可以同时携带 `selected` 中的请求选项标签与非空 `custom` 文本；单选题的回答项必须二选一。标签重复、标签未知、id 不匹配、批次不完整以及自定义文本为空都会以 `bad-response` 拒绝。
 

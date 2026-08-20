@@ -20,6 +20,7 @@ interface RuntimeSchema {
 
 interface RuntimeDescriptor {
   readonly id: string
+  readonly access: 'authenticated' | 'permission'
   readonly cancellation?: { readonly parameter: 'signal' }
   readonly parameters: readonly {
     readonly wire: string
@@ -72,6 +73,7 @@ describe('Remote model generation', { timeout: 60_000 }, () => {
       service: 'goals',
       namespace: 'goals',
       method: 'create',
+      access: 'authenticated',
       invocation: { kind: 'direct' },
       scope: { context: 'agent', wire: 'agentId' },
       parameters: [
@@ -97,6 +99,7 @@ describe('Remote model generation', { timeout: 60_000 }, () => {
       service: 'goals',
       namespace: 'goals',
       method: 'rename',
+      access: 'authenticated',
       invocation: {
         kind: 'context',
         context: 'agent',
@@ -131,6 +134,7 @@ describe('Remote model generation', { timeout: 60_000 }, () => {
     const generated = await import(`data:text/javascript,${encodeURIComponent(executable)}`) as RuntimeRemoteModule
     expect(generated.TYPERT_REMOTE.package).toBe('@fixture/remote')
     const create = generated.TYPERT_REMOTE.descriptors[0]
+    expect(create?.access).toBe('authenticated')
     expect(create?.cancellation).toEqual({ parameter: 'signal' })
     expect(create?.parameters[1]?.codec.schema.safeParse({ title: 'ship' }).success).toBe(true)
     expect(create?.parameters[1]?.codec.schema.safeParse({ title: 1 }).success).toBe(false)
@@ -153,17 +157,17 @@ describe('Remote model generation', { timeout: 60_000 }, () => {
       '\n}\n\nexport type {',
       `
 
-  @Remote
+  @Remote({ access: 'authenticated' })
   maybe(value: string | undefined): string | undefined {
     return value
   }
 
-  @Remote
+  @Remote({ access: 'authenticated' })
   labelled(id: string, label?: string): string {
     return label ?? id
   }
 
-  @Remote
+  @Remote({ access: 'authenticated' })
   clear(): void {}
 }
 
@@ -246,7 +250,7 @@ export type GenericResult = {
     return { renamed: request.title.length > 0 }
   }
 
-  @Remote
+  @Remote({ access: 'authenticated' })
   dispatch(request: GenericRequest): GenericResult {
     if (request.kind === 'ship') return { kind: 'ship', value: { accepted: request.payload.count > 0 } }
     return { kind: 'cancel', value: { cancelled: request.payload.reason.length > 0 } }
@@ -297,7 +301,7 @@ export interface BoxPayload {
     return { renamed: request.title.length > 0 }
   }
 
-  @Remote
+  @Remote({ access: 'authenticated' })
   box(request: Box<BoxPayload>): Box<BoxPayload> {
     return request
   }
@@ -318,7 +322,7 @@ export interface BoxPayload {
     return { renamed: request.title.length > 0 }
   }
 
-  @Remote('create-goal')
+  @Remote({ access: 'authenticated', exportName: 'create-goal' })
   createAlias(request: CreateGoalRequest): CreateGoalResult {
     return { ref: request.title }
   }
@@ -333,18 +337,113 @@ export interface BoxPayload {
   it.each(['create#v2', 'create goal', '.', '..'])('rejects untransportable Remote alias %s', (alias) => {
     const root = copyFixture()
     editFile(root, 'packages/remote/src/index.ts', source => source.replace(
-      '  @Remote\n  async create(',
-      `  @Remote('${alias}')\n  async create(`,
+      "  @Remote({ access: 'authenticated' })\n  async create(",
+      `  @Remote({ access: 'authenticated', exportName: '${alias}' })\n  async create(`,
     ))
 
     expect(() => analyzeRemote(root, false)).toThrow(/RPC endpoint segment characters/)
   })
 
+  it.each([
+    ['a bare decorator', '@Remote', /Remote requires one explicit access options object/],
+    ['a string alias', "@Remote('create-goal')", /access options must be an object literal/],
+    ['missing access', '@Remote({})', /options require access "authenticated" or a nonempty permission/],
+    [
+      'contradictory access and permission',
+      "@Remote({ access: 'authenticated', permission: 'fixture:read' })",
+      /permission options must not declare access/,
+    ],
+  ] as const)('rejects %s', (_name, decorator, message) => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace(
+      "@Remote({ access: 'authenticated' })",
+      decorator,
+    ))
+
+    expect(() => analyzeRemote(root, false)).toThrow(message)
+  })
+
+  it('requires explicit RemoteScope options', () => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace(
+      "@RemoteScope('agent', { access: 'authenticated' })",
+      "@RemoteScope('agent')",
+    ))
+
+    expect(() => analyzeRemote(root, false)).toThrow(/requires a Context key and explicit access options object/)
+  })
+
+  it('emits protected Remote authorization without exposing the Host AuthenticatedCall parameter', () => {
+    const root = copyFixture()
+    installAuthenticationFixture(root)
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace(
+      "import type { Agent } from '@fixture/domain'",
+      "import type { Agent } from '@fixture/domain'\nimport type { AuthenticatedCall } from '@deepseek-ai/dsh-authentication'",
+    ).replace(
+      "  @Remote({ access: 'authenticated' })\n  async create(agent:",
+      "  @Remote({ permission: 'fixture:read' })\n  async create(call: AuthenticatedCall, agent:",
+    ).replace(
+      '    signal.throwIfAborted()',
+      '    void call\n    signal.throwIfAborted()',
+    ))
+
+    const model = remotePackage(root)
+    expect(model.invocations[0]).toMatchObject({
+      access: 'permission',
+      authorization: { permission: 'fixture:read', callParameter: 'call' },
+      parameters: [
+        { name: 'agent', wire: 'agentId' },
+        { name: 'request', wire: 'request' },
+      ],
+    })
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    expect(artifact?.js).toContain("permission: 'fixture:read'")
+    expect(artifact?.remote?.dts).toContain(
+      'create: (agentId: AgentId, request: CreateGoalRequest, signal?: AbortSignal) => Promise<RemoteResult<CreateGoalResult>>',
+    )
+    expect(artifact?.remote?.dts).not.toContain('AuthenticatedCall')
+    assertRemoteConsumerTypechecks(artifact?.remote?.dts, artifact?.remote?.dtsMap, root)
+  })
+
+  it('requires the Host AuthenticatedCall parameter for protected Remote methods', () => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace(
+      "  @Remote({ access: 'authenticated' })\n  async create(",
+      "  @Remote({ permission: 'fixture:read' })\n  async create(",
+    ))
+
+    expect(() => analyzeRemote(root, false)).toThrow(
+      /protected Remote methods require a first parameter named call with type AuthenticatedCall/,
+    )
+  })
+
+  it('injects the Host AuthenticatedCall parameter for permission RemoteScope methods', () => {
+    const root = copyFixture()
+    installAuthenticationFixture(root)
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace(
+      "import type { Agent } from '@fixture/domain'",
+      "import type { Agent } from '@fixture/domain'\nimport type { AuthenticatedCall } from '@deepseek-ai/dsh-authentication'",
+    ).replace(
+      "@RemoteScope('agent', { access: 'authenticated' })\n  rename(request:",
+      "@RemoteScope('agent', { permission: 'fixture:read' })\n  rename(call: AuthenticatedCall, request:",
+    ).replace(
+      '  rename(call: AuthenticatedCall, request: RenameGoalRequest): RenameGoalResult {\n    return',
+      '  rename(call: AuthenticatedCall, request: RenameGoalRequest): RenameGoalResult {\n    void call\n    return',
+    ))
+
+    expect(remotePackage(root).invocations[1]).toMatchObject({
+      access: 'permission',
+      authorization: { permission: 'fixture:read', callParameter: 'call' },
+      invocation: { kind: 'context', context: 'agent' },
+      parameters: [{ name: 'request', wire: 'request' }],
+    })
+  })
+
   it('rejects a Remote export after its last Remote method is removed', () => {
     const root = copyFixture()
     editFile(root, 'packages/remote/src/index.ts', source => source
-      .replace('  @Remote\n', '')
-      .replace("  @RemoteScope('agent')\n", ''))
+      .replace("  @Remote({ access: 'authenticated' })\n", '')
+      .replace("  @RemoteScope('agent', { access: 'authenticated' })\n", ''))
     editFile(root, 'packages/remote/src/types.ts', source => `${source}
 
 /** @typert schema */
@@ -555,7 +654,10 @@ export interface ClientMarker {
 
   it('rejects a Remote Scope without a static Context declaration', () => {
     const root = copyFixture()
-    editFile(root, 'packages/remote/src/index.ts', source => source.replace("@RemoteScope('agent')", "@RemoteScope('missing')"))
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace(
+      "@RemoteScope('agent', { access: 'authenticated' })",
+      "@RemoteScope('missing', { access: 'authenticated' })",
+    ))
 
     expect(() => analyzeRemote(root, false)).toThrow(/Remote Scope missing has no TypertContextMap entry/)
   })
@@ -578,7 +680,7 @@ export class DuplicateGoalService extends TypertRemoteService {
     super(undefined, 'duplicate', { namespace: 'goals' })
   }
 
-  @Remote
+  @Remote({ access: 'authenticated' })
   create(request: CreateGoalRequest): CreateGoalResult {
     return { ref: request.title }
   }
@@ -616,6 +718,50 @@ function editFile(root: string, relativePath: string, edit: (source: string) => 
   const result = edit(source)
   if (result === source) throw new Error(`fixture edit made no change to ${relativePath}`)
   writeFileSync(path, result)
+}
+
+function installAuthenticationFixture(root: string): void {
+  const packageRoot = join(root, 'packages', 'authentication')
+  mkdirSync(join(packageRoot, 'src'), { recursive: true })
+  writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({
+    name: '@deepseek-ai/dsh-authentication',
+    private: true,
+    type: 'module',
+    exports: { '.': './src/index.ts' },
+  }, null, 2))
+  writeFileSync(join(packageRoot, 'tsconfig.json'), JSON.stringify({
+    extends: '../../tsconfig.base.json',
+    compilerOptions: {
+      rootDir: 'src',
+      outDir: 'lib/types',
+      noEmit: false,
+      declaration: true,
+      emitDeclarationOnly: true,
+    },
+    include: ['src'],
+  }, null, 2))
+  writeFileSync(join(packageRoot, 'src/index.ts'), `declare const AUTHENTICATED_CALL: unique symbol
+export interface AuthenticatedCall {
+  readonly [AUTHENTICATED_CALL]: true
+}
+`)
+  editFile(root, 'tsconfig.base.json', (source) => {
+    const config = JSON.parse(source) as { compilerOptions: { paths: Record<string, string[]> } }
+    config.compilerOptions.paths['@deepseek-ai/dsh-authentication'] = [
+      ['.', 'packages', 'authentication', 'src', 'index.ts'].join('/'),
+    ]
+    return `${JSON.stringify(config, null, 2)}\n`
+  })
+  for (const configPath of ['tsconfig.host.json', 'packages/remote/tsconfig.json']) {
+    editFile(root, configPath, (source) => {
+      const config = JSON.parse(source) as { references: Array<{ path: string }> }
+      const path = configPath === 'tsconfig.host.json'
+        ? ['.', 'packages', 'authentication'].join('/')
+        : '../authentication'
+      config.references.unshift({ path })
+      return `${JSON.stringify(config, null, 2)}\n`
+    })
+  }
 }
 
 function assertRemoteConsumerTypechecks(

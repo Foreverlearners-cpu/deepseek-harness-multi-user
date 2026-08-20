@@ -19,6 +19,9 @@
   ],
   "references": [
     {
+      "path": "../../identity/authentication"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {

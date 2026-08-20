@@ -186,7 +186,7 @@ export class MessageFeedbackService extends TypertRemoteService {
    * @param request - Session identity to inspect and list.
    * @returns current immutable items or `session-not-found`.
    */
-  @Remote('list')
+  @Remote({ access: 'authenticated', exportName: 'list' })
   async list(request: MessageFeedbackListRequest): Promise<MessageFeedbackListResult> {
     const known = await this.inspectSession(request.sessionId)
     if (!known.ok) return known
@@ -202,7 +202,7 @@ export class MessageFeedbackService extends TypertRemoteService {
    * @param request - target, desired value, and observed item version.
    * @returns the committed item or an explicit business failure.
    */
-  @Remote('put')
+  @Remote({ access: 'authenticated', exportName: 'put' })
   put(request: MessageFeedbackPutRequest): Promise<MessageFeedbackPutResult> {
     const note = this.resolveNote(request.note)
     if (!note.ok) return Promise.resolve(note)
@@ -268,7 +268,7 @@ export class MessageFeedbackService extends TypertRemoteService {
    * @param request - Session, message, and observed item version.
    * @returns the stable absent postcondition, or an explicit failure.
    */
-  @Remote('delete')
+  @Remote({ access: 'authenticated', exportName: 'delete' })
   delete(request: MessageFeedbackDeleteRequest): Promise<MessageFeedbackDeleteResult> {
     return this.enqueue(request.sessionId, async () => {
       const known = await this.inspectSession(request.sessionId)

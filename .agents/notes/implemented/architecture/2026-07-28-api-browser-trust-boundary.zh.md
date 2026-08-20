@@ -15,7 +15,7 @@ Web GUI 宿主以纯 HTTP 提供 `/api`（默认 `127.0.0.1:3080`，支持 `--ho
 - **媒体类型栅栏（dsh-host-apiproxy）**：每个 `/api` POST 必须声明 `application/json`，否则在解析前以 415 拒绝。跨站「简单请求」由此不复存在：任何跨站尝试都被逼进一次本服务器从不应答的 CORS 预检。
 - **权威栅栏（dsh-client-connection，`src/api-request-trust.ts`）**：每个请求的 `Host` 都必须是回环地址，或与某个 `trustedHosts` 条目匹配（带端口的 `host:port` 条目精确匹配，不带端口的条目匹配任意端口，均经 WHATWG 归一化；rebinding 防御）。刻意不为无标记请求开捷径：明文 HTTP 下浏览器的读取（EventSource、图片、导航——这些头只发给可信目标）既不带 `Origin` 也不带 Fetch-Metadata，因此无标记请求可能是被重绑页面发起且响应可被读走的读取，而 Host 是重绑唯一伪造不了的请求头；非浏览器客户端经由回环地址、推导的 LAN IP 字面量或已声明的权威通过。若带 `Origin` 则必须与 Host 权威完全一致；`sec-fetch-site: cross-site` 一律拒绝。不是单纯规范化 authority 的 `trustedHosts` 条目会导致插件加载失败——否则 WHATWG 解析会悄悄授权笔误里的 hostname，或放大精确端口授权。`host.pickDirectory` 失去专属守卫，与其他请求同栅而行。
 
-两条边界刻意留在范围之外：可达性由 webserver 的绑定配置（`host: 127.0.0.1 | 0.0.0.0`）控制；真正远程部署的认证是延期工作，记录在 connection README——这道栅栏是混淆代理人防御，不是认证层。旧守卫的回环 socket 检查被放弃而非泛化：绑定表达可达性、`trustedHosts` 点名远程权威之后，socket 地址提供不了头部栅栏覆盖不到的任何东西。
+两条边界刻意分开：可达性由 webserver 的绑定配置（`host: 127.0.0.1 | 0.0.0.0`）控制，身份与权限则由 `dsh-client-connection` 配置的 Authentication／Authorization Provider 执行。这道栅栏仍是混淆代理人防御，不是认证层。生产 `/api` mount 会认证并授权 unary route、`respond`、session export、SSE 流和 WebSocket upgrade；local-only Provider 不能与非空 `trustedHosts` 组合，远程部署必须提供支持网络的 Provider。旧守卫的回环 socket 检查被放弃而非泛化：绑定表达可达性、`trustedHosts` 点名远程权威之后，socket 地址提供不了头部栅栏覆盖不到的任何东西。
 
 ## 曾考虑的替代方案
 
@@ -28,4 +28,4 @@ Web GUI 宿主以纯 HTTP 提供 `/api`（默认 `127.0.0.1:3080`，支持 `--ho
 - 未来任何 `/api` 方法天然在覆盖范围内；不存在会被遗忘的按路由信任决定。
 - 非回环部署的对外服务 authority 必须列入信任范围，否则请求会被拒绝。dsh CLI 通过把本机 LAN IP 字面量推导进 connection 行（不带端口的条目——IP 字面量 Host 不可能是被重绑的域名，且绑定端口可能由操作系统分配）来保住它公布的 `--host 0.0.0.0` LAN URL，并提供 `dsh web --trusted-host` 声明具名权威；并非由 CLI 启动的组合自行声明 `trustedHosts`。非浏览器自动化走同一道栅栏：回环地址、推导的 LAN IP 或已声明的权威可通过；未声明的 DNS 别名会被拒绝。
 - 客户端必须给 POST 体标注 `application/json`（我们自己的客户端一向如此；裸 fetch 测试补上了该头）。
-- 无认证 `0.0.0.0` 部署的「可信网络」假设从隐含变为成文。
+- `0.0.0.0` 部署必须声明服务 authority 并使用支持网络的 Authentication Provider；local bootstrap Provider 会被拒绝用于该组合。可信网络栅栏与应用身份是两道独立检查。

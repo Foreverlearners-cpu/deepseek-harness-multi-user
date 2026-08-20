@@ -33,6 +33,8 @@ export const rpcIdSchema = z.string() as unknown as z.ZodType<RpcId>
 /** Error body: discriminated by code, per-branch details aligned to RpcErrorDetailsMap; details is required. */
 export const rpcErrorSchema: z.ZodType<RpcError> = z.discriminatedUnion('code', [
   z.object({ code: z.literal('bad-request'), message: z.string(), details: z.object({ issues: z.array(z.custom<ZodIssue>()) }) }),
+  z.object({ code: z.literal('unauthenticated'), message: z.string(), details: z.object({}) }),
+  z.object({ code: z.literal('permission-denied'), message: z.string(), details: z.object({ permission: z.string() }) }),
   z.object({ code: z.literal('cancelled'), message: z.string(), details: z.object({}) }),
   z.object({ code: z.literal('session-not-found'), message: z.string(), details: z.object({ sessionId: z.string() }) }),
   z.object({ code: z.literal('model-unavailable'), message: z.string(), details: z.object({ provider: z.string(), model: z.string() }) }),

@@ -16,7 +16,7 @@ Host 与 Browser Client 使用独立的 TypeScript Program，因为两边会以�
 
 ## 决策
 
-业务 Service 继承 `TypertRemoteService`，并通过 `@Remote` 或 `@RemoteScope()` 声明可调用方法；已有其他基类的 Service 可以改用 `bindTypertRemote()` 暴露同一绑定。Typert 从 Host Program 生成 Host 本地反射产物和平台无关的 Remote 消费端投影；Client Program 继续独立生成自己的本地反射产物。
+业务 Service 继承 `TypertRemoteService`，并通过 `@Remote(options)` 或 `@RemoteScope(key, options)` 声明可调用方法；每个 options 对象都要显式选择 authenticated 或 permission access。已有其他基类的 Service 可以改用 `bindTypertRemote()` 暴露同一绑定。Typert 从 Host Program 生成 Host 本地反射产物和平台无关的 Remote 消费端投影；Client Program 继续独立生成自己的本地反射产物。
 
 Remote 消费端投影同时包含 `.d.ts`、`.d.ts.map` 和 `.js`。`.d.ts` 只暴露被 Remote decorator 标记的方法，并引用业务包唯一的公共类型符号；`.d.ts.map` 把消费端 API 方法导航回 Host 业务方法实现；`.js` 携带同一约定的 endpoint、参数、Context 和 Zod 信息。Browser Client 在 assembly 层把需要的 Remote JS 贡献集中挂到 Client Remote Service；该投影和 Remote 抽象保持平台无关，以便未来 TUI 复用。
 
@@ -31,7 +31,7 @@ Remote 消费端投影同时包含 `.d.ts`、`.d.ts.map` 和 `.js`。`.d.ts` 只
 | `@deepseek-ai/dsh-typert-protocol` | 只声明 `ctx.typert` 的最小协议 | `TypertRemoteService`、decorator、binding 回退、descriptor、lookup/Context 和 Remote map；不依赖 compiler、Zod、Connection 或 Browser |
 | Typert registry | `ctx.typert` | 分开保存当前环境 reflection、导入的 Remote contribution、lookup provider 和 Context provider |
 | Typert generator/loader | 无新增业务服务 | 从 Host/Client Program 生成三类 `lib` 产物，并把当前环境产物注册到 `ctx.typert` |
-| API Gateway 的 Host face | `ctx.typertGateway` | 关联 Host definition 与活 Service，解码参数、解析 receiver、调用方法和编码结果 |
+| API Gateway 的 Host face | `ctx.typertGateway` | 校验 Host-issued call、执行 descriptor permission、关联 Host definition 与活 Service、解析参数和 receiver、调用方法并编码结果 |
 | Connection | `ctx.connection` | 独占 HTTP Server/未来 WebSocket、共享 `/api` route、RPC envelope、rpcId、序列化、trust、错误传输、Typert 拦截和旧 API Proxy 回退 |
 | API Gateway 的 Client face | `ctx.remote`、`ctx.remote.<namespace>` | mount Remote contribution，把每个 namespace 实体化为可追踪的 `remote.<namespace>` 子 Service，并把规范调用交给 `ctx.connection.rpc` |
 | API Remotes | 无新增服务 | 负责 Host Agent/Session lookup 策略，并作为 Client 业务的唯一 facade，选择并挂载 `/remote` contribution，同时暴露所选 API 声明 |
@@ -42,7 +42,7 @@ Host Gateway 不依赖 `ctx.agents`、`ctx.sessions`、`ctx.goals` 或 `ctx.webS
 
 ## 业务声明
 
-普通直接调用使用 `@Remote`。现有方法的参数和结果已经是预期的 Remote 约定时，直接装饰该方法，不为此重命名。只有 wire 约定需要不同的请求或结果形态时，才新增 `remoteExport*` 适配器，并由 decorator 参数声明短 API 名。方法需要哪个业务对象，就在顶层参数位置显式声明该对象：
+普通直接调用使用 `@Remote(options)`。现有方法的参数和结果已经是预期的 Remote 约定时，直接装饰该方法，不为此重命名。只有 wire 约定需要不同的请求或结果形态时，才新增 `remoteExport*` 适配器，并通过 options 对象中的 `exportName` 声明短 API 名。方法需要哪个业务对象，就在顶层参数位置显式声明该对象：
 
 ```text
 export class GoalService extends TypertRemoteService {
@@ -54,7 +54,7 @@ export class GoalService extends TypertRemoteService {
     // Existing business method remains unchanged.
   }
 
-  @Remote('create')
+  @Remote({ exportName: 'create', access: 'authenticated' })
   remoteExportCreate(agent: Agent, request: CreateGoalRequest): CreateGoalResult {
     const view = this.create(agent, request)
     return { ref: { id: view.id, revision: view.revision } }
@@ -64,7 +64,7 @@ export class GoalService extends TypertRemoteService {
 
 `goals` 是传给 `super()` 的明确 Cordis service key，并默认作为 wire namespace。只有协议 namespace 确实需要与 service key 不同时，才通过第三个参数传入 `namespace` 选项。
 
-需要在某类隔离 Context 中查找 Service receiver 时使用 `@RemoteScope()`。Scope identity 不进入业务方法参数：
+需要在某类隔离 Context 中查找 Service receiver 时使用 `@RemoteScope(key, options)`。Scope identity 不进入业务方法参数：
 
 ```text
 export class ScopedGoalService extends TypertRemoteService {
@@ -72,14 +72,14 @@ export class ScopedGoalService extends TypertRemoteService {
     super(ctx, 'goals')
   }
 
-  @RemoteScope('agent', 'create')
+  @RemoteScope('agent', { exportName: 'create', access: 'authenticated' })
   remoteExportCreate(request: CreateGoalRequest): Promise<CreateGoalResult> {
     // Runs against the goals service resolved from the Agent Context.
   }
 }
 ```
 
-同一个 endpoint 只能选择一种调用模式。需要显式 `Agent` 参数的流程使用 `@Remote`；需要切换到 Agent Context 再解析 scoped receiver 的流程使用 `@RemoteScope('agent')`，两者不会由 Typert 根据方法体或参数缺失自动猜测。
+同一个 endpoint 只能选择一种调用模式。需要显式 `Agent` 参数的流程使用 `@Remote(options)`；需要切换到 Agent Context 再解析 scoped receiver 的流程使用 `@RemoteScope('agent', options)`，两者不会由 Typert 根据方法体或参数缺失自动猜测。
 
 业务包只依赖轻量的 `@deepseek-ai/dsh-typert-protocol`。它提供 `TypertRemoteService`，以及 decorator、binding 回退、lookup、Remote Scope 和 descriptor 的声明协议，不依赖 TypeScript compiler、Zod、HTTP 或 Client runtime。
 
@@ -87,11 +87,11 @@ export class ScopedGoalService extends TypertRemoteService {
 
 ## Decorator 与显式 Gateway facet
 
-Decorator 只表达“该方法参与 Remote 约定”，不负责运行时类型反射，也不向 Service constructor 注入隐藏 symbol。`@Remote('create')` 和 `@RemoteScope('agent', 'create')` 的参数是外部方法名；被装饰成员既可以是业务方法本身，也可以是 `remoteExportCreate` 这样的适配器。未给别名时才使用成员名作为外部方法名。继承 `TypertRemoteService` 是 Service 加入 Gateway 的常规显式声明；其 public readonly `typertGateway` 字段使运行时实例上的绑定保持可见。
+Decorator 会记录方法的 direct/scoped invocation、可选 `exportName` 和显式 access 分支，不负责运行时类型反射，也不向 Service constructor 注入隐藏 symbol。`@Remote({ exportName: 'create', access: 'authenticated' })` 和 `@RemoteScope('agent', { exportName: 'create', access: 'authenticated' })` 会把 `remoteExportCreate` 这样的适配器以外部名称 `create` 暴露；省略 `exportName` 时才使用成员名。permission access 则声明 `permission`，并要求 Host 方法把非可选且类型为 `AuthenticatedCall` 的 `call` 作为首参。缺少 options 对象、使用字符串 alias，或者 options 对象既没有 `access: 'authenticated'` 也没有 `permission` 时都会拒绝。继承 `TypertRemoteService` 是 Service 加入 Gateway 的常规显式声明；其 public readonly `typertRemote` 字段使运行时实例上的绑定保持可见。
 
-SRC 运行时允许 decorator 在 `dsh-typert-protocol` 内部的 `WeakMap` 记录 prototype、方法名和调用模式。它不向 Service 实例、prototype、constructor 或方法函数写入自定义属性。
+SRC 运行时允许 decorator 在 `dsh-typert-protocol` 内部的 `WeakMap` 记录 prototype、方法名、调用模式、endpoint alias 和 access 分支。它不向 Service 实例、prototype、constructor 或方法函数写入自定义属性。
 
-LIB 的严格方法发现、类型解析和 descriptor 生成由 Typert compiler 完成。它接受 `TypertRemoteService` 直接 `super()` 调用中的字面量 service key，或显式 binding 回退；生成过程不改写业务源码，也不注入隐藏注册元数据。
+LIB 的严格方法发现、类型解析和 descriptor 生成由 Typert compiler 完成。它接受 `TypertRemoteService` 直接 `super()` 调用中的字面量 service key，或显式 binding 回退，并拒绝缺少有效 access 分支的 Remote 声明；生成过程不改写业务源码，也不注入隐藏注册元数据。
 
 ## Lookup 与 Remote Scope 注册
 
@@ -117,7 +117,7 @@ Agent、Session 等 lookup 对象只能各自占据一个顶层参数位置。�
 
 Remote Scope 使用独立的 merge-extensible map 和 Context provider。Agent 包注册 `agent` provider，负责用 wire identity 找到 Agent Context，并从该 Context 解析 descriptor 指定的 service key；Gateway 不知道 Agent Context 的内部结构。
 
-Client 侧也注册 `agent` Context binder。binder 只负责从一次调用所在的 Context 取得 `SessionId`；它不枚举 Scope，也不逐个复制方法。scoped namespace 由 Cordis Service tracker 自动 rebind 到当前 Agent Context。
+Client 侧也注册 `agent` Context binder。binder 只负责从一次调用所在的 Context 取得 `SessionId`；它不枚举 Scope，也不逐个复制方法。scoped namespace 由 Cordis Service tracker 自动 rebind 到当前 Agent Context。binder 不是授权检查，因为 raw RPC 可以直接提供同一个 identity；受 permission 保护的 scoped 方法会使用 Host-issued call 执行领域拥有的 owner、tenant 和 resource 检查。
 
 ## InvocationDescriptor
 
@@ -130,6 +130,8 @@ InvocationDescriptor {
   namespace: 'goals'
   method: 'create'
   implementation: 'remoteExportCreate'
+  access: authenticated | permission
+  authorization?: { permission, callParameter: 'call' }
   invocation: direct | { context: 'agent', wire: 'agentId' }
   scope?: { context: 'agent', wire: 'agentId' }
   parameters: [
@@ -141,11 +143,11 @@ InvocationDescriptor {
 }
 ```
 
-`method` 是 endpoint 和 Client Remote 使用的外部短名，`implementation` 是 Host receiver 上的真实成员名；两者相同时可省略 `implementation`。`direct` descriptor 保留原始 Service 实例作为 receiver。Context descriptor 先通过对应 Context provider 找到 scoped Context，再以 descriptor 的 service key 解析 receiver。
+`method` 是 endpoint 和 Client Remote 使用的外部短名，`implementation` 是 Host receiver 上的真实成员名；两者相同时可省略 `implementation`。`access` 是必填的闭合判别字段：authenticated descriptor 不含 `authorization`，permission descriptor 则要求匹配的 permission metadata 和 `callParameter: 'call'`。生成、加载和注册会拒绝缺失或未知的 access 以及不一致的 access/authorization 组合。strict descriptor 与 live marker 必须在 access、permission、endpoint alias 及 direct/scoped invocation 上一致。`direct` descriptor 保留原始 Service 实例作为 receiver。Context descriptor 先通过对应 Context provider 找到 scoped Context，再以 descriptor 的 service key 解析 receiver。
 
 严格生成器只在 direct 方法恰好包含一个 lookup 参数、同名 `TypertContextMap` 声明存在且两者使用同一 wire 类型 symbol 时写入 `scope`。`scope.wire` 必须指向该 lookup 参数；它声明消费端可以从调用所在 Context 补入这个参数，不改变 Host receiver 或 endpoint。多个 lookup、缺少 Context 声明或 wire 类型不一致时不生成 scoped 投影，其中类型不一致属于构建错误。
 
-参数顺序来自方法签名，HTTP 字段来自参数名或 lookup 声明。取消 descriptor 只保留最后一个 `signal` 位置，并使其不进入具名 `args`；实际 signal 由 Connection 或直接调用 Gateway 的调用方提供。Gateway 不根据请求内容推断可选字段、Context 类型、lookup 类型或缺失参数，也不会合成业务默认值。
+参数顺序来自方法签名，HTTP 字段来自参数名或 lookup 声明。对于 permission access，生成过程会保留首个 Host `call` 参数，并从 Client 签名及具名 `args` 中移除它。取消 descriptor 只保留最后一个 `signal` 位置，同样不让它进入具名 `args`；Gateway 从 Host-issued call 取得实际 signal。Gateway 不根据请求内容推断可选字段、Context 类型、lookup 类型或缺失参数，也不会合成业务默认值。
 
 LIB codec 带有 Zod schema 和「package + 公共 subpath + export name」的规范 `typeSymbol`；SRC codec 只标记 `src-json`。Host 和消费端运行在不同 JavaScript realm 时会各自持有 Zod 实例，但这些实例由同一 Typert 模型和 symbol key 生成。
 
@@ -286,7 +288,7 @@ ctx.remote.goals.create(agentId, request)
 agentCtx.remote.goals.create(request)
 ```
 
-Agent Scope 自动提供自己的 `SessionId`。因此带 `agent` lookup 的 `@Remote` 方法可以同时生成 root 和 scoped 两种消费端签名；`@RemoteScope('agent')` 方法也省略独立的 Scope identity，但只生成 scoped 签名。根 `Context` 通过 `ctx.remote` 暴露 direct namespace，`AgentContext.remote` 则把该 direct surface 与 scoped surface 取交集。未来 TUI 复用时必须维持相同区分。
+Agent Scope 自动提供自己的 `SessionId`。因此带 `agent` lookup 的 direct Remote 方法可以同时生成 root 和 scoped 两种消费端签名；通过 `@RemoteScope('agent', options)` 声明的方法也省略独立的 Scope identity，但只生成 scoped 签名。根 `Context` 通过 `ctx.remote` 暴露 direct namespace，`AgentContext.remote` 则把该 direct surface 与 scoped surface 取交集。未来 TUI 复用时必须维持相同区分。
 
 `TypertClientRemote` 保持平台无关，Browser Client 通过 `ctx.remote` 暴露它。未来 TUI 若复用该类型，也必须通过专用 Remote 对象和 Agent Scope 使用它，不能把 Host `Context` 当成更宽的 Service 集合；未标记的 public Service 方法不会进入 Remote maps。
 
@@ -313,9 +315,9 @@ Client 业务包只引用 `@deepseek-ai/dsh-api-remotes/client`，不直接依�
 
 `ctx.remote.$mount()` 把 contribution 注册到 `Typert.remotes`，安装它的 namespace Service 和具体方法，并在它们就绪后才 resolve。调用该方法的 Cordis fiber 持有 disposer。endpoint 重复、同一 namespace/method 模式冲突或 descriptor 与现有类型身份冲突时直接失败。
 
-Client Remote Service 把 `@Remote` descriptor 实体化为 `remote.<namespace>` 子 Service 上的真实函数。函数按 descriptor 的位置参数顺序构造具名 `args`，执行 Client strict codec，然后调用 `ctx.connection.rpc.call('/api', endpoint, { args }, signal)`。对于支持取消的 descriptor，生成的函数接受最后一个可选 signal，并将其与 contribution 的挂载生命周期合并；因此卸载会取消所有正在进行的 carrier 调用，而调用方也可以单独取消一次调用。
+Client Remote Service 把每个 Remote descriptor 实体化为 `remote.<namespace>` 子 Service 上的真实函数。函数按 descriptor 的位置参数顺序构造具名 `args`，执行 Client strict codec，然后调用 `ctx.connection.rpc.call('/api', endpoint, { args }, signal)`。对于支持取消的 descriptor，生成的函数接受最后一个可选 signal，并将其与 contribution 的挂载生命周期合并；因此卸载会取消所有正在进行的 carrier 调用，而调用方也可以单独取消一次调用。
 
-带 `scope` 的 direct descriptor 和 `@RemoteScope` descriptor 都不为每个 Agent Scope 复制函数。Client Remote Service 为每个 namespace 创建一个注册为 `remote.<namespace>` 的 Cordis 子 Service，并在其上实体化 direct 与 scoped 变体。通过 `agentCtx.remote.goals` 取得方法时，accessor 会在返回可调用句柄前捕获当前 Agent Context。方法再通过对应 Context binder 从该 Context 取得 identity。direct scoped 投影用 identity 替代 `scope.wire` 指定的 lookup 位置，Remote Scope descriptor 则把 identity 写入 receiver 的独立 wire 字段；两者都发起同一种 `/api` 调用。
+带 `scope` 的 direct descriptor 和 Remote Scope descriptor 都不为每个 Agent Scope 复制函数。Client Remote Service 为每个 namespace 创建一个注册为 `remote.<namespace>` 的 Cordis 子 Service，并在其上实体化 direct 与 scoped 变体。通过 `agentCtx.remote.goals` 取得方法时，accessor 会在返回可调用句柄前捕获当前 Agent Context。方法再通过对应 Context binder 从该 Context 取得 identity。direct scoped 投影用 identity 替代 `scope.wire` 指定的 lookup 位置，Remote Scope descriptor 则把 identity 写入 receiver 的独立 wire 字段；两者都发起同一种 `/api` 调用。
 
 ```text
 root ctx.remote.goals.create(agentId, request)
@@ -339,7 +341,7 @@ Remote API 是消费端能力，不等同于 Browser API。已交付的运行时
 
 Remote DTS、Remote JS、`TypertClientRemote`、`InvocationDescriptor`、Remote RPC 数据协议和 Context binder 不得依赖 DOM、Browser module loader 或 HTTP。Browser Client 通过 Connection 把 descriptor 实体化的方法编码为 `/api` RPC 调用。
 
-未来 TUI 可以在不改变业务 decorator、Remote maps 和 API 调用形状的前提下接入同一调用抽象。届时 TUI 可见的 API 仍只能由 `@Remote` 和 `@RemoteScope` 生成，不能因为它与 Host 同进程就绕过 Remote 限制直接暴露 Service 方法。
+未来 TUI 可以在不改变业务 decorator、Remote maps 和 API 调用形状的前提下接入同一调用抽象。届时 TUI 可见的 API 仍只能由 `@Remote(options)` 和 `@RemoteScope(key, options)` 生成，不能因为它与 Host 同进程就绕过 Remote 限制直接暴露 Service 方法。
 
 TUI 的 runtime 挂载、carrier、Agent Scope 关联和 SRC 启动接线均仍延后，不在本决策之内。
 
@@ -347,13 +349,13 @@ Web 本身依赖 `lib/client.js` 等构建产物，因此启动 Web 前要求完
 
 ## SRC 与 LIB 运行模式
 
-SRC 面向本地源码启动。`@Remote` 和 `@RemoteScope()` 的 WeakMap 记录给出方法名和调用模式，运行时从 JavaScript 函数签名读取顺序参数名，并结合已注册 lookup/Context provider 生成弱 descriptor。
+SRC 面向本地源码启动。`@Remote(options)` 和 `@RemoteScope(key, options)` 的 WeakMap 记录给出方法名、调用模式、endpoint alias 和 access 分支，运行时从 JavaScript 函数签名读取顺序参数名，并结合已注册 lookup/Context provider 生成使用宽松 JSON codec 的 descriptor。
 
-例如 `@Remote('create') remoteExportCreate(agent, request, signal)` 解析为外部方法 `create`、实现成员 `remoteExportCreate`、两个顶层业务参数和一个取消注入点；lookup 注册把 `agent` 改写为 wire 字段 `agentId`，`request` 按同名 JSON 参数传递，最后一个 `signal` 则留在 payload 之外。SRC 不启动 `ts.Program`，不使用 preload、loader hook、源码生成或模块改写，也不检查普通 JSON 对象的内部结构。
+例如 `@Remote({ exportName: 'create', access: 'authenticated' }) remoteExportCreate(agent, request, signal)` 会解析出外部方法 `create`、实现成员 `remoteExportCreate`、authenticated access、两个顶层业务参数和一个取消注入点；lookup 注册把 `agent` 改写为 wire 字段 `agentId`，`request` 按同名 JSON 参数传递，最后一个 `signal` 则留在 payload 之外。SRC 不启动 `ts.Program`，不使用 preload、loader hook、源码生成或模块改写，也不检查普通 JSON 对象的内部结构。
 
 SRC 无法明确解析的签名会在首次调用解析其 descriptor 时失败；Service 挂载只记录 decorator 标记，不检查 JavaScript 签名。SRC 不会猜测对象解构、默认参数造成的歧义、rest 参数、嵌套 lookup 或复杂类型。
 
-LIB 面向 CI、发布和 Web 前置构建。Typert 扫描完整 Host project，检查 Remote decorator、显式 binding、service key、endpoint 冲突、lookup/Context 声明、公共符号可达性、JSON codec、结果 codec，以及保留的最后一个 `signal` 参数是否具有全局 `AbortSignal` 类型，并生成严格 descriptor。
+LIB 面向 CI、发布和 Web 前置构建。Typert 扫描完整 Host project，检查 Remote decorator access、permission call 参数、显式 binding、service key、endpoint 冲突、lookup/Context 声明、公共符号可达性、JSON codec、结果 codec，以及保留的最后一个 `signal` 参数是否具有全局 `AbortSignal` 类型，并生成严格 descriptor。
 
 LIB 运行时只加载 `lib` 中的 definition，不启动 TypeScript compiler。Host Gateway 后续的 Service 关联、lookup、Context 解析、调用和响应编码不区分 descriptor 来自 SRC 弱解析还是 LIB 严格生成。
 
@@ -361,22 +363,23 @@ CI 和发布运行 LIB。全仓 coverage 全部切换到 LIB 是独立后续工�
 
 ## Host Gateway 解析
 
-Host Gateway 向 Connection 注册一个 `/api` interceptor，不维护第二份 endpoint 注册表。ownership matcher 会先检查当前 Typert local 注册表，再查询一份可失效的集合；该集合通过扫描当前 Cordis Service 中的 `typertGateway` binding 与 SRC Remote 标记生成。Cordis Service 发生变化时会整体丢弃该集合，因此 Typert definition 与业务 Service 可以按任意顺序到达，同时既不会让旧 API Proxy 的 `/api` 流量在每次请求时重新扫描所有 Service，也不会因任意请求路径而扩大缓存。
+Host Gateway 向 Connection 注册一个 `/api` interceptor，不维护第二份 endpoint 注册表。ownership matcher 会先检查当前 Typert local 注册表，再查询一份可失效的集合；该集合通过扫描当前 Cordis Service 中的 `typertRemote` binding 与 SRC Remote 标记生成。Cordis Service 发生变化时会整体丢弃该集合，因此 Typert definition 与业务 Service 可以按任意顺序到达，同时既不会让旧 API Proxy 的 `/api` 流量在每次请求时重新扫描所有 Service，也不会因任意请求路径而扩大缓存。
 
 每次调用都会重新从当前状态解析 descriptor、receiver、lookup 提供方与 Context 提供方。当前 strict descriptor 优先于 SRC。strict endpoint 一旦出现，即使随后撤回对应 descriptor，`TypertLocalRegistry.hasSeen()` 仍会在注册表剩余生命周期内保持对它的认领并禁止回退 SRC；重新注册 strict descriptor 即可恢复调用。移除 Service 或提供方会让调用明确失败；Gateway 既不保留失效对象，也不会以原始 lookup ID 调用方法。
 
-普通 `@Remote` 调用保留原始 Service 实例作为 receiver。lookup 成功后，Gateway 按 descriptor 的参数顺序调用 `implementation ?? method` 指定的成员；若 descriptor 声明取消，则在这些参数之后追加 carrier signal。
+direct Remote 调用保留原始 Service 实例作为 receiver。授权和 lookup 成功后，Gateway 按 descriptor 的参数顺序调用 `implementation ?? method` 指定的成员；permission access 会在业务参数前注入 Host-issued call，若 descriptor 声明取消则在末尾追加 call 的 signal。
 
-`@RemoteScope('agent')` 调用先由 Agent Context provider 解析 wire identity，再从该 Context 读取 descriptor 的 service key 并调用 scoped receiver。业务方法不会收到隐藏 Context 参数或 Agent ID。
+通过 `@RemoteScope('agent', options)` 声明的调用会在需要时先完成 permission 授权，再由 Agent Context provider 解析 wire identity，从该 Context 读取 descriptor 的 service key 并调用 scoped receiver。业务方法不会收到隐藏 Context 参数或 Agent ID。
 
 ```text
-ctx.typertGateway.invoke({ namespace, method, args, signal })
-→ 查找本地 InvocationDescriptor 与 live receiver
-→ 按参数 descriptor 读取具名 wire 字段
-→ codec 解码普通值或 lookup ID
-→ lookup provider 把 ID 解析为活对象
-→ direct 使用原 Service；context 先解析 scoped Context 和 Service
-→ cancellation descriptor 存在时把 signal 追加到业务参数末尾
+ctx.typertGateway.invoke({ call, namespace, method, args })
+→ 验证 call 属于当前 Authentication Provider 且未过期
+→ 查找本地 InvocationDescriptor
+→ permission 分支在参数、业务 lookup provider 或 scoped receiver 解析前完成授权
+→ 按参数 descriptor 读取并校验具名 wire 字段
+→ direct lookup 或 Context provider 解析业务参数与 receiver
+→ permission 分支在调用前再次校验 decision
+→ permission 分支把 call 放在业务参数前；cancellation 把 call.signal 追加在末尾
 → Reflect.apply(receiver[implementation ?? method], receiver, orderedArgs)
 → result codec 编码业务结果
 ```
@@ -391,15 +394,15 @@ Connection 在 HTTP Server 上持有唯一 `/api` route。Gateway 把同步 endp
 ctx.connection.rpc.intercept(
   '/api',
   endpoint => ownsRemoteEndpoint(endpoint),
-  (endpoint, payload, signal) => {
+  (endpoint, payload, call) => {
     const { namespace, method } = parseEndpoint(endpoint)
     const { args } = parsePayload(payload)
-    return ctx.typertGateway.invoke({ namespace, method, args, signal })
+    return ctx.typertGateway.invoke({ call, namespace, method, args })
   },
 )
 ```
 
-Host registry 中存在 strict descriptor、记录过已撤回的 strict descriptor，或 active SRC Service binding 上存在匹配的 `@Remote` 标记时，Gateway 认领该 endpoint。endpoint 一旦被认领，即使 payload 解码、descriptor 解析或调用失败也继续由 Gateway 返回错误；只有不属于 Remote 的 endpoint 才进入旧 API Proxy 回退。
+Host registry 中存在 strict descriptor、记录过已撤回的 strict descriptor，或 active SRC Service binding 上存在匹配的 Remote marker 时，Gateway 认领该 endpoint。endpoint 一旦被认领，即使 payload 解码、descriptor 解析或调用失败也继续由 Gateway 返回错误；只有不属于 Remote 的 endpoint 才进入旧 API Proxy 回退。
 
 Connection Host half 把一个复合 FetchHandler 交给 HTTP bridge。bridge 创建标准 `Request` 后，该 handler 再选择 Gateway RPC FetchHandler 或 API Proxy FetchHandler；两条路径复用同一 request/response envelope、rpcId、序列化、trust、transport error 和 `RpcError`。当前物理映射是：
 
@@ -429,22 +432,23 @@ ctx.remote.goals.create(sessionId, request, signal?)
 → ctx.connection.rpc.call('/api', 'goals/create', { args }, signal)
 → Connection 创建 rpcId 和既有 client-request envelope
 → 当前 carrier 发送 POST /api/goals/create
-→ Connection Host half 执行共享 trust，再由 bridge 创建标准 Request
+→ Connection Host half 执行共享 trust，并从标准 Request 认证 call
 → 复合 FetchHandler 判断 endpoint ownership 并选择目标 FetchHandler
-→ Typert interceptor 调用 ctx.typertGateway.invoke(..., request.signal)
-→ Host InvocationDescriptor 解码、lookup、receiver 解析并把 signal 注入 Reflect.apply
+→ Typert interceptor 把 call 脱离 wire 传给 ctx.typertGateway.invoke(...)
+→ Host InvocationDescriptor 在参数、lookup 和 receiver 解析前执行 access 检查
+→ permission 分支注入 call，cancellation 分支注入 call.signal
 → result codec 编码
 → Connection 写入既有 RPC result 并回送相同 rpcId
 → Client result codec 验证并返回 CreateGoalResult
 ```
 
-Remote 不定义第二层 `{ ok, value/error }` response。成功值和 Gateway 错误直接使用既有 RPC response 的 `result`。adapter 把普通 Gateway 与业务调用失败转换为既有 `RpcError` envelope，并统一使用 `code: 'internal'`；resolver 通过 `TypertLookupFailure` 携带的既有 RPC error 则原样返回，使冷恢复失败和 ownership fence 保持稳定错误码。Gateway 的结构化错误分类仅在进程内保留，诊断信息则通过 message 跨 Connection 传递。
+Remote 不定义第二层 `{ ok, value/error }` response。成功值和 Gateway 错误直接使用既有 RPC response 的 `result`。adapter 把 authentication 与 authorization failure 分别映射为 `unauthenticated` 和 `permission-denied`，普通 Gateway 与业务调用失败则转换为使用 `code: 'internal'` 的既有 `RpcError` envelope。resolver 通过 `TypertLookupFailure` 携带的既有 RPC error 会原样返回，使冷恢复失败和 ownership fence 保持稳定错误码。Gateway 的结构化错误分类仅在进程内保留，诊断信息则通过 message 跨 Connection 传递。
 
-Gateway 不处理逐方法权限、调用者身份、幂等或长连接状态。它只把 Connection 的协作式取消传播给显式支持取消的业务方法。Typert endpoint 使用 Connection 的 trusted-host 策略；未认领 endpoint 保留旧 API Proxy 的 trust 和 privileged-method 策略。Connection/WebSocket 迁移后续独立完成。
+Gateway 会为每个 Remote 校验调用者身份，并在参数、业务 lookup provider 或 scoped receiver 解析前执行 permission access。领域仍拥有 owner、tenant、resource 和 projection 检查；Gateway 不提供幂等或长连接状态。它把 authenticated call 的协作式取消传播给显式支持取消的业务方法。Connection 的 trusted-host 策略仍只是 transport prefilter，不是身份或授权；未认领 endpoint 保留旧 API Proxy 策略。Connection/WebSocket 迁移后续独立完成。
 
 ## Connection 与协议边界
 
-Client Remote Service 负责 Remote contribution、namespace Service 实体化、Scope 绑定以及位置参数与 descriptor 的对应。Gateway 负责 Host descriptor、endpoint ownership、lookup、Context 和业务调用。Connection 把 `/api`、endpoint 和 `{ args }` 作为一个 RPC 调用发送到目标并返回既有 RPC result；它不理解 Goal、Agent、lookup、descriptor 或 Client Remote 类型。
+Client Remote Service 负责 Remote contribution、namespace Service 实体化、Scope 绑定以及位置参数与 descriptor 的对应。Gateway 负责 Host descriptor、endpoint ownership、authorization、lookup、Context 和业务调用。Connection 把 `/api`、endpoint 和 `{ args }` 作为一个 RPC 调用发送到目标，认证 Host Request，并把产生的 call 脱离 wire 提供给 handler；它不理解 Goal、Agent、lookup、descriptor 或 Client Remote 类型。
 
 Gateway 只向 Connection 注册 ownership matcher 和 RPC handler，不注册 HTTP route。Connection 把共享 `/api` route 挂到 HTTP Server，并把一个复合 FetchHandler 交给 bridge；该 handler 将已认领 endpoint 分发给 Gateway，未认领 endpoint 则交给 API Proxy。未来 Connection transport 可以保留相同顺序，而不改变 Remote payload、业务 decorator、生成的 DTS、Remote API 类型或 Agent Scope 编程界面。
 
@@ -453,7 +457,7 @@ Gateway 只向 Connection 注册 ownership matcher 和 RPC handler，不注册 H
 - `@deepseek-ai/dsh-typert-protocol`：轻量 decorator、binding、lookup、Remote Scope 和 descriptor 协议。
 - Typert generator：分析 Host/Client Program，生成本地 face 和 Remote 消费端投影，并生成规范 symbol/Zod 信息。
 - Typert runtime：分别保存当前环境的 local reflection 与导入的 Remote contribution。
-- `@deepseek-ai/dsh-api-gateway`：默认入口关联 Host definition 与 Service，认领 Remote endpoint，执行 lookup、Context receiver 解析、调用和结果编码，并向 Connection 注册 `/api` interceptor；`/client` 入口挂载 Remote contribution，创建严格 Remote namespace Service 和方法，并把调用交给 `ctx.connection.rpc`。两个入口共享 Remote 协议，但不互相导入各自的 Cordis interface merge。
+- `@deepseek-ai/dsh-api-gateway`：默认入口校验 call、执行 descriptor access、关联 Host definition 与 Service、认领 Remote endpoint、执行 lookup、Context receiver 解析、调用和结果编码，并向 Connection 注册 `/api` interceptor；`/client` 入口挂载 Remote contribution，创建严格 Remote namespace Service 和方法，并把调用交给 `ctx.connection.rpc`。两个入口共享 Remote 协议，但不互相导入各自的 Cordis interface merge。
 - `@deepseek-ai/dsh-api-remotes`：BFF 层；负责 Host Agent/Session resolver，选择 Client `/remote` contribution，并通过共享的 `TypertClientRemote` 约定向业务包暴露合并后的 Remote 类型。
 - Connection：拥有唯一 HTTP Server/未来 WebSocket carrier、共享 `/api` route 与复合 FetchHandler、API Proxy 回退、RPC envelope、rpcId、序列化、trust 和错误传输。
 - Agent/Session 等业务对象包：拥有 lookup、Context provider、唯一 ID 类型和纯类型公共出口。
@@ -462,9 +466,9 @@ Gateway 只向 Connection 注册 ownership matcher 和 RPC handler，不注册 H
 
 ## 已交付范围与后续工作
 
-已交付的纵向链路是 `@deepseek-ai/dsh-goal/remote → Browser Client Remote → Connection RPC /api → Host Gateway → GoalService.remoteExportCreate()`。同一个带 Agent lookup 的 direct descriptor 同时支持 `ctx.remote.goals.create(agentId, request)` 与 `agentCtx.remote.goals.create(request)`。普通冷会话在 lookup 时通过 `agentFor()` 恢复，subagent-owned identity 保持既有 `agent-busy` fence；`@RemoteScope('agent')` 仍是独立的 scoped receiver 模式。
+已交付的纵向链路是 `@deepseek-ai/dsh-goal/remote → Browser Client Remote → Connection RPC /api → Host Gateway → GoalService.remoteExportCreate()`。同一个带 Agent lookup 的 direct descriptor 同时支持 `ctx.remote.goals.create(agentId, request)` 与 `agentCtx.remote.goals.create(request)`。普通冷会话在 lookup 时通过 `agentFor()` 恢复，subagent-owned identity 保持既有 `agent-busy` fence；`@RemoteScope('agent', options)` 仍是独立的 scoped receiver 模式。
 
-Connection 提供共享 channel interceptor 与当前 HTTP carrier 映射。WebSocket 迁移、TUI runtime 与 carrier、TUI Agent Scope 接线、Permission/Approval 状态机、Session 事件流、调用授权、重试、幂等及跨版本协议兼容均不属于本决策。
+Connection 提供共享 channel interceptor 与当前 HTTP carrier 映射。WebSocket 迁移、TUI runtime 与 carrier、TUI Agent Scope 接线、Permission/Approval 状态机、Session 事件流、重试、幂等及跨版本协议兼容均不属于本决策。
 
 包拓扑为 `api/remotes → api/gateway → client/connection → host/webserver`。Connection 与 WebServer 在本次变更中保留既有路径；后续将它们移到 `api/connection` 和 `api/webserver` 只会改变包位置，不会改变这些服务边界。旧 API Proxy 同样保留在 `host/apiproxy` 下，作为尚未迁移到 Remote 的方法的回退路径。
 
@@ -520,10 +524,10 @@ Browser 与 Host 各自持有 Zod 实例，不能依赖对象 identity 跨 realm
 
 Connection 的通用 channel API 必须同时适合当前 HTTP carrier 和后续 WebSocket carrier。若 Client Remote 或 Gateway 暴露 `fetch`、HTTP request 或 route handle，WebSocket 迁移会再次穿透 Remote 层，因此这些物理对象必须留在 Connection 内部。
 
-Remote endpoint 使用 Connection 的 `trusted-host` authority。系统默认接受 loopback；LAN 调用方必须通过显式 trusted-host 配置接入，但本层不增加逐方法调用方授权，因此每个 trusted host 都能调用已挂载的 Remote endpoint。
+Remote endpoint 使用 Connection 的 `trusted-host` authority 作为 transport prefilter。每次调用还必须带有当前 Authentication Provider 拥有的 call，并满足 descriptor 显式声明的 authenticated 或 permission access；trusted host 本身没有 Remote authority。
 
 `hasSeen()` 优先保障 strict definition 的安全性，而非 SRC 可用性。strict descriptor 撤回时（例如 HMR 期间），Gateway 会继续认领 endpoint 并报告不可用，而不会回退到弱 SRC descriptor。重新注册即可恢复；只有重启 Typert 注册表才会忘记历史 strict definition。
 
-支持取消的 Remote 签名会接收 Connection 请求的 `AbortSignal`，因此 HTTP 断连或 Client 侧 abort 能在不进入 JSON 协议的情况下传递到正在进行的业务工作。取消仍是协作式的：没有保留末位参数的方法会继续运行；收到 signal 的方法必须将它传给自身支持取消的操作，或自行观测它。
+支持取消的 Remote 签名会接收 authenticated call 的 `AbortSignal`，因此 HTTP 断连或 Client 侧 abort 能在不进入 JSON 协议的情况下传递到正在进行的业务工作。取消仍是协作式的：没有保留末位参数的方法会继续运行；收到 signal 的方法必须将它传给自身支持取消的操作，或自行观测它。
 
 lookup 配置当前以 key 为粒度，因此每个 `agent` 或 `session` 参数都采用同一套冷恢复策略。需要 live-only 语义的特定 Remote 必须等待显式的逐参数或逐 endpoint 策略，不能靠业务实现猜测对象是否刚被恢复。

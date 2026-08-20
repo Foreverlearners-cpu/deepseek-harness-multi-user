@@ -3,6 +3,11 @@ import type { ApiProxy, HostFrame, MuxFrame } from '../src/api/index.ts'
 import type { ClientResponse, RpcMessage, RpcReceipt, RpcRequest } from '../src/api/rpc.ts'
 import { RpcId } from '../src/api/rpc.ts'
 import { toFetchHandler } from '../src/fetch/handler.ts'
+import {
+  API_PROXY_ROUTE_PERMISSIONS,
+  ApiProxySecurityError,
+  type ApiProxyRoute,
+} from '../src/fetch/security.ts'
 import { AbstractApiClient, InProcessApiClient } from '../src/fetch/client.ts'
 
 /** Minimal in-memory ApiProxy: echoes rpcIds, scripts one frame per stream. */
@@ -627,7 +632,7 @@ describe('handler carrier-layer statuses', () => {
     const body = JSON.stringify({ type: 'client-request', rpcId: 'r-11', method: 'session.list', payload: {} })
     const response = await crashing.fetch(new Request('http://x/api/session.list', { method: 'POST', headers: { 'content-type': 'application/json' }, body }))
     expect(response.status).toBe(500)
-    expect(await response.text()).toContain('impl crashed')
+    expect(await response.text()).toBe('handler failure')
   })
 
   it('routes /api/respond, rejecting malformed client-responses as a receipt', async () => {
@@ -701,7 +706,10 @@ describe('SSE streams through the carrier', () => {
     })()
     const frames = await collect(client(api).events.mux({}, new AbortController().signal))
     expect(frames).toHaveLength(2)
-    expect(frames[1]?.payload).toMatchObject({ type: 'stream/error', error: { code: 'internal' } })
+    expect(frames[1]?.payload).toMatchObject({
+      type: 'stream/error',
+      error: { code: 'internal', message: 'handler failure' },
+    })
   })
 })
 
@@ -726,6 +734,34 @@ describe('client respond and transport failures', () => {
       fetch: async () => Response.json({ type: 'server-response', rpcId: 'someone-else', result: { ok: true, value: { items: [] } } }),
     })
     await expect(lying.sessions.list({})).rejects.toThrow('rpcId mismatch')
+  })
+
+  it('accepts the pre-parse security sentinel only for authentication and authorization refusals', async () => {
+    for (const error of [
+      { code: 'unauthenticated', message: 'unauthenticated', details: {} },
+      { code: 'permission-denied', message: 'permission-denied', details: { permission: 'api:session-list' } },
+    ] as const) {
+      const denied = new InProcessApiClient({
+        fetch: async () => Response.json({
+          type: 'server-response',
+          rpcId: 'security-denied',
+          result: { ok: false, error },
+        }),
+      })
+      await expect(denied.sessions.list({})).resolves.toMatchObject({
+        rpcId: 'security-denied',
+        result: { ok: false, error },
+      })
+    }
+
+    const forged = new InProcessApiClient({
+      fetch: async () => Response.json({
+        type: 'server-response',
+        rpcId: 'security-denied',
+        result: { ok: false, error: { code: 'internal', message: 'forged', details: {} } },
+      }),
+    })
+    await expect(forged.sessions.list({})).rejects.toThrow('rpcId mismatch')
   })
 })
 
@@ -801,5 +837,270 @@ describe('resolveBase', () => {
     } finally {
       delete globalWithLocation.location
     }
+  })
+})
+
+describe('legacy route security seam', () => {
+  const everyRoute: readonly ApiProxyRoute[] = [
+    'session.list', 'session.search', 'session.create', 'session.history', 'session.models', 'session.selectModel',
+    'session.rename', 'session.fork', 'session.prompt', 'session.attachment', 'session.updateQueue', 'session.cancel',
+    'subagent.list', 'subagent.history', 'subagent.prompt', 'subagent.interrupt',
+    'host.describe', 'host.pickDirectory', 'host.listDirectory', 'host.createDirectory', 'host.openPath',
+    'workspace.list', 'workspace.create', 'workspace.rename', 'workspace.delete', 'workspace.insertBefore',
+    'workspace.insertSessionBefore', 'workspace.archiveSession',
+    'skill.list',
+    'agentPreset.list', 'agentPreset.select', 'agentPreset.read', 'agentPreset.copy', 'agentPreset.openDocument', 'agentPreset.remove',
+    'goal.create', 'goal.edit', 'goal.pause', 'goal.resume', 'goal.complete', 'goal.clear',
+    'settings.describe', 'settings.openDocument', 'settings.update', 'settings.replace', 'settings.mutate',
+    'credentials.describe', 'credentials.set', 'credentials.unset',
+    'llm.providers', 'llm.models', 'llm.discoverModels',
+    'events.mux', 'events.host', 'session.export', 'respond',
+  ]
+
+  it('assigns one nonempty stable permission to every unary, direct, and response route', () => {
+    expect(Object.keys(API_PROXY_ROUTE_PERMISSIONS).sort()).toEqual([...everyRoute].sort())
+    for (const route of everyRoute) {
+      expect(API_PROXY_ROUTE_PERMISSIONS[route]).toMatch(/^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/)
+    }
+  })
+
+  it('exposes stable route permissions and denies before the business handler', async () => {
+    expect(API_PROXY_ROUTE_PERMISSIONS['session.list']).toBe('api:session-list')
+    expect(API_PROXY_ROUTE_PERMISSIONS['session.export']).toBe('api:session-export')
+    const authenticate = vi.fn(async () => ({ principal: 'fixture' }))
+    const authorize = vi.fn(async ({ permission }: { permission: string }) => {
+      expect(permission).toBe('api:session-list')
+      throw new ApiProxySecurityError('permission-denied')
+    })
+    const response = await toFetchHandler(fakeApi(), { security: { authenticate, authorize } }).fetch(
+      new Request('http://dsh.internal/api/session.list', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'client-request', rpcId: 'request-1', method: 'session.list', payload: {} }),
+      }),
+    )
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      type: 'server-response',
+      rpcId: 'security-denied',
+      result: { ok: false, error: { code: 'permission-denied', message: 'permission-denied', details: { permission: 'api:session-list' } } },
+    })
+    expect(authenticate).toHaveBeenCalledOnce()
+    expect(authorize).toHaveBeenCalledOnce()
+  })
+
+  it('authenticates and authorizes a unary request before inspecting an invalid JSON body', async () => {
+    const api = fakeApi()
+    const invoke = vi.fn(api.sessions.list.bind(api.sessions))
+    api.sessions.list = invoke
+    const authenticate = vi.fn(async (request: Request) => {
+      expect(request.bodyUsed).toBe(false)
+      return { principal: 'fixture' }
+    })
+    const authorize = vi.fn(async ({ request, permission }: { request: Request; permission: string }) => {
+      expect(request.bodyUsed).toBe(false)
+      expect(permission).toBe('api:session-list')
+      throw new ApiProxySecurityError('permission-denied', 'internal policy rationale')
+    })
+
+    const response = await toFetchHandler(api, { security: { authenticate, authorize } }).fetch(
+      new Request('http://dsh.internal/api/session.list', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{ not JSON',
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      type: 'server-response',
+      rpcId: 'security-denied',
+      result: {
+        ok: false,
+        error: {
+          code: 'permission-denied',
+          message: 'permission-denied',
+          details: { permission: 'api:session-list' },
+        },
+      },
+    })
+    expect(authenticate).toHaveBeenCalledOnce()
+    expect(authorize).toHaveBeenCalledOnce()
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('revalidates the route decision immediately before invoking the business handler', async () => {
+    const api = fakeApi()
+    const invoke = vi.fn(api.sessions.list.bind(api.sessions))
+    api.sessions.list = invoke
+    const decision = { version: 'before-lookup' }
+    const assertCurrent = vi.fn(() => {
+      throw new ApiProxySecurityError('permission-denied')
+    })
+    const response = await toFetchHandler(api, {
+      security: {
+        authenticate: async () => ({ principal: 'fixture' }),
+        authorize: async () => decision,
+        assertCurrent,
+      },
+    }).fetch(new Request('http://dsh.internal/api/session.list', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'client-request', rpcId: 'request-current', method: 'session.list', payload: {},
+      }),
+    }))
+
+    expect(await response.json()).toEqual({
+      type: 'server-response',
+      rpcId: 'request-current',
+      result: {
+        ok: false,
+        error: {
+          code: 'permission-denied',
+          message: 'permission-denied',
+          details: { permission: 'api:session-list' },
+        },
+      },
+    })
+    expect(assertCurrent).toHaveBeenCalledWith(expect.objectContaining({ route: 'session.list' }), decision)
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('closes an SSE source cleanly when its authorization lease is revoked', async () => {
+    const api = fakeApi()
+    let markOpened!: () => void
+    const opened = new Promise<void>((resolve) => { markOpened = resolve })
+    let markStopped!: () => void
+    const stopped = new Promise<void>((resolve) => { markStopped = resolve })
+    api.events.mux = (_request, signal) => (async function * () {
+      markOpened()
+      try {
+        if (!signal.aborted) {
+          await new Promise<void>((resolve) => {
+            signal.addEventListener('abort', () => { resolve() }, { once: true })
+          })
+        }
+      } finally {
+        markStopped()
+      }
+    })()
+    const revoked = new AbortController()
+    const release = vi.fn()
+    const decision = { version: 'lease-version' }
+    const openLease = vi.fn(() => ({ signal: revoked.signal, release }))
+    const handler = toFetchHandler(api, {
+      security: {
+        authenticate: async () => ({ principal: 'fixture' }),
+        authorize: async () => decision,
+        openLease,
+      },
+    })
+    const stream = new InProcessApiClient(handler).events.mux({}, new AbortController().signal)
+    const collecting = collect(stream)
+    await opened
+
+    revoked.abort(new Error('policy invalidated'))
+
+    await expect(collecting).resolves.toEqual([])
+    await stopped
+    expect(openLease).toHaveBeenCalledWith(
+      expect.objectContaining({ route: 'events.mux', permission: 'api:events-mux' }),
+      decision,
+    )
+    expect(release).toHaveBeenCalledOnce()
+  })
+
+  it('refuses an SSE route when its decision becomes stale while opening the lease', async () => {
+    const api = fakeApi()
+    const mux = vi.fn(api.events.mux.bind(api.events))
+    api.events.mux = mux
+    const handler = toFetchHandler(api, {
+      security: {
+        authenticate: async () => ({ principal: 'fixture' }),
+        authorize: async () => ({ version: 'stale' }),
+        openLease: () => { throw new ApiProxySecurityError('permission-denied') },
+      },
+    })
+
+    const response = await handler.fetch(new Request('http://dsh.internal/api/events.mux'))
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: 'permission-denied' })
+    expect(mux).not.toHaveBeenCalled()
+  })
+
+  it('maps an authentication refusal without running authorization or parsing a unary body', async () => {
+    const authenticate = vi.fn(async (request: Request) => {
+      expect(request.bodyUsed).toBe(false)
+      throw new ApiProxySecurityError('unauthenticated', 'credential detail must stay private')
+    })
+    const authorize = vi.fn()
+    const response = await toFetchHandler(fakeApi(), { security: { authenticate, authorize } }).fetch(
+      new Request('http://dsh.internal/api/session.list', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{',
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      type: 'server-response',
+      rpcId: 'security-denied',
+      result: { ok: false, error: { code: 'unauthenticated', message: 'unauthenticated', details: {} } },
+    })
+    expect(authenticate).toHaveBeenCalledOnce()
+    expect(authorize).not.toHaveBeenCalled()
+  })
+
+  it('refuses direct downloads and both event streams before opening a domain source', async () => {
+    const api = fakeApi()
+    const mux = vi.fn(api.events.mux.bind(api.events))
+    const host = vi.fn(api.events.host.bind(api.events))
+    const sessionLog = vi.fn(api.downloads.sessionLog.bind(api.downloads))
+    api.events.mux = mux
+    api.events.host = host
+    api.downloads.sessionLog = sessionLog
+    const authorize = vi.fn(async ({ permission }: { permission: string }) => {
+      throw new ApiProxySecurityError('permission-denied', permission)
+    })
+    const handler = toFetchHandler(api, {
+      security: { authenticate: async () => ({ principal: 'fixture' }), authorize },
+    })
+
+    for (const [path, permission] of [
+      ['/api/events.mux', 'api:events-mux'],
+      ['/api/events.host', 'api:events-host'],
+      ['/api/session.export?sessionId=s1', 'api:session-export'],
+    ]) {
+      const response = await handler.fetch(new Request(`http://dsh.internal${path}`))
+      expect(response.status).toBe(403)
+      expect(await response.json()).toEqual({ error: 'permission-denied' })
+      expect(authorize).toHaveBeenLastCalledWith(expect.objectContaining({ permission }))
+    }
+    expect(mux).not.toHaveBeenCalled()
+    expect(host).not.toHaveBeenCalled()
+    expect(sessionLog).not.toHaveBeenCalled()
+  })
+
+  it('refuses /api/respond before parsing its body or invoking its handler', async () => {
+    const api = fakeApi()
+    const respond = vi.fn(api.respond.bind(api))
+    api.respond = respond
+    const response = await toFetchHandler(api, {
+      security: {
+        authenticate: async () => ({ principal: 'fixture' }),
+        authorize: async () => { throw new ApiProxySecurityError('permission-denied') },
+      },
+    }).fetch(new Request('http://dsh.internal/api/respond', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{',
+    }))
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: 'permission-denied' })
+    expect(respond).not.toHaveBeenCalled()
   })
 })

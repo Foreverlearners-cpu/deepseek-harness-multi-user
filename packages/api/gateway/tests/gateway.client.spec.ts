@@ -95,6 +95,7 @@ function directDescriptor(): InvocationDescriptor {
     service: 'probe',
     namespace: 'probe',
     method: 'create',
+    access: 'authenticated',
     invocation: { kind: 'direct' },
     scope: { context: 'fixture', wire: 'agentId' },
     parameters: [{
@@ -120,6 +121,7 @@ function contextDescriptor(): InvocationDescriptor {
     service: 'probe',
     namespace: 'probe',
     method: 'rename',
+    access: 'authenticated',
     invocation: {
       kind: 'context',
       context: 'fixture',
@@ -143,6 +145,7 @@ function maybeDescriptor(): InvocationDescriptor {
     service: 'probe',
     namespace: 'probe',
     method: 'maybe',
+    access: 'authenticated',
     invocation: { kind: 'direct' },
     parameters: [{
       name: 'value',

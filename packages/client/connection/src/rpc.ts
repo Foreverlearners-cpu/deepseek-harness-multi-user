@@ -1,6 +1,7 @@
 /** Generic unary RPC contracts shared by the Host and Client Connection halves. */
 
 import type { RpcResult } from '@deepseek-ai/dsh-host-apiproxy/api'
+import type { AuthenticatedCall } from '@deepseek-ai/dsh-authentication/types'
 
 /** Trust fence applied before a Host RPC channel reaches its handler. */
 export type ConnectionRpcAuthority = 'trusted-host' | 'loopback'
@@ -15,7 +16,7 @@ export interface ConnectionRpcHandlerOptions {
 export type ConnectionRpcHandler = (
   endpoint: string,
   payload: unknown,
-  signal: AbortSignal,
+  call: AuthenticatedCall,
 ) => Promise<RpcResult<unknown>>
 
 /** Synchronous ownership test for one endpoint on a shared RPC channel. */

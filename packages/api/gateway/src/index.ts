@@ -5,6 +5,9 @@
  */
 
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
+import { AuthenticationError, type AuthenticatedCall } from '@deepseek-ai/dsh-authentication'
+import { AuthorizationDeniedError, permissionCode } from '@deepseek-ai/dsh-authorization'
+import type { AuthorizationAllowDecision, AuthorizationRequest } from '@deepseek-ai/dsh-authorization'
 import type { ConnectionRpcHandler } from '@deepseek-ai/dsh-client-connection'
 import {
   remoteMethods,
@@ -36,9 +39,25 @@ interface ResolvedBinding {
   readonly original: object
 }
 
+interface ResolvedInvocation {
+  readonly descriptor: InvocationDescriptor
+  readonly source:
+    | { readonly kind: 'strict'; readonly revision: number }
+    | { readonly kind: 'src' }
+}
+
+interface ResolvedReceiverContext {
+  readonly context: Context
+  readonly provider?: { readonly key: string; readonly revision: number }
+}
+
+interface ResolvedBusinessParameter {
+  readonly value: unknown
+  readonly provider?: { readonly key: string; readonly revision: number }
+}
+
 type ConnectionRpcResult = Awaited<ReturnType<ConnectionRpcHandler>>
 type ConnectionRpcError = Extract<ConnectionRpcResult, { readonly ok: false }>['error']
-const NEVER_ABORTED_SIGNAL = new AbortController().signal
 
 /** Dispatch failure produced outside the invoked business method. */
 export class TypertGatewayError extends Error {
@@ -88,7 +107,7 @@ class RemoteInvocationCancelled extends Error {
  * @typert service typertGateway
  */
 export class TypertGatewayService extends Service implements TypertGateway {
-  static inject = ['typert']
+  static inject = ['typert', 'authentication', 'authorization']
 
   private srcClaims: ReadonlySet<string> | undefined
 
@@ -105,7 +124,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
       connectionCtx.connection.rpc.intercept(
         '/api',
         endpoint => this.claimsEndpoint(endpoint),
-        (endpoint, payload, signal) => this.dispatchRpc(endpoint, payload, signal),
+        (endpoint, payload, call) => this.dispatchRpc(endpoint, payload, call),
         { authority: 'trusted-host' },
       )
     })
@@ -140,13 +159,50 @@ export class TypertGatewayService extends Service implements TypertGateway {
    * Invoke one live Remote method through strict generated reflection or SRC markers.
    * @param request - decoded endpoint and exact named wire arguments.
    * @returns the validated business result.
-   * @throws {@link TypertGatewayError} for dispatch, provider, or boundary failures; lookup-policy and business errors retain identity.
+   * @throws {@link AuthenticationError} for an invalid call.
+   * @throws {@link TypertGatewayError} for dispatch, provider, or boundary failures.
+   * Lookup-policy and business errors retain identity.
    */
   async invoke(request: InvokeRemoteRequest): Promise<unknown> {
+    assertAuthenticatedCall(this.ctx, request.call)
     const endpoint = endpointOf(request.namespace, request.method)
-    const descriptor = this.resolveDescriptor(request.namespace, request.method, endpoint)
+    const resolved = this.resolveDescriptor(request.namespace, request.method, endpoint)
+    const { descriptor } = resolved
+    validateDescriptorAccess(descriptor, endpoint)
+    const rootReceiver = this.ctx.get(descriptor.service) as unknown
+    if (!isObject(rootReceiver)) {
+      throw new TypertGatewayError(
+        'service-unavailable',
+        endpoint,
+        `active Service ${JSON.stringify(descriptor.service)} is unavailable`,
+      )
+    }
+    validateBinding(rootReceiver, descriptor.service, descriptor.namespace, endpoint)
+    validateRemoteAccess(rootReceiver, descriptor, endpoint)
+    let authorizationRequest: AuthorizationRequest | undefined
+    let authorizationDecision: AuthorizationAllowDecision | undefined
+    if (descriptor.access === 'permission') {
+      let permission
+      try {
+        permission = permissionCode(descriptor.authorization.permission)
+      } catch (cause) {
+        throw new TypertGatewayError(
+          'signature-invalid',
+          endpoint,
+          'protected Remote descriptor has an invalid permission code',
+          { cause },
+        )
+      }
+      authorizationRequest = { call: request.call, permission }
+      authorizationDecision = await this.ctx.authorization.require(authorizationRequest)
+      // Lookup providers and receiver-context resolution are asynchronous.
+      // Re-check the allow immediately after the policy gate so a credential
+      // expiring or policy invalidation racing those steps cannot be consumed.
+      this.ctx.authorization.assertCurrent(authorizationRequest, authorizationDecision)
+    }
     assertExactArguments(request.args, descriptor, endpoint)
-    const receiverContext = await this.resolveReceiverContext(descriptor, request.args, endpoint)
+    const receiverResolution = await this.resolveReceiverContext(descriptor, request.args, endpoint)
+    const receiverContext = receiverResolution.context
     const receiver = receiverContext.get(descriptor.service) as unknown
     if (!isObject(receiver)) {
       throw new TypertGatewayError(
@@ -156,11 +212,60 @@ export class TypertGatewayService extends Service implements TypertGateway {
       )
     }
     validateBinding(receiver, descriptor.service, descriptor.namespace, endpoint)
-    const args = await Promise.all(descriptor.parameters.map(parameter =>
+    validateRemoteAccess(receiver, descriptor, endpoint)
+    const parameterResolutions = await Promise.all(descriptor.parameters.map(parameter =>
       this.resolveParameter(parameter, request.args, endpoint)))
-    if (descriptor.cancellation !== undefined) args.push(request.signal ?? NEVER_ABORTED_SIGNAL)
+    const businessArgs = parameterResolutions.map(resolution => resolution.value)
+    this.assertResolutionCurrent(resolved, endpoint)
+    if (receiverResolution.provider !== undefined
+      && this.ctx.typert.contexts.hostRevision(receiverResolution.provider.key)
+      !== receiverResolution.provider.revision) {
+      throw new TypertGatewayError(
+        'provider-mismatch',
+        endpoint,
+        `Context provider ${JSON.stringify(receiverResolution.provider.key)} changed while resolving the invocation`,
+      )
+    }
+    for (const resolution of parameterResolutions) {
+      if (resolution.provider !== undefined
+        && this.ctx.typert.lookups.revision(resolution.provider.key) !== resolution.provider.revision) {
+        throw new TypertGatewayError(
+          'provider-mismatch',
+          endpoint,
+          `lookup provider ${JSON.stringify(resolution.provider.key)} changed while resolving the invocation`,
+        )
+      }
+    }
+    assertAuthenticatedCall(this.ctx, request.call)
+    const currentReceiver = receiverContext.get(descriptor.service) as unknown
+    if (!isObject(currentReceiver)
+      || originalOf(currentReceiver) !== originalOf(receiver)
+      || originalOf(currentReceiver) !== originalOf(rootReceiver)) {
+      throw new TypertGatewayError(
+        'service-unavailable',
+        endpoint,
+        `active Service ${JSON.stringify(descriptor.service)} changed while the invocation was pending`,
+      )
+    }
+    validateBinding(currentReceiver, descriptor.service, descriptor.namespace, endpoint)
+    validateRemoteAccess(currentReceiver, descriptor, endpoint)
+    if (descriptor.access === 'permission') {
+      // Argument lookup can suspend and policy changes can be committed while
+      // it is running.  This is the final check directly before invocation;
+      // the business method never receives a stale authorization decision.
+      /* v8 ignore next -- descriptor.authorization always initialized together with the request above. */
+      if (authorizationRequest === undefined || authorizationDecision === undefined) {
+        throw new TypertGatewayError('binding-invalid', endpoint, 'protected Remote authorization state is missing')
+      }
+      this.ctx.authorization.assertCurrent(authorizationRequest, authorizationDecision)
+    }
+    const args: unknown[] = descriptor.access === 'authenticated'
+      ? businessArgs
+      : [request.call, ...businessArgs]
+    const signal = request.call.signal
+    if (descriptor.cancellation !== undefined) args.push(signal)
     const implementation = descriptor.implementation ?? descriptor.method
-    const method = Reflect.get(receiver, implementation) as unknown
+    const method = Reflect.get(currentReceiver, implementation) as unknown
     if (typeof method !== 'function') {
       throw new TypertGatewayError(
         'method-unavailable',
@@ -171,9 +276,9 @@ export class TypertGatewayService extends Service implements TypertGateway {
 
     let result: unknown
     try {
-      result = await Reflect.apply(method, receiver, args) as unknown
+      result = await Reflect.apply(method, currentReceiver, args) as unknown
     } catch (error) {
-      if (request.signal?.aborted === true) throw new RemoteInvocationCancelled(endpoint, error)
+      if (signal.aborted) throw new RemoteInvocationCancelled(endpoint, error)
       throw error
     }
     // A weak descriptor declares no return type, so nothing returned is a void
@@ -186,12 +291,12 @@ export class TypertGatewayService extends Service implements TypertGateway {
   private async dispatchRpc(
     endpoint: string,
     payload: unknown,
-    signal: AbortSignal,
+    call: AuthenticatedCall,
   ): Promise<ConnectionRpcResult> {
-    return this.invokeRpc(endpoint, payload, signal)
+    return this.invokeRpc(endpoint, payload, call)
   }
 
-  private async invokeRpc(endpoint: string, payload: unknown, signal: AbortSignal): Promise<ConnectionRpcResult> {
+  private async invokeRpc(endpoint: string, payload: unknown, call: AuthenticatedCall): Promise<ConnectionRpcResult> {
     try {
       const segments = endpoint.split('/')
       if (segments.length !== 2 || segments[0] === '' || segments[1] === '') {
@@ -207,10 +312,10 @@ export class TypertGatewayService extends Service implements TypertGateway {
         throw new Error('Remote payload must contain exactly one plain-object args field')
       }
       const value = await this.invoke({
+        call,
         namespace,
         method,
         args: payload.args,
-        signal,
       })
       // A void or explicitly absent business result carries no `value` field;
       // JSON has no `undefined`, and the envelope's optional slot is the one
@@ -221,9 +326,14 @@ export class TypertGatewayService extends Service implements TypertGateway {
     }
   }
 
-  private resolveDescriptor(namespace: string, method: string, endpoint: string): InvocationDescriptor {
+  private resolveDescriptor(namespace: string, method: string, endpoint: string): ResolvedInvocation {
     const strict = this.ctx.typert.local.get(endpoint)
-    if (strict !== undefined) return strict
+    if (strict !== undefined) {
+      return {
+        descriptor: strict,
+        source: { kind: 'strict', revision: this.ctx.typert.local.revision(endpoint) },
+      }
+    }
     if (this.ctx.typert.local.hasSeen(endpoint)) {
       throw new TypertGatewayError(
         'definition-unavailable',
@@ -231,7 +341,37 @@ export class TypertGatewayService extends Service implements TypertGateway {
         'its strict definition was withdrawn and SRC fallback is forbidden',
       )
     }
-    return this.resolveSrcDescriptor(namespace, method, endpoint)
+    return { descriptor: this.resolveSrcDescriptor(namespace, method, endpoint), source: { kind: 'src' } }
+  }
+
+  private assertResolutionCurrent(resolved: ResolvedInvocation, endpoint: string): void {
+    if (resolved.source.kind === 'strict') {
+      if (this.ctx.typert.local.revision(endpoint) === resolved.source.revision
+        && this.ctx.typert.local.get(endpoint) === resolved.descriptor) return
+      throw new TypertGatewayError(
+        'definition-unavailable',
+        endpoint,
+        'its strict definition changed while the invocation was pending',
+      )
+    }
+    if (this.ctx.typert.local.get(endpoint) !== undefined || this.ctx.typert.local.hasSeen(endpoint)) {
+      throw new TypertGatewayError(
+        'definition-unavailable',
+        endpoint,
+        'its definition source changed while the invocation was pending',
+      )
+    }
+    const current = this.resolveSrcDescriptor(
+      resolved.descriptor.namespace,
+      resolved.descriptor.method,
+      endpoint,
+    )
+    if (JSON.stringify(current) === JSON.stringify(resolved.descriptor)) return
+    throw new TypertGatewayError(
+      'definition-unavailable',
+      endpoint,
+      'its SRC definition changed while the invocation was pending',
+    )
   }
 
   private resolveSrcDescriptor(namespace: string, method: string, endpoint: string): InvocationDescriptor {
@@ -268,7 +408,18 @@ export class TypertGatewayService extends Service implements TypertGateway {
     method: string,
     endpoint: string,
   ): InvocationDescriptor {
-    const names = methodParameterNames(binding.service, marker.method, endpoint)
+    let names = methodParameterNames(binding.service, marker.method, endpoint)
+    if (marker.access === 'permission') {
+      if (names[0] !== marker.authorization.callParameter) {
+        throw new TypertGatewayError(
+          'signature-invalid',
+          endpoint,
+          'protected SRC Remote must declare call as its first parameter',
+          { field: marker.authorization.callParameter },
+        )
+      }
+      names = names.slice(1)
+    }
     const signalIndex = names.indexOf('signal')
     if (signalIndex >= 0 && signalIndex !== names.length - 1) {
       throw new TypertGatewayError(
@@ -343,7 +494,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
       }
     }
 
-    return {
+    const base: Omit<InvocationDescriptor, 'access' | 'authorization'> = {
       id: `src:${binding.serviceKey}#${endpoint}`,
       service: binding.serviceKey,
       namespace: binding.namespace,
@@ -354,15 +505,19 @@ export class TypertGatewayService extends Service implements TypertGateway {
       ...(cancellation === undefined ? {} : { cancellation }),
       result: { mode: 'src-json' },
     }
+    return marker.access === 'authenticated'
+      ? { ...base, access: 'authenticated' }
+      : { ...base, access: 'permission', authorization: marker.authorization }
   }
 
   private async resolveReceiverContext(
     descriptor: InvocationDescriptor,
     args: Readonly<Record<string, unknown>>,
     endpoint: string,
-  ): Promise<Context> {
-    if (descriptor.invocation.kind === 'direct') return this.ctx
+  ): Promise<ResolvedReceiverContext> {
+    if (descriptor.invocation.kind === 'direct') return { context: this.ctx }
     const invocation = descriptor.invocation
+    const revision = this.ctx.typert.contexts.hostRevision(invocation.context)
     const provider = this.ctx.typert.contexts.getHost(invocation.context)
     if (provider === undefined) {
       throw new TypertGatewayError(
@@ -401,21 +556,21 @@ export class TypertGatewayService extends Service implements TypertGateway {
         { field: invocation.wire },
       )
     }
-    return context
+    return { context, provider: { key: invocation.context, revision } }
   }
 
   private async resolveParameter(
     parameter: InvocationParameterDescriptor,
     args: Readonly<Record<string, unknown>>,
     endpoint: string,
-  ): Promise<unknown> {
+  ): Promise<ResolvedBusinessParameter> {
     // An absent field reached assertExactArguments' allowance, so this parameter
     // takes undefined; a present-but-undefined field is not JSON-safe input and
     // still fails decode. Lookup ids are never omissible, so absence here only
     // ever belongs to a json parameter.
-    if (!Object.hasOwn(args, parameter.wire)) return undefined
+    if (!Object.hasOwn(args, parameter.wire)) return { value: undefined }
     const value = decode(parameter.codec, args[parameter.wire], 'input-invalid', endpoint, parameter.wire)
-    if (parameter.source === 'json') return value
+    if (parameter.source === 'json') return { value }
     const key = parameter.lookup
     /* v8 ignore next -- registry validation rejects strict descriptors without a key, and SRC derivation always supplies one. */
     if (key === undefined) {
@@ -426,6 +581,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
         { field: parameter.wire },
       )
     }
+    const revision = this.ctx.typert.lookups.revision(key)
     const provider = this.ctx.typert.lookups.get(key)
     if (provider === undefined) {
       throw new TypertGatewayError(
@@ -464,7 +620,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
         { field: parameter.wire },
       )
     }
-    return resolved
+    return { value: resolved, provider: { key, revision } }
   }
 }
 
@@ -478,14 +634,114 @@ function rpcFailure(error: unknown): ConnectionRpcResult {
   if (error instanceof TypertLookupFailure) {
     return { ok: false, error: error.failure as ConnectionRpcError }
   }
+  if (error instanceof AuthorizationDeniedError) {
+    return {
+      ok: false,
+      error: error.publicError.code === 'UNAUTHENTICATED'
+        ? { code: 'unauthenticated', message: error.message, details: {} }
+        : {
+          code: 'permission-denied',
+          message: error.message,
+          details: { permission: error.permission },
+        },
+    }
+  }
+  if (error instanceof AuthenticationError) {
+    return {
+      ok: false,
+      error: { code: 'unauthenticated', message: error.message, details: {} },
+    }
+  }
   return {
     ok: false,
     error: {
       code: 'internal',
-      message: error instanceof Error ? error.message : String(error),
+      message: 'handler failure',
       details: {},
     },
   }
+}
+
+function assertAuthenticatedCall(ctx: Context, call: AuthenticatedCall): void {
+  const authentication = ctx.get('authentication')
+  if (authentication === undefined || !authentication.owns(call)) {
+    throw new AuthenticationError('unauthenticated', 'authenticated call is invalid')
+  }
+  if (call.expiresAt !== undefined && call.expiresAt <= Date.now()) {
+    throw new AuthenticationError('unauthenticated', 'authenticated call has expired')
+  }
+}
+
+function validateDescriptorAccess(descriptor: InvocationDescriptor, endpoint: string): void {
+  if (!Object.hasOwn(descriptor, 'access')) {
+    throw new TypertGatewayError('signature-invalid', endpoint, 'Remote descriptor access must be authenticated or permission')
+  }
+  const access = (descriptor as { readonly access?: unknown }).access
+  const authorization = Object.hasOwn(descriptor, 'authorization')
+    ? (descriptor as { readonly authorization?: unknown }).authorization
+    : undefined
+  if (access === 'authenticated') {
+    if (authorization === undefined) return
+    throw new TypertGatewayError(
+      'signature-invalid',
+      endpoint,
+      'authenticated Remote descriptor must not declare authorization',
+    )
+  }
+  if (access === 'permission') {
+    if (typeof authorization === 'object'
+      && authorization !== null
+      && Object.hasOwn(authorization, 'permission')
+      && Object.hasOwn(authorization, 'callParameter')
+      && typeof Reflect.get(authorization, 'permission') === 'string'
+      && (Reflect.get(authorization, 'permission') as string).trim().length > 0
+      && Reflect.get(authorization, 'callParameter') === 'call') return
+    throw new TypertGatewayError(
+      'signature-invalid',
+      endpoint,
+      'permission Remote descriptor requires valid authorization metadata',
+    )
+  }
+  throw new TypertGatewayError(
+    'signature-invalid',
+    endpoint,
+    'Remote descriptor access must be authenticated or permission',
+  )
+}
+
+function validateRemoteAccess(
+  receiver: object,
+  descriptor: InvocationDescriptor,
+  endpoint: string,
+): void {
+  const original = originalOf(receiver)
+  const implementation = descriptor.implementation ?? descriptor.method
+  const marker = remoteMethods(original).find(candidate =>
+    candidate.method === implementation
+    && (candidate.exportName ?? candidate.method) === descriptor.method)
+  const invocationMatches = marker !== undefined
+    && marker.invocation.kind === descriptor.invocation.kind
+    && (marker.invocation.kind === 'direct'
+      || (descriptor.invocation.kind === 'context'
+        && marker.invocation.context === descriptor.invocation.context))
+  if (!invocationMatches) {
+    throw new TypertGatewayError(
+      'binding-invalid',
+      endpoint,
+      'live Remote invocation does not match its invocation descriptor',
+    )
+  }
+  if (marker.access === 'authenticated' && descriptor.access === 'authenticated') return
+  if (marker.access === 'permission'
+    && descriptor.access === 'permission'
+    && marker.authorization.permission === descriptor.authorization.permission
+    && (marker.authorization as { readonly callParameter?: unknown }).callParameter
+      === (descriptor.authorization as { readonly callParameter?: unknown }).callParameter) return
+  throw new TypertGatewayError(
+    'binding-invalid',
+    endpoint,
+    'live Remote access does not match its invocation descriptor',
+  )
 }
 
 function endpointOf(namespace: string, method: string): string {

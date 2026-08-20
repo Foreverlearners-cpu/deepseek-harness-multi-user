@@ -1,10 +1,18 @@
 /** Host registry and HTTP adapter for generic Connection RPC channels. */
 
+import { randomUUID } from 'node:crypto'
 import { Context, Service } from '@deepseek-ai/cordis'
+import {
+  AuthenticationError,
+  authenticationRequestId,
+  type AuthenticatedCall,
+} from '@deepseek-ai/dsh-authentication'
+import { AuthorizationDeniedError } from '@deepseek-ai/dsh-authorization'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import {
   clientRequestSchema,
   RpcId,
+  SECURITY_DENIED_RPC_ID,
   type ClientRequest,
   type RpcError,
   type RpcErrorDetailsMap,
@@ -95,7 +103,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
   ): () => Promise<void> {
     assertChannel(channel)
     const trustedHosts = options.authority === 'loopback' ? [] : this.trustedHosts
-    const fetchHandler = rpcFetchHandler(channel, handler)
+    const fetchHandler = rpcFetchHandler(channel, handler, request => this.authenticateRequest(request))
     const route: WebRoute = {
       kind: 'prefix',
       path: channel,
@@ -126,7 +134,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
     }
     const interceptor: ConnectionRpcInterceptor = {
       matches,
-      fetchHandler: rpcFetchHandler(channel, handler),
+      fetchHandler: rpcFetchHandler(channel, handler, request => this.authenticateRequest(request)),
       options,
     }
     return owner.effect(() => {
@@ -139,11 +147,38 @@ export class HostConnectionService extends Service implements HostConnectionHand
       }
     }, `client-connection: ${channel} rpc interceptor`)
   }
+
+  /**
+   * Authenticate one carrier-owned Request before business payload dispatch.
+   * @param request - Original Request retained by the Host adapter.
+   * @returns Immutable call identity issued by the active Provider.
+   */
+  async authenticateRequest(request: Request): Promise<AuthenticatedCall> {
+    const provider = this.ctx.get('authentication')
+    if (provider === undefined) {
+      throw new AuthenticationError('authentication-unavailable', 'authentication provider is unavailable')
+    }
+    try {
+      return await provider.authenticate({
+        requestId: authenticationRequestId(randomUUID()),
+        channel: 'http',
+        evidence: { kind: 'http', request },
+        signal: request.signal,
+      })
+    } catch (error) {
+      if (error instanceof AuthenticationError) throw error
+      this.ctx.logger.warn('client-connection: authentication Provider failed')
+      this.ctx.logger.warn(error)
+      throw new AuthenticationError('authentication-unavailable', 'authentication failed', { cause: error })
+    }
+  }
+
 }
 
 function rpcFetchHandler(
   channel: string,
   handler: ConnectionRpcHandler,
+  authenticate: (request: Request) => Promise<AuthenticatedCall>,
 ): FetchHandler {
   return {
     async fetch(request: Request): Promise<Response> {
@@ -155,6 +190,20 @@ function rpcFetchHandler(
       const mediaType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
       if (mediaType !== 'application/json') {
         return new Response('content type must be application/json', { status: 415 })
+      }
+
+      // Authenticate while the carrier still owns an unread body. A refusal
+      // must not expose JSON/schema or request-correlation oracles.
+      let call: AuthenticatedCall
+      try {
+        call = await authenticate(request)
+      } catch (error) {
+        const message = error instanceof AuthenticationError ? error.message : 'authentication failed'
+        return errorResponse(SECURITY_DENIED_RPC_ID, {
+          code: 'unauthenticated',
+          message,
+          details: {},
+        })
       }
 
       let body: unknown
@@ -178,10 +227,19 @@ function rpcFetchHandler(
       }
 
       try {
-        const result = await handler(endpoint, message.payload, request.signal)
+        const result = await handler(endpoint, message.payload, call)
         return fullResponse(message.rpcId, result)
       } catch (error) {
-        return new Response(`handler failure: ${String(error)}`, { status: 500 })
+        if (error instanceof AuthorizationDeniedError) {
+          return errorResponse(message.rpcId, error.publicError.code === 'UNAUTHENTICATED'
+            ? { code: 'unauthenticated', message: error.message, details: {} }
+            : {
+              code: 'permission-denied',
+              message: error.message,
+              details: { permission: error.permission },
+            })
+        }
+        return new Response('handler failure', { status: 500 })
       }
     },
   }

@@ -19,6 +19,8 @@ import { isLoopbackHostname } from './loopback-hostname.ts'
 /** The request facts the fence reads from either HTTP representation. */
 interface ApiTrustRequest {
   headers: IncomingHttpHeaders | Headers
+  /** Present on real Node IncomingMessage values; absent on Fetch/in-process requests. */
+  socket?: { readonly remoteAddress: string | undefined }
 }
 
 function header(headers: IncomingHttpHeaders | Headers, name: string): string | undefined {
@@ -105,7 +107,15 @@ export function isTrustedApiRequest(request: ApiTrustRequest, trustedHosts: read
   if (host === undefined) return false
   const hostUrl = parseAuthority(host)
   if (hostUrl === undefined) return false
-  if (!isLoopbackHostname(hostUrl.hostname) && !isTrustedAuthority(hostUrl, trustedHosts)) return false
+  const loopbackHost = isLoopbackHostname(hostUrl.hostname)
+  if (!loopbackHost && !isTrustedAuthority(hostUrl, trustedHosts)) return false
+  // A real Node request that names localhost must also originate from a
+  // loopback TCP peer. Host is client-controlled outside browsers, so this
+  // closes the `Host: localhost` bypass on all-interface listeners. Fetch and
+  // intentional in-process adapters have no socket and retain their normal
+  // authority-only behavior.
+  if (loopbackHost && request.socket !== undefined
+    && !isLoopbackRemoteAddress(request.socket.remoteAddress)) return false
   // Cross-site fence: modern browsers label the initiator relationship on
   // every fetch; an explicit cross-site marker is refused regardless of Origin.
   if (header(request.headers, 'sec-fetch-site') === 'cross-site') return false
@@ -120,4 +130,17 @@ export function isTrustedApiRequest(request: ApiTrustRequest, trustedHosts: read
   } catch {
     return false
   }
+}
+
+/**
+ * Test whether a Node socket peer is IPv4 or IPv6 loopback, including mapped IPv4.
+ * @param address - Remote socket address supplied by Node.
+ * @returns Whether the address belongs to a loopback range.
+ */
+export function isLoopbackRemoteAddress(address: string | undefined): boolean {
+  if (address === undefined) return false
+  const normalized = address.toLowerCase()
+  if (normalized === '::1') return true
+  const ipv4 = normalized.startsWith('::ffff:') ? normalized.slice('::ffff:'.length) : normalized
+  return isLoopbackHostname(ipv4)
 }

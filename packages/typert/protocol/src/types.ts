@@ -169,8 +169,7 @@ export interface InvocationSourceLocation {
   readonly column: number
 }
 
-/** Carrier-independent description of one exported method invocation. */
-export interface InvocationDescriptor {
+interface InvocationDescriptorBase {
   /** Globally stable generated identity. */
   readonly id: string
   /** Cordis service key owning the method. */
@@ -209,6 +208,26 @@ export interface InvocationDescriptor {
   /** Source declaration used only for diagnostics. */
   readonly sourceLocation?: InvocationSourceLocation
 }
+
+/** Carrier-independent description of one exported method invocation. */
+export type InvocationDescriptor = InvocationDescriptorBase & (
+  | {
+    /** A valid Host-issued authenticated call is sufficient. */
+    readonly access: 'authenticated'
+    readonly authorization?: never
+  }
+  | {
+    /** Product authorization is required before dispatch. */
+    readonly access: 'permission'
+    /** Host-only authorization and call-context injection. */
+    readonly authorization: {
+      /** Product permission required before argument validation or lookup. */
+      readonly permission: string
+      /** Reserved first Host parameter omitted from the wire and Client signature. */
+      readonly callParameter: 'call'
+    }
+  }
+)
 
 /** Generated Host contract selected explicitly by a Client assembly. */
 export interface TypertRemoteContribution {
@@ -342,6 +361,12 @@ export interface TypertLocalRegistry {
    * @returns `true` after the endpoint has been registered at least once, even if withdrawn.
    */
   hasSeen(endpoint: string): boolean
+  /**
+   * Read the monotonic registration revision for one endpoint.
+   * @param endpoint - canonical endpoint.
+   * @returns a value changed by every commit or withdrawal of this endpoint.
+   */
+  revision(endpoint: string): number
   /** @returns a registration-order snapshot of local descriptors. */
   list(): readonly InvocationDescriptor[]
   /**
@@ -411,6 +436,12 @@ export interface TypertLookupRegistry {
    * @returns the live provider, or `undefined` when absent.
    */
   get(key: string): TypertLookupProvider | undefined
+  /**
+   * Read the monotonic provider/configuration revision for one lookup key.
+   * @param key - descriptor lookup key.
+   * @returns a value changed by every provider or resolver replacement.
+   */
+  revision(key: string): number
   /** @returns lookup declarations observed during this Typert Service lifetime. */
   definitions(): readonly TypertLookupDefinition[]
   /** @returns a snapshot of registered provider keys. */
@@ -462,6 +493,12 @@ export interface TypertContextRegistry {
    * @returns the provider, or `undefined` when absent.
    */
   getHost(key: string): TypertHostContextProvider | undefined
+  /**
+   * Read the monotonic Host provider/configuration revision for one Context key.
+   * @param key - descriptor Context key.
+   * @returns a value changed by every Host provider or resolver replacement.
+   */
+  hostRevision(key: string): number
   /**
    * Look up a Client Context binder.
    * @param key - descriptor Context key.

@@ -2,15 +2,41 @@
 import { EventEmitter, once } from 'node:events'
 import { createServer, request as httpRequest } from 'node:http'
 import { PassThrough, Readable } from 'node:stream'
-import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { Context, FiberState } from '@deepseek-ai/cordis'
+import { describe, expect, it, vi } from 'vitest'
 import type { AddressInfo } from 'node:net'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import AuthenticationProvider, {
+  AuthenticationError,
+  authenticationMethod,
+  isAuthenticatedCall,
+  localPrincipalId,
+  membershipId,
+  tenantId,
+  type AuthenticationAttempt,
+  type VerifiedAuthentication,
+} from '@deepseek-ai/dsh-authentication'
+import LocalAuthenticationProvider from '@deepseek-ai/dsh-authentication-local'
+import StaticAuthorizationProvider from '@deepseek-ai/dsh-authorization-static'
+import type AuthorizationProvider from '@deepseek-ai/dsh-authorization'
 import type { ApiProxy } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
-import { RpcId, type ClientRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
+import {
+  API_PROXY_ROUTE_PERMISSIONS,
+  RpcId,
+  type ClientRequest,
+} from '@deepseek-ai/dsh-host-apiproxy'
 import type { WebServer, WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
-import { API_PATH, apply, HOST_EVENTS_PATH, inject, MUX_EVENTS_PATH, type HostConnectionHandle } from '../src/index.ts'
+import {
+  API_PATH,
+  API_PROXY_PERMISSIONS,
+  apply,
+  HOST_EVENTS_PATH,
+  inject,
+  MUX_EVENTS_PATH,
+  type HostConnectionHandle,
+} from '../src/index.ts'
+import { WebSocketDownlinks } from '../src/websocket-downlink.ts'
 
 /** Structural webServer fake recording both route registries. */
 function fakeHttpServer(
@@ -74,19 +100,80 @@ function fakeResponse(): { response: ServerResponse; state: { status?: number; b
   return { response, state }
 }
 
-async function mounted(config?: { trustedHosts?: string[] }): Promise<{
+/** Network-capable fixture identity used only where the test declares a non-loopback authority. */
+class FixtureAuthenticationProvider extends AuthenticationProvider {
+  protected verify(attempt: AuthenticationAttempt): Promise<VerifiedAuthentication> {
+    if (attempt.channel === 'http'
+      && attempt.evidence.request.headers.get('x-fixture-auth') === 'deny') {
+      throw new AuthenticationError('unauthenticated', 'fixture authentication refused')
+    }
+    return Promise.resolve({
+      principal: { kind: 'local', id: localPrincipalId('connection-test') },
+      method: authenticationMethod('fixture'),
+      scope: {
+        kind: 'tenant',
+        tenantId: tenantId('connection-tenant'),
+        membershipId: membershipId('connection-membership'),
+      },
+    })
+  }
+}
+
+/** Test-only explicit local profile: neither identity nor an allow policy is implicit. */
+async function mountIdentity(
+  ctx: Context,
+  mode: 'trusted-local' | 'deny-all' = 'trusted-local',
+  networkCapable = false,
+): Promise<{ dispose: () => Promise<void>; authorization: AuthorizationProvider }> {
+  const authenticationFiber = networkCapable
+    ? ctx.plugin(FixtureAuthenticationProvider)
+    : ctx.plugin(LocalAuthenticationProvider, {
+      principalId: 'connection-test',
+      tenantId: 'connection-tenant',
+      membershipId: 'connection-membership',
+    })
+  await authenticationFiber
+  const authorizationFiber = ctx.plugin(StaticAuthorizationProvider, { mode })
+  await authorizationFiber
+  return {
+    authorization: ctx.get('authorization') as AuthorizationProvider,
+    dispose: async () => {
+      await authorizationFiber.dispose()
+      await authenticationFiber.dispose()
+    },
+  }
+}
+
+async function mounted(
+  config?: { trustedHosts?: string[] },
+  options: { mode?: 'trusted-local' | 'deny-all'; apiProxy?: ApiProxy } = {},
+): Promise<{
   routes: WebRoute[]
   upgrades: WebUpgradeRoute[]
+  ctx: Context
   dispose: () => Promise<void>
 }> {
   const ctx = new Context()
   const routes: WebRoute[] = []
   const upgrades: WebUpgradeRoute[] = []
   ctx.provide('webServer', fakeHttpServer(routes, upgrades) as WebServer)
-  ctx.provide('apiProxy', {} as unknown as ApiProxy)
+  ctx.provide('apiProxy', options.apiProxy ?? {} as ApiProxy)
+  const identity = await mountIdentity(
+    ctx,
+    options.mode ?? 'trusted-local',
+    (config?.trustedHosts?.length ?? 0) > 0 || options.mode === 'deny-all',
+  )
   const fiber = ctx.plugin({ inject: [...inject], apply }, config)
   await fiber.await()
-  return { routes, upgrades, dispose: () => fiber.dispose() }
+  return {
+    routes,
+    upgrades,
+    ctx,
+    dispose: async () => {
+      await fiber.dispose()
+      await identity.dispose()
+    },
+  }
 }
 
 describe('connection node half', () => {
@@ -98,6 +185,9 @@ describe('connection node half', () => {
       imageLimits: { maxMessageImageBytes: 20 * 1024 * 1024 },
     } as AttachmentStore)
     ctx.provide('apiProxy', {} as ApiProxy)
+    ctx.plugin(LocalAuthenticationProvider, {
+      principalId: 'connection-test', tenantId: 'connection-tenant', membershipId: 'connection-membership',
+    })
     expect(() => { apply(ctx, { maxRequestBodyBytes: 1024 }) })
       .toThrow(/must be at least .* aggregate image limit/)
     expect(routes).toHaveLength(0)
@@ -109,10 +199,37 @@ describe('connection node half', () => {
     const ctx = new Context()
     ctx.provide('webServer', fakeHttpServer(routes, upgrades) as WebServer)
     ctx.provide('apiProxy', {} as unknown as ApiProxy)
+    const identity = await mountIdentity(ctx, 'trusted-local', true)
     const fiber = ctx.plugin({ inject: [...inject], apply }, { trustedHosts: ['harness.internal/path'] })
     await expect(fiber).rejects.toThrow(/not a bare host\[:port\] authority/)
     expect(routes).toHaveLength(0)
     expect(upgrades).toHaveLength(0)
+    await identity.dispose()
+  })
+
+  it('fails closed when local-only authentication is combined with a remote authority', async () => {
+    const routes: WebRoute[] = []
+    const ctx = new Context()
+    ctx.provide('webServer', fakeHttpServer(routes, []) as WebServer)
+    ctx.provide('apiProxy', {} as ApiProxy)
+    const identity = await mountIdentity(ctx)
+    const fiber = ctx.plugin({ inject: [...inject], apply }, { trustedHosts: ['harness.internal'] })
+
+    await expect(fiber).rejects.toThrow(/local-only authentication cannot be combined with trustedHosts/)
+    expect(routes).toHaveLength(0)
+    await identity.dispose()
+  })
+
+  it('requires an explicit Authentication Provider before mounting Connection', async () => {
+    const ctx = new Context()
+    const routes: WebRoute[] = []
+    ctx.provide('webServer', fakeHttpServer(routes, []) as WebServer)
+    ctx.provide('apiProxy', {} as unknown as ApiProxy)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await Promise.resolve()
+    expect(fiber.state).toBe(FiberState.PENDING)
+    expect(routes).toHaveLength(0)
+    await fiber.dispose()
   })
 
   it('registers one HTTP route plus one upgrade route per downlink and removes all three with the fiber', async () => {
@@ -148,6 +265,181 @@ describe('connection node half', () => {
     await ended
     expect(Buffer.concat(chunks).toString()).toContain('HTTP/1.1 403 Forbidden')
     await dispose()
+  })
+
+  it('rejects a spoofed loopback Host from a non-loopback TCP peer', async () => {
+    const { routes, upgrades, dispose } = await mounted()
+    const http = fakeRequest({ host: 'localhost:3080' })
+    Object.assign(http, { socket: { remoteAddress: '192.168.1.9' } })
+    const denied = fakeResponse()
+    await routes[0]!.handler(http, denied.response)
+    expect(denied.state).toMatchObject({ status: 403, body: 'forbidden' })
+
+    const upgrade = fakeRequest({ host: 'localhost:3080' }, MUX_EVENTS_PATH)
+    Object.assign(upgrade, { socket: { remoteAddress: '::ffff:192.168.1.9' } })
+    const socket = new PassThrough()
+    const chunks: Buffer[] = []
+    socket.on('data', (chunk: Buffer) => { chunks.push(chunk) })
+    const ended = once(socket, 'end')
+    await upgrades[0]!.handler(upgrade, socket, Buffer.alloc(0))
+    await ended
+    expect(Buffer.concat(chunks).toString()).toContain('HTTP/1.1 403 Forbidden')
+    await dispose()
+  })
+
+  it('registers the complete legacy API permission catalog while mounting Connection', async () => {
+    const { ctx, dispose } = await mounted()
+    const registered = new Set(ctx.authorization.permissions.list().map(definition => definition.code))
+    expect(registered).toEqual(new Set(Object.values(API_PROXY_ROUTE_PERMISSIONS)))
+    expect(API_PROXY_PERMISSIONS.map(definition => definition.code).sort())
+      .toEqual([...registered].sort())
+    await dispose()
+  })
+
+  it('maps an authorization denial before a malformed fallback body can be parsed', async () => {
+    const { routes, dispose } = await mounted(undefined, { mode: 'deny-all' })
+    const denied = fakeResponse()
+    await routes[0]!.handler(fakeRawPost(
+      { host: '127.0.0.1:3080', 'content-type': 'application/json' },
+      '/api/session.list',
+      '{',
+    ), denied.response)
+
+    expect(denied.state.status).toBe(200)
+    expect(JSON.parse(String(denied.state.body))).toEqual({
+      type: 'server-response',
+      rpcId: 'security-denied',
+      result: {
+        ok: false,
+        error: {
+          code: 'permission-denied',
+          message: 'permission-denied',
+          details: { permission: 'api:session-list' },
+        },
+      },
+    })
+    await dispose()
+  })
+
+  it('rejects unauthorized WebSocket upgrades without opening either event source', async () => {
+    const mux = vi.fn(() => (async function * () {})())
+    const host = vi.fn(() => (async function * () {})())
+    const api = { events: { mux, host } } as unknown as ApiProxy
+    const { upgrades, dispose } = await mounted(undefined, { mode: 'deny-all', apiProxy: api })
+
+    for (const [index, path] of [
+      [0, MUX_EVENTS_PATH],
+      [1, HOST_EVENTS_PATH],
+    ] as const) {
+      const socket = new PassThrough()
+      const chunks: Buffer[] = []
+      socket.on('data', (chunk: Buffer) => { chunks.push(chunk) })
+      const ended = once(socket, 'end')
+      await upgrades[index]!.handler(fakeRequest({ host: '127.0.0.1:3080' }, path), socket, Buffer.alloc(0))
+      await ended
+      expect(Buffer.concat(chunks).toString()).toContain('HTTP/1.1 403 Forbidden')
+    }
+    expect(mux).not.toHaveBeenCalled()
+    expect(host).not.toHaveBeenCalled()
+    await dispose()
+  })
+
+  it('opens each lease after the final freshness check and hands it to the matching downlink', async () => {
+    const { ctx, upgrades, dispose } = await mounted()
+    const authorization = ctx.authorization
+    const order: string[] = []
+    const muxRelease = vi.fn()
+    const hostRelease = vi.fn()
+    const muxLease = { signal: new AbortController().signal, release: muxRelease }
+    const hostLease = { signal: new AbortController().signal, release: hostRelease }
+    const requireCurrent = authorization.require.bind(authorization)
+    const assertCurrent = authorization.assertCurrent.bind(authorization)
+    const requireSpy = vi.spyOn(authorization, 'require').mockImplementation(async (request) => {
+      order.push(`authorize:${request.permission}`)
+      return requireCurrent(request)
+    })
+    const assertSpy = vi.spyOn(authorization, 'assertCurrent').mockImplementation((request, decision) => {
+      order.push(`assert:${request.permission}`)
+      assertCurrent(request, decision)
+    })
+    const leaseSpy = vi.spyOn(authorization, 'openLease').mockImplementation((request) => {
+      order.push(`lease:${request.permission}`)
+      return request.permission === API_PROXY_ROUTE_PERMISSIONS['events.mux'] ? muxLease : hostLease
+    })
+    const muxHandoff = vi.spyOn(WebSocketDownlinks.prototype, 'handleMux')
+      .mockImplementation((_request, socket, _head, lease) => {
+        order.push('handoff:mux')
+        expect(lease).toBe(muxLease)
+        lease?.release()
+        socket.destroy()
+      })
+    const hostHandoff = vi.spyOn(WebSocketDownlinks.prototype, 'handleHost')
+      .mockImplementation((_request, socket, _head, lease) => {
+        order.push('handoff:host')
+        expect(lease).toBe(hostLease)
+        lease?.release()
+        socket.destroy()
+      })
+
+    try {
+      await upgrades[0]!.handler(
+        fakeRequest({ host: '127.0.0.1:3080' }, MUX_EVENTS_PATH),
+        new PassThrough(),
+        Buffer.alloc(0),
+      )
+      await upgrades[1]!.handler(
+        fakeRequest({ host: '127.0.0.1:3080' }, HOST_EVENTS_PATH),
+        new PassThrough(),
+        Buffer.alloc(0),
+      )
+      expect(order).toEqual([
+        `authorize:${API_PROXY_ROUTE_PERMISSIONS['events.mux']}`,
+        `assert:${API_PROXY_ROUTE_PERMISSIONS['events.mux']}`,
+        `lease:${API_PROXY_ROUTE_PERMISSIONS['events.mux']}`,
+        'handoff:mux',
+        `authorize:${API_PROXY_ROUTE_PERMISSIONS['events.host']}`,
+        `assert:${API_PROXY_ROUTE_PERMISSIONS['events.host']}`,
+        `lease:${API_PROXY_ROUTE_PERMISSIONS['events.host']}`,
+        'handoff:host',
+      ])
+      expect(muxRelease).toHaveBeenCalledTimes(1)
+      expect(hostRelease).toHaveBeenCalledTimes(1)
+    } finally {
+      hostHandoff.mockRestore()
+      muxHandoff.mockRestore()
+      leaseSpy.mockRestore()
+      assertSpy.mockRestore()
+      requireSpy.mockRestore()
+      await dispose()
+    }
+  })
+
+  it('rejects an upgrade when opening its authorization lease fails', async () => {
+    const mux = vi.fn(() => (async function * () {})())
+    const api = { events: { mux, host: vi.fn(() => (async function * () {})()) } } as unknown as ApiProxy
+    const { ctx, upgrades, dispose } = await mounted(undefined, { apiProxy: api })
+    const leaseSpy = vi.spyOn(ctx.authorization, 'openLease').mockImplementation(() => {
+      throw new Error('lease unavailable')
+    })
+    const socket = new PassThrough()
+    const chunks: Buffer[] = []
+    socket.on('data', (chunk: Buffer) => { chunks.push(chunk) })
+    const ended = once(socket, 'end')
+
+    try {
+      await upgrades[0]!.handler(
+        fakeRequest({ host: '127.0.0.1:3080' }, MUX_EVENTS_PATH),
+        socket,
+        Buffer.alloc(0),
+      )
+      await ended
+      expect(Buffer.concat(chunks).toString()).toContain('HTTP/1.1 403 Forbidden')
+      expect(leaseSpy).toHaveBeenCalledTimes(1)
+      expect(mux).not.toHaveBeenCalled()
+    } finally {
+      leaseSpy.mockRestore()
+      await dispose()
+    }
   })
 
   it('refuses an untrusted Host on any /api path before the bridge runs', async () => {
@@ -217,6 +509,7 @@ describe('connection node half', () => {
     const ctx = new Context()
     const routes: WebRoute[] = []
     ctx.provide('webServer', fakeHttpServer(routes, []) as WebServer)
+    const identity = await mountIdentity(ctx)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     expect(routes).toHaveLength(1)
@@ -224,8 +517,10 @@ describe('connection node half', () => {
 
     const connection = ctx.get('connection') as HostConnectionHandle
     const calls: unknown[] = []
-    const remove = connection.rpc.handle('/rpc', async (endpoint, payload) => {
+    let receivedCall: unknown
+    const remove = connection.rpc.handle('/rpc', async (endpoint, payload, call) => {
       calls.push({ endpoint, payload })
+      receivedCall = call
       return { ok: true, value: { accepted: true } }
     }, { authority: 'trusted-host' })
     const route = routes.find(candidate => candidate.path === '/rpc')
@@ -249,6 +544,7 @@ describe('connection node half', () => {
       endpoint: 'goals/create',
       payload: { args: { agentId: 'agent-1' } },
     }])
+    expect(isAuthenticatedCall(receivedCall)).toBe(true)
 
     expect(() => connection.rpc.handle('/rpc', async () => ({ ok: true, value: null }), {
       authority: 'trusted-host',
@@ -256,6 +552,7 @@ describe('connection node half', () => {
     await remove()
     expect(routes.map(candidate => candidate.path)).toEqual([API_PATH])
     await fiber.dispose()
+    await identity.dispose()
     expect(routes).toHaveLength(0)
   })
 
@@ -264,15 +561,18 @@ describe('connection node half', () => {
     const routes: WebRoute[] = []
     ctx.provide('webServer', fakeHttpServer(routes, []) as WebServer)
     ctx.provide('apiProxy', {} as unknown as ApiProxy)
+    const identity = await mountIdentity(ctx, 'trusted-local', true)
     const fiber = ctx.plugin({ inject: [...inject], apply }, { trustedHosts: ['harness.example'] })
     await fiber.await()
     const connection = ctx.get('connection') as HostConnectionHandle
     const calls: unknown[] = []
+    let receivedCall: unknown
     const remove = connection.rpc.intercept(
       '/api',
       endpoint => endpoint === 'goals/create',
-      async (endpoint, payload) => {
+      async (endpoint, payload, call) => {
         calls.push({ endpoint, payload })
+        receivedCall = call
         return { ok: true, value: { accepted: true } }
       },
       { authority: 'trusted-host' },
@@ -308,6 +608,7 @@ describe('connection node half', () => {
       endpoint: 'goals/create',
       payload: { args: { agentId: 'agent-1' } },
     }])
+    expect(isAuthenticatedCall(receivedCall)).toBe(true)
 
     const denied = fakeResponse()
     await route.handler(fakePost({ host: 'other.example' }, '/api/goals/create', request), denied.response)
@@ -335,19 +636,22 @@ describe('connection node half', () => {
     expect(loopbackOnly.state.status).toBe(403)
     await removeLoopback()
     await fiber.dispose()
+    await identity.dispose()
   })
 
   it('applies the configured trust fence and JSON envelope checks to generic channels', async () => {
     const ctx = new Context()
     const routes: WebRoute[] = []
     ctx.provide('webServer', fakeHttpServer(routes, []) as WebServer)
+    const identity = await mountIdentity(ctx, 'trusted-local', true)
     const fiber = ctx.plugin({ inject: [...inject], apply }, { trustedHosts: ['harness.example'] })
     await fiber.await()
     const connection = ctx.get('connection') as HostConnectionHandle
-    const remove = connection.rpc.handle('/rpc', async (endpoint) => {
+    const handler = vi.fn(async (endpoint: string) => {
       if (endpoint === 'fail') throw new Error('handler broke')
-      return { ok: true, value: null }
-    }, {
+      return { ok: true as const, value: null }
+    })
+    const remove = connection.rpc.handle('/rpc', handler, {
       authority: 'trusted-host',
     })
     const route = routes.find(candidate => candidate.path === '/rpc')!
@@ -355,6 +659,22 @@ describe('connection node half', () => {
     const denied = fakeResponse()
     await route.handler(fakePost({ host: 'other.example' }, '/rpc/goals/create', {}), denied.response)
     expect(denied.state).toMatchObject({ status: 403, body: 'forbidden' })
+
+    const unauthenticated = fakeResponse()
+    await route.handler(fakeRawPost({
+      host: 'harness.example',
+      'content-type': 'application/json',
+      'x-fixture-auth': 'deny',
+    }, '/rpc/goals/create', '{'), unauthenticated.response)
+    expect(JSON.parse(String(unauthenticated.state.body))).toEqual({
+      type: 'server-response',
+      rpcId: 'security-denied',
+      result: {
+        ok: false,
+        error: { code: 'unauthenticated', message: 'fixture authentication refused', details: {} },
+      },
+    })
+    expect(handler).not.toHaveBeenCalled()
 
     const methodMismatch = fakeResponse()
     await route.handler(fakePost({ host: 'harness.example' }, '/rpc/goals/create', {
@@ -395,7 +715,7 @@ describe('connection node half', () => {
     await route.handler(fakePost({ host: 'harness.example' }, '/rpc/fail', {
       type: 'client-request', rpcId: 'rpc-fail', method: 'fail', payload: {},
     }), failed.response)
-    expect(failed.state).toMatchObject({ status: 500, body: 'handler failure: Error: handler broke' })
+    expect(failed.state).toMatchObject({ status: 500, body: 'handler failure' })
 
     expect(() => connection.rpc.handle('/api', async () => ({ ok: true, value: null }), {
       authority: 'loopback',
@@ -416,6 +736,7 @@ describe('connection node half', () => {
     await removeLoopback()
     await remove()
     await fiber.dispose()
+    await identity.dispose()
   })
 })
 

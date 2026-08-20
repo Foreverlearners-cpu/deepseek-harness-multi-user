@@ -2,6 +2,7 @@
 
 import {
   RpcId,
+  SECURITY_DENIED_RPC_ID,
   serverResponseSchema,
   type ClientRequest,
 } from '@deepseek-ai/dsh-host-apiproxy/api'
@@ -40,12 +41,21 @@ export function createWebConnectionRpc(): ClientConnectionRpc {
         throw new Error(`transport failure for ${channel}/${endpoint}: HTTP ${response.status}`)
       }
       const full = serverResponseSchema.parse(await response.json())
-      if (full.rpcId !== rpcId) {
+      if (full.rpcId !== rpcId && !isPreParseSecurityDenial(full)) {
         throw new Error(`rpcId mismatch for ${endpoint}: sent ${rpcId}, got ${full.rpcId}`)
       }
       return full.result
     },
   }
+}
+
+function isPreParseSecurityDenial(
+  response: ReturnType<typeof serverResponseSchema.parse>,
+): boolean {
+  return response.rpcId === SECURITY_DENIED_RPC_ID
+    && !response.result.ok
+    && (response.result.error.code === 'unauthenticated'
+      || response.result.error.code === 'permission-denied')
 }
 
 function resolveBase(): string {

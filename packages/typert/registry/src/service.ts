@@ -108,6 +108,7 @@ class DescriptorStore {
   private readonly entries = new Map<string, DescriptorEntry>()
   private readonly ids = new Map<string, DescriptorEntry>()
   private readonly history = new Set<string>()
+  private readonly revisions = new Map<string, number>()
   private readonly changes: ChangeSource
 
   constructor(
@@ -141,6 +142,7 @@ class DescriptorStore {
       this.entries.set(endpoint, entry)
       this.ids.set(descriptor.id, entry)
       this.history.add(endpoint)
+      this.revisions.set(endpoint, (this.revisions.get(endpoint) ?? 0) + 1)
     }
     for (const descriptor of descriptors) {
       this.changes.emit({ kind: this.kind, key: typertEndpoint(descriptor) })
@@ -157,6 +159,7 @@ class DescriptorStore {
       this.entries.delete(endpoint)
       /* v8 ignore next -- ids and endpoints are committed and withdrawn together under the same unique owner. */
       if (this.ids.get(descriptor.id) === entry) this.ids.delete(descriptor.id)
+      this.revisions.set(endpoint, (this.revisions.get(endpoint) ?? 0) + 1)
       removed.push(endpoint)
     }
     for (const endpoint of removed) this.changes.emit({ kind: this.kind, key: endpoint })
@@ -168,6 +171,10 @@ class DescriptorStore {
 
   hasSeen(endpoint: string): boolean {
     return this.history.has(endpoint)
+  }
+
+  revision(endpoint: string): number {
+    return this.revisions.get(endpoint) ?? 0
   }
 
   list(): readonly InvocationDescriptor[] {
@@ -217,6 +224,7 @@ class LookupStore {
   private readonly providers = new Map<string, ProviderEntry<TypertLookupProvider>>()
   private readonly resolvers = new Map<string, ProviderEntry<LookupResolverEntry>>()
   private readonly definitions = new Map<string, TypertLookupDefinition>()
+  private readonly revisions = new Map<string, number>()
   private readonly changes: ChangeSource
 
   constructor(report: ReportObserverError) {
@@ -240,6 +248,7 @@ class LookupStore {
         >,
       ) => this.configure(ctx, key, resolver),
       get: key => this.get(key),
+      revision: key => this.revisions.get(key) ?? 0,
       definitions: () => [...this.definitions.values()],
       keys: () => [...this.providers.keys()],
       subscribe: listener => this.changes.subscribe(ctx, listener),
@@ -274,14 +283,16 @@ class LookupStore {
       provider: { resolve: async id => resolver(id as Wire) },
       owner,
     }
-    const { resolvers, changes } = this
+    const { resolvers, revisions, changes } = this
     return ctx.effect(function* () {
       resolvers.set(key, entry)
+      revisions.set(key, (revisions.get(key) ?? 0) + 1)
       changes.emit({ kind: 'lookup', key })
       yield () => {
         /* v8 ignore next -- duplicate configuration is rejected, so this effect remains the key's unique owner. */
         if (resolvers.get(key) !== entry) return
         resolvers.delete(key)
+        revisions.set(key, (revisions.get(key) ?? 0) + 1)
         changes.emit({ kind: 'lookup', key })
       }
     }, `typert.lookups.configure(${JSON.stringify(key)})`)
@@ -307,15 +318,17 @@ class LookupStore {
     }
     const owner = {}
     const entry: ProviderEntry<TypertLookupProvider> = { provider, owner }
-    const { definitions, providers, changes } = this
+    const { definitions, providers, revisions, changes } = this
     return ctx.effect(function* () {
       definitions.set(key, definition)
       providers.set(key, entry)
+      revisions.set(key, (revisions.get(key) ?? 0) + 1)
       changes.emit({ kind: 'lookup', key })
       yield () => {
         /* v8 ignore next -- duplicate registration is rejected, so this effect remains the key's unique owner. */
         if (providers.get(key) !== entry) return
         providers.delete(key)
+        revisions.set(key, (revisions.get(key) ?? 0) + 1)
         changes.emit({ kind: 'lookup', key })
       }
     }, `typert.lookups.register(${JSON.stringify(key)})`)
@@ -337,6 +350,7 @@ class ContextStore {
   private readonly hosts = new Map<string, ProviderEntry<TypertHostContextProvider>>()
   private readonly hostResolvers = new Map<string, ProviderEntry<HostContextResolverEntry>>()
   private readonly clients = new Map<string, ProviderEntry<TypertClientContextBinder>>()
+  private readonly hostRevisions = new Map<string, number>()
   private readonly changes: ChangeSource
 
   constructor(report: ReportObserverError) {
@@ -358,6 +372,7 @@ class ContextStore {
         binder: TypertClientContextBinder<TypertContextWire<TypertContextMap[K]>>,
       ) => this.registerClient(ctx, key, binder),
       getHost: key => this.getHost(key),
+      hostRevision: key => this.hostRevisions.get(key) ?? 0,
       getClient: key => this.clients.get(key)?.provider,
       subscribe: listener => this.changes.subscribe(ctx, listener),
     }
@@ -386,14 +401,16 @@ class ContextStore {
       provider: { resolve: async id => resolver(id as Wire) },
       owner: {},
     }
-    const { hostResolvers, changes } = this
+    const { hostResolvers, hostRevisions, changes } = this
     return ctx.effect(function* () {
       hostResolvers.set(key, entry)
+      hostRevisions.set(key, (hostRevisions.get(key) ?? 0) + 1)
       changes.emit({ kind: 'host-context', key })
       yield () => {
         /* v8 ignore next -- duplicate configuration is rejected, so this effect remains the key's unique owner. */
         if (hostResolvers.get(key) !== entry) return
         hostResolvers.delete(key)
+        hostRevisions.set(key, (hostRevisions.get(key) ?? 0) + 1)
         changes.emit({ kind: 'host-context', key })
       }
     }, `typert.contexts.configureHost(${JSON.stringify(key)})`)
@@ -420,14 +437,16 @@ class ContextStore {
   ): TypertDisposer {
     if (table.has(key)) throw new Error(`typert: ${kind} provider "${key}" is already registered`)
     const entry: ProviderEntry<Provider> = { provider, owner: {} }
-    const { changes } = this
+    const { changes, hostRevisions } = this
     return ctx.effect(function* () {
       table.set(key, entry)
+      if (kind === 'host-context') hostRevisions.set(key, (hostRevisions.get(key) ?? 0) + 1)
       changes.emit({ kind, key })
       yield () => {
         /* v8 ignore next -- duplicate registration is rejected, so this effect remains the key's unique owner. */
         if (table.get(key) !== entry) return
         table.delete(key)
+        if (kind === 'host-context') hostRevisions.set(key, (hostRevisions.get(key) ?? 0) + 1)
         changes.emit({ kind, key })
       }
     }, `typert.contexts.register(${JSON.stringify(key)})`)
@@ -469,6 +488,7 @@ export class TypertRegistry extends Service implements TypertRegistryContract {
     return {
       get: endpoint => this.localStore.get(endpoint),
       hasSeen: endpoint => this.localStore.hasSeen(endpoint),
+      revision: endpoint => this.localStore.revision(endpoint),
       list: () => this.localStore.list(),
       subscribe: listener => this.localStore.subscribe(ctx, listener),
     }
@@ -664,6 +684,33 @@ function validateInvocation(descriptor: InvocationDescriptor): void {
       throw new Error(`typert: invocation "${descriptor.id}" JSON parameter "${parameter.name}" declares a lookup key`)
     }
     validateCodec(parameter.codec, `${descriptor.id} parameter ${parameter.name}`)
+  }
+  if (!Object.hasOwn(descriptor, 'access')) {
+    throw new Error(`typert: invocation "${descriptor.id}" access must be "authenticated" or "permission"`)
+  }
+  const access = (descriptor as { readonly access?: unknown }).access
+  if (access !== 'authenticated' && access !== 'permission') {
+    throw new Error(`typert: invocation "${descriptor.id}" access must be "authenticated" or "permission"`)
+  }
+  const authorization = Object.hasOwn(descriptor, 'authorization')
+    ? (descriptor as { readonly authorization?: unknown }).authorization
+    : undefined
+  if (access === 'permission') {
+    if (authorization === undefined || typeof authorization !== 'object' || authorization === null) {
+      throw new Error(`typert: invocation "${descriptor.id}" permission access requires authorization`)
+    }
+    if (!Object.hasOwn(authorization, 'permission') || !Object.hasOwn(authorization, 'callParameter')) {
+      throw new Error(`typert: invocation "${descriptor.id}" authorization metadata must declare own fields`)
+    }
+    const permission = Reflect.get(authorization, 'permission') as unknown
+    if (typeof permission !== 'string' || permission.trim().length === 0) {
+      throw new Error(`typert: invocation "${descriptor.id}" authorization permission must be nonempty`)
+    }
+    if (Reflect.get(authorization, 'callParameter') !== 'call') {
+      throw new Error(`typert: invocation "${descriptor.id}" authorization call parameter must be "call"`)
+    }
+  } else if (authorization !== undefined) {
+    throw new Error(`typert: invocation "${descriptor.id}" authenticated access must not declare authorization`)
   }
   const cancellation = descriptor.cancellation as { readonly parameter: string } | undefined
   if (cancellation !== undefined && cancellation.parameter !== 'signal') {

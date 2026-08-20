@@ -78,6 +78,7 @@ function invocationTypertSource(pkgName: string): string {
     '  invocations: [{',
     `    id: '${pkgName}#goals/create',`,
     '    service: \'goals\', namespace: \'goals\', method: \'create\',',
+    "    access: 'authenticated',",
     '    invocation: { kind: \'direct\' },',
     '    parameters: [{',
     '      name: \'request\', wire: \'request\', source: \'json\',',
@@ -504,6 +505,47 @@ describe('validateTypertManifest', () => {
     const descriptor = strictInvocation()
     const manifest = { ...base, invocations: [descriptor] }
     expect(validateTypertManifest('pkg', manifest)).toBe(manifest)
+    const authorized = {
+      ...descriptor,
+      access: 'permission',
+      authorization: { permission: 'plugin:metadata-read', callParameter: 'call' },
+    }
+    expect(validateTypertManifest('pkg', { ...base, invocations: [authorized] }).invocations)
+      .toEqual([authorized])
+    expect(() => validateTypertManifest('pkg', {
+      ...base,
+      invocations: [{
+        ...descriptor,
+        access: 'permission',
+        authorization: { permission: '', callParameter: 'call' },
+      }],
+    })).toThrow('authorization has a missing or empty permission')
+    expect(() => validateTypertManifest('pkg', {
+      ...base,
+      invocations: [{
+        ...descriptor,
+        access: 'permission',
+        authorization: { permission: 'plugin:read', callParameter: 'context' },
+      }],
+    })).toThrow('authorization call parameter must be "call"')
+    const { access: _access, ...missingAccess } = descriptor
+    expect(() => validateTypertManifest('pkg', { ...base, invocations: [missingAccess] }))
+      .toThrow('access must be "authenticated" or "permission"')
+    expect(() => validateTypertManifest('pkg', {
+      ...base,
+      invocations: [{ ...descriptor, access: 'future' }],
+    })).toThrow('access must be "authenticated" or "permission"')
+    expect(() => validateTypertManifest('pkg', {
+      ...base,
+      invocations: [{
+        ...descriptor,
+        authorization: { permission: 'plugin:read', callParameter: 'call' },
+      }],
+    })).toThrow('authenticated access must not declare authorization')
+    expect(() => validateTypertManifest('pkg', {
+      ...base,
+      invocations: [{ ...descriptor, access: 'permission' }],
+    })).toThrow('permission access requires authorization')
     const cancellable = { ...descriptor, cancellation: { parameter: 'signal' } }
     expect(validateTypertManifest('pkg', { ...base, invocations: [cancellable] }).invocations)
       .toEqual([cancellable])
@@ -645,6 +687,7 @@ function strictInvocation() {
     service: 'goals',
     namespace: 'goals',
     method: 'create',
+    access: 'authenticated',
     invocation: { kind: 'direct' },
     parameters: [{
       name: 'request',

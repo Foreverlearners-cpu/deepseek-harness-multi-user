@@ -13,7 +13,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 /**
  * Message correlation id: the initiator mints it on a request; a response
- * echoes the matching request's rpcId and never mints a new one.
+ * echoes it once parsed. Pre-parse security refusal uses the fixed sentinel
+ * below because the Host is not allowed to read the untrusted request id.
  */
 export type RpcId = Branded<'rpc-id'>
 
@@ -28,9 +29,19 @@ export function RpcId(id: string): RpcId {
   return id as RpcId
 }
 
+/**
+ * Correlation sentinel used only when authentication or authorization rejects
+ * a request before the Host is allowed to read its client-supplied rpcId.
+ */
+export const SECURITY_DENIED_RPC_ID = RpcId('security-denied')
+
 /** Error code → details type map (a second table isomorphic to RpcMethodMap). New code = one row here + one branch in the error schema. */
 export interface RpcErrorDetailsMap {
   'bad-request': { issues: ZodIssue[] }
+  /** No authenticated principal could be established for the request. */
+  'unauthenticated': {}
+  /** The authenticated principal lacks the action required by the endpoint. */
+  'permission-denied': { permission: string }
   'cancelled': {}
   'session-not-found': { sessionId: SessionId }
   'model-unavailable': { provider: string; model: string }
@@ -149,7 +160,7 @@ export interface ClientRequest {
   payload: unknown
 }
 
-/** Response to a ClientRequest (wire carrier: the HTTP response body of that POST); rpcId echoed. */
+/** Response to a ClientRequest; rpcId is echoed or the pre-parse security sentinel. */
 export interface ServerResponse {
   type: 'server-response'
   rpcId: RpcId

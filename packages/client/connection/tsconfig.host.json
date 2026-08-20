@@ -18,6 +18,12 @@
   ],
   "references": [
     {
+      "path": "../../identity/authentication"
+    },
+    {
+      "path": "../../identity/authorization"
+    },
+    {
       "path": "../../attachment/attachment"
     },
     {

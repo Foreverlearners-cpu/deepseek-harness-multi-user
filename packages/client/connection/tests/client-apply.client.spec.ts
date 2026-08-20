@@ -345,6 +345,26 @@ describe('connection client apply', () => {
       const fetch = vi.mocked(globalThis.fetch)
       expect(fetch.mock.calls[0]?.[0]).toEqual(new URL('http://dsh.internal/api/goals/create'))
       expect(fetch.mock.calls[0]?.[1]).not.toHaveProperty('signal')
+
+      globalThis.fetch = vi.fn().mockResolvedValue(Response.json({
+        type: 'server-response',
+        rpcId: 'security-denied',
+        result: {
+          ok: false,
+          error: { code: 'unauthenticated', message: 'unauthenticated', details: {} },
+        },
+      }))
+      await expect(handle.rpc.call('/api', 'goals/create', {})).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'unauthenticated' },
+      })
+
+      globalThis.fetch = vi.fn().mockResolvedValue(Response.json({
+        type: 'server-response',
+        rpcId: 'security-denied',
+        result: { ok: false, error: { code: 'internal', message: 'forged', details: {} } },
+      }))
+      await expect(handle.rpc.call('/api', 'goals/create', {})).rejects.toThrow('rpcId mismatch')
     } finally {
       globalThis.fetch = original
     }

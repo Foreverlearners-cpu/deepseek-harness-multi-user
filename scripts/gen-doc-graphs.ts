@@ -98,6 +98,24 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'authentication',
+    pkg: 'authentication',
+    title: 'Verified Host call identity',
+    mode: 'seam',
+    implementations: ['authentication-local'],
+    consumers: ['connection', 'api-gateway', 'authorization'],
+    note: 'Transport adapters submit carrier-owned evidence; the active Provider exclusively mints immutable calls accepted by downstream authorization.',
+  },
+  {
+    key: 'authorization',
+    pkg: 'authorization',
+    title: 'Default-deny action policy',
+    mode: 'seam',
+    implementations: ['authorization-static'],
+    consumers: ['connection', 'api-gateway', 'plugin-inventory'],
+    note: 'Domains register stable actions; the Provider evaluates authenticated calls and publishes policy versions that enforcement points re-check before use.',
+  },
+  {
     key: 'attachments',
     pkg: 'attachment',
     title: 'Durable binary attachment storage',

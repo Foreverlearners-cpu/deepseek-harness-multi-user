@@ -145,6 +145,19 @@ interface GatewayBinding {
   readonly site: ts.Node
 }
 
+type RemoteAccessMarker =
+  | { readonly access: 'authenticated'; readonly exportName?: string; readonly authorization?: never }
+  | {
+    readonly access: 'permission'
+    readonly exportName?: string
+    readonly authorization: { readonly permission: string; readonly callParameter: 'call' }
+  }
+
+type RemoteMarker = RemoteAccessMarker & (
+  | { readonly kind: 'direct' }
+  | { readonly kind: 'context'; readonly context: string }
+)
+
 type ReferenceSite = ts.TypeReferenceNode | ts.ExpressionWithTypeArguments | ts.ImportTypeNode
 
 const EMPTY_DOCUMENTATION: DocumentationModel = { tags: [] }
@@ -975,9 +988,7 @@ class FaceAnalyzer {
     registration: PackageRegistration,
     binding: GatewayBinding,
     method: ts.MethodDeclaration,
-    invocation:
-      | { readonly kind: 'direct'; readonly exportName?: string }
-      | { readonly kind: 'context'; readonly context: string; readonly exportName?: string },
+    invocation: RemoteMarker,
   ): InvocationModel {
     if (visibilityOf(method) !== 'public' || hasModifier(method, ts.SyntaxKind.StaticKeyword)) {
       this.fail(method, 'Remote decorators require a public instance method')
@@ -997,6 +1008,7 @@ class FaceAnalyzer {
     const lookups = this.lookupDeclarations()
     const lookupByHost = new Map(lookups.map(lookup => [lookup.hostSymbol, lookup]))
     const parameters: InvocationParameterModel[] = []
+    let authenticatedCall = false
     let cancellation: InvocationModel['cancellation']
     const wires = new Set<string>()
     for (const [parameterIndex, parameter] of method.parameters.entries()) {
@@ -1008,6 +1020,17 @@ class FaceAnalyzer {
       if (parameter.name.text === 'this') this.fail(parameter, 'Remote methods cannot declare an explicit this parameter')
       const optional = parameter.questionToken !== undefined
       const authoredType = this.requiredType(parameter, parameter.type, 'parameter')
+      if (invocation.access === 'permission' && parameterIndex === 0) {
+        if (parameter.name.text !== invocation.authorization.callParameter || !this.isAuthenticatedCall(authoredType)) {
+          this.fail(
+            parameter,
+            'protected Remote methods require a first parameter named call with type AuthenticatedCall from @deepseek-ai/dsh-authentication',
+          )
+        }
+        if (optional) this.fail(parameter, 'protected Remote call parameter cannot be optional')
+        authenticatedCall = true
+        continue
+      }
       const cancellationName = parameter.name.text === 'signal'
       const cancellationType = this.isGlobalAbortSignal(authoredType)
       if (cancellationName || cancellationType) {
@@ -1062,6 +1085,12 @@ class FaceAnalyzer {
       wires.add(modeled.wire)
       parameters.push(modeled)
     }
+    if (invocation.access === 'permission' && !authenticatedCall) {
+      this.fail(
+        method,
+        'protected Remote methods require a first parameter named call with type AuthenticatedCall from @deepseek-ai/dsh-authentication',
+      )
+    }
 
     let receiver: InvocationModel['invocation'] = { kind: 'direct' }
     if (invocation.kind === 'context') {
@@ -1107,7 +1136,7 @@ class FaceAnalyzer {
     }
 
     const resultType = this.remoteResultType(method)
-    return {
+    const base: Omit<InvocationModel, 'access' | 'authorization'> = {
       id: `${registration.name}#${binding.namespace}/${exportedMethod}`,
       service: binding.service,
       namespace: binding.namespace,
@@ -1125,6 +1154,9 @@ class FaceAnalyzer {
       ),
       location: this.location(method.name),
     }
+    return invocation.access === 'authenticated'
+      ? { ...base, access: 'authenticated' }
+      : { ...base, access: 'permission', authorization: invocation.authorization }
   }
 
   private gatewayBinding(declaration: ts.ClassDeclaration): GatewayBinding | undefined {
@@ -1212,44 +1244,32 @@ class FaceAnalyzer {
     return { service, namespace, site }
   }
 
-  private remoteMarker(
-    member: ts.ClassElement,
-  ):
-    | { readonly kind: 'direct'; readonly exportName?: string }
-    | { readonly kind: 'context'; readonly context: string; readonly exportName?: string }
-    | undefined {
-    let found:
-      | { readonly kind: 'direct'; readonly exportName?: string }
-      | { readonly kind: 'context'; readonly context: string; readonly exportName?: string }
-      | undefined
+  private remoteMarker(member: ts.ClassElement): RemoteMarker | undefined {
+    let found: RemoteMarker | undefined
     for (const decorator of ts.canHaveDecorators(member) ? ts.getDecorators(member) ?? [] : []) {
       const expression = decorator.expression
       let marker: typeof found
       if (this.isTypeMetaSymbol(expression, 'Remote')) {
-        marker = { kind: 'direct' }
+        this.fail(expression, 'Remote requires one explicit access options object')
       } else if (ts.isCallExpression(expression)
         && this.isTypeMetaSymbol(expression.expression, 'Remote')) {
-        if (expression.arguments.length !== 1) this.fail(expression, 'Remote() requires one exported method name')
-        const exportName = stringLiteralValue(expression.arguments[0])
-        if (exportName === undefined || !isRemoteSegment(exportName)) {
-          this.fail(expression.arguments[0] ?? expression, 'Remote() name must be a string literal containing only RPC endpoint segment characters')
-        }
-        marker = { kind: 'direct', exportName }
+        if (expression.arguments.length !== 1) this.fail(expression, 'Remote() requires one explicit access options object')
+        const argument = expression.arguments[0]
+        marker = { kind: 'direct', ...this.remoteAccessOptions(argument ?? expression, 'Remote()') }
       } else if (ts.isCallExpression(expression)
         && this.isTypeMetaSymbol(expression.expression, 'RemoteScope')) {
-        if (expression.arguments.length < 1 || expression.arguments.length > 2) {
-          this.fail(expression, 'RemoteScope() requires a Context key and optional exported method name')
+        if (expression.arguments.length !== 2) {
+          this.fail(expression, 'RemoteScope() requires a Context key and explicit access options object')
         }
         const context = stringLiteralValue(expression.arguments[0])
         if (context === undefined || !isRemoteSegment(context)) {
           this.fail(expression.arguments[0] ?? expression, 'RemoteScope() key must be a string literal containing only RPC endpoint segment characters')
         }
-        const exportArgument = expression.arguments[1]
-        const exportName = exportArgument === undefined ? undefined : stringLiteralValue(exportArgument)
-        if (exportArgument !== undefined && (exportName === undefined || !isRemoteSegment(exportName))) {
-          this.fail(exportArgument, 'RemoteScope() name must be a string literal containing only RPC endpoint segment characters')
+        marker = {
+          kind: 'context',
+          context,
+          ...this.remoteAccessOptions(expression.arguments[1] ?? expression, 'RemoteScope()'),
         }
-        marker = { kind: 'context', context, ...exportName === undefined ? {} : { exportName } }
       } else {
         continue
       }
@@ -1257,6 +1277,53 @@ class FaceAnalyzer {
       found = marker
     }
     return found
+  }
+
+  private remoteAccessOptions(argument: ts.Node, decorator: 'Remote()' | 'RemoteScope()'): RemoteAccessMarker {
+    if (!ts.isObjectLiteralExpression(argument)) {
+      this.fail(argument, `${decorator} access options must be an object literal`)
+    }
+    let exportName: string | undefined
+    let access: string | undefined
+    let permission: string | undefined
+    const seen = new Set<string>()
+    for (const property of argument.properties) {
+      if (!ts.isPropertyAssignment(property)) {
+        this.fail(property, `${decorator} access options require property assignments`)
+      }
+      const key = memberName(property.name)
+      if (seen.has(key)) this.fail(property, `${decorator} access options repeat a property`)
+      seen.add(key)
+      const value = stringLiteralValue(property.initializer)
+      if (key === 'exportName') {
+        if (value === undefined || !isRemoteSegment(value)) {
+          this.fail(property, `${decorator} exportName must be a string literal containing only RPC endpoint segment characters`)
+        }
+        exportName = value
+      } else if (key === 'access') {
+        if (value === undefined) this.fail(property, `${decorator} access must be a string literal`)
+        access = value
+      } else if (key === 'permission') {
+        if (value === undefined || value.trim().length === 0) {
+          this.fail(property, `${decorator} permission must be one nonempty string literal`)
+        }
+        permission = value
+      } else {
+        this.fail(property, `${decorator} access options support only access, exportName, and permission`)
+      }
+    }
+    if (permission !== undefined) {
+      if (access !== undefined) this.fail(argument, `${decorator} permission options must not declare access`)
+      return {
+        ...(exportName === undefined ? {} : { exportName }),
+        access: 'permission',
+        authorization: { permission, callParameter: 'call' },
+      }
+    }
+    if (access !== 'authenticated') {
+      this.fail(argument, `${decorator} options require access "authenticated" or a nonempty permission`)
+    }
+    return { ...(exportName === undefined ? {} : { exportName }), access: 'authenticated' }
   }
 
   private remoteResultType(method: ts.MethodDeclaration): ts.TypeNode {
@@ -1276,6 +1343,14 @@ class FaceAnalyzer {
     if (symbol?.name !== 'AbortSignal') return false
     return symbol.declarations?.some(declaration =>
       isStandardLibraryFile(declaration.getSourceFile().fileName)) === true
+  }
+
+  private isAuthenticatedCall(type: ts.TypeNode): boolean {
+    const symbol = this.symbolAtType(type)
+    if (symbol?.name !== 'AuthenticatedCall') return false
+    const declaration = preferredDeclaration(symbol)
+    return declaration !== undefined
+      && this.packageNameForFile(declaration.getSourceFile().fileName) === '@deepseek-ai/dsh-authentication'
   }
 
   private lookupDeclarations(): readonly StaticLookupDeclaration[] {

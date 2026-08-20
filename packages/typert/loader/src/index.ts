@@ -154,7 +154,7 @@ function requireArray(pkgName: string, value: unknown, subject: string): unknown
 }
 
 function requireString(pkgName: string, value: Record<string, unknown>, key: string, subject: string): void {
-  if (typeof value[key] !== 'string' || value[key].length === 0) {
+  if (!Object.hasOwn(value, key) || typeof value[key] !== 'string' || value[key].length === 0) {
     throw new Error(`typert-loader: ${pkgName} ${subject} has a missing or empty ${key}`)
   }
 }
@@ -225,6 +225,28 @@ function requireInvocation(pkgName: string, value: unknown): void {
     }
     parameters.set(wire, parameter)
     requireStrictCodec(pkgName, parameter.codec, `invocation "${id}" parameter codec`)
+  }
+  if (!Object.hasOwn(invocation, 'access')) {
+    throw new Error(`typert-loader: ${pkgName} invocation "${id}" access must be "authenticated" or "permission"`)
+  }
+  const access = invocation.access
+  if (access !== 'authenticated' && access !== 'permission') {
+    throw new Error(`typert-loader: ${pkgName} invocation "${id}" access must be "authenticated" or "permission"`)
+  }
+  if (access === 'permission') {
+    if (!Object.hasOwn(invocation, 'authorization') || invocation.authorization === undefined) {
+      throw new Error(`typert-loader: ${pkgName} invocation "${id}" permission access requires authorization`)
+    }
+    const authorization = requireObject(pkgName, invocation.authorization, `invocation "${id}" authorization`)
+    requireString(pkgName, authorization, 'permission', `invocation "${id}" authorization`)
+    if ((authorization.permission as string).trim().length === 0) {
+      throw new Error(`typert-loader: ${pkgName} invocation "${id}" authorization permission must be nonempty`)
+    }
+    if (authorization.callParameter !== 'call') {
+      throw new Error(`typert-loader: ${pkgName} invocation "${id}" authorization call parameter must be "call"`)
+    }
+  } else if (Object.hasOwn(invocation, 'authorization') && invocation.authorization !== undefined) {
+    throw new Error(`typert-loader: ${pkgName} invocation "${id}" authenticated access must not declare authorization`)
   }
   if (invocation.cancellation !== undefined) {
     const cancellation = requireObject(pkgName, invocation.cancellation, `invocation "${id}" cancellation`)

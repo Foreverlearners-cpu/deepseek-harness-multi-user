@@ -12,6 +12,16 @@ export type PluginFiberPhase =
   | 'unloading'
   | null
 
+/** One plugin existence result without package or runtime metadata. */
+export interface PluginInventoryDiscoveryEntry {
+  readonly entryId: PluginEntryId
+}
+
+/** Point-in-time plugin existence projection. */
+export interface PluginInventoryDiscoverySnapshot {
+  readonly entries: readonly PluginInventoryDiscoveryEntry[]
+}
+
 /** One non-group Loader entry exposed to trusted clients. */
 export interface PluginInventoryEntry {
   readonly entryId: PluginEntryId

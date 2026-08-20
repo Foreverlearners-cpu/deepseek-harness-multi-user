@@ -242,7 +242,7 @@ Storage-domain sidecar service. It inspects persisted Session history and never 
  * @param request - Session identity to inspect and list.
  * @returns current immutable items or `session-not-found`.
  */
-@Remote('list') async list(request: MessageFeedbackListRequest): Promise<MessageFeedbackListResult>
+@Remote({ access: 'authenticated', exportName: 'list' }) async list(request: MessageFeedbackListRequest): Promise<MessageFeedbackListResult>
 
 /**
  * Create or replace feedback for one derived append-origin assistant
@@ -251,7 +251,7 @@ Storage-domain sidecar service. It inspects persisted Session history and never 
  * @param request - target, desired value, and observed item version.
  * @returns the committed item or an explicit business failure.
  */
-@Remote('put') put(request: MessageFeedbackPutRequest): Promise<MessageFeedbackPutResult>
+@Remote({ access: 'authenticated', exportName: 'put' }) put(request: MessageFeedbackPutRequest): Promise<MessageFeedbackPutResult>
 
 /**
  * Delete one feedback item. Absence is successful regardless of the
@@ -259,7 +259,7 @@ Storage-domain sidecar service. It inspects persisted Session history and never 
  * @param request - Session, message, and observed item version.
  * @returns the stable absent postcondition, or an explicit failure.
  */
-@Remote('delete') delete(request: MessageFeedbackDeleteRequest): Promise<MessageFeedbackDeleteResult>
+@Remote({ access: 'authenticated', exportName: 'delete' }) delete(request: MessageFeedbackDeleteRequest): Promise<MessageFeedbackDeleteResult>
 ```
 
 Source: [`packages/feedback/message-feedback/src/index.ts:150`](../../packages/feedback/message-feedback/src/index.ts)

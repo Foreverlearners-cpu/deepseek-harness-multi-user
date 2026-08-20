@@ -20,6 +20,10 @@ flowchart LR
   cfg --> plugin_dsh_base_typert
   plugin_dsh_base_typert_loader["typert-loader<br/>@deepseek-ai/dsh-typert-loader"]
   cfg --> plugin_dsh_base_typert_loader
+  plugin_dsh_base_authentication["authentication<br/>@deepseek-ai/dsh-authentication-local"]
+  cfg --> plugin_dsh_base_authentication
+  plugin_dsh_base_authorization["authorization<br/>@deepseek-ai/dsh-authorization-static"]
+  cfg --> plugin_dsh_base_authorization
   plugin_dsh_base_typert_gateway["typert-gateway<br/>@deepseek-ai/dsh-api-gateway"]
   cfg --> plugin_dsh_base_typert_gateway
   plugin_dsh_base_session_title["session-title<br/>@deepseek-ai/dsh-session-title"]
@@ -174,6 +178,8 @@ flowchart LR
 | `session` | `@deepseek-ai/dsh-session` |
 | `typert` | `@deepseek-ai/dsh-typert-registry` |
 | `typert-loader` | `@deepseek-ai/dsh-typert-loader` |
+| `authentication` | `@deepseek-ai/dsh-authentication-local` |
+| `authorization` | `@deepseek-ai/dsh-authorization-static` |
 | `typert-gateway` | `@deepseek-ai/dsh-api-gateway` |
 | `session-title` | `@deepseek-ai/dsh-session-title` |
 | `session-title-llm` | `@deepseek-ai/dsh-session-title-first-prompt-llm` |

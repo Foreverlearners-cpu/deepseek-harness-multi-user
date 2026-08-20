@@ -55,18 +55,17 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     options?: { readonly namespace?: string },
   ): { readonly service: Service; readonly serviceKey: string; readonly namespace: string }
 
-  export function Remote<This extends object, Args extends unknown[], Result>(
-    method: (this: This, ...args: Args) => Result,
-    context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Result>,
-  ): void
+  type RemoteOptions =
+    | { readonly access: 'authenticated'; readonly exportName?: string }
+    | { readonly permission: string; readonly exportName?: string }
 
-  export function Remote(exportName: string):
+  export function Remote(options: RemoteOptions):
   <This extends object, Args extends unknown[], Result>(
     method: (this: This, ...args: Args) => Result,
     context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Result>,
   ) => void
 
-  export function RemoteScope(key: Extract<keyof TypertContextMap, string>, exportName?: string):
+  export function RemoteScope(key: Extract<keyof TypertContextMap, string>, options: RemoteOptions):
   <This extends object, Args extends unknown[], Result>(
     method: (this: This, ...args: Args) => Result,
     context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Result>,

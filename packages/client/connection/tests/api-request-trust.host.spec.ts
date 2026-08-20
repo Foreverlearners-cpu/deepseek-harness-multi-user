@@ -1,7 +1,11 @@
 /** Behavior of the /api browser-trust fence (rebinding + cross-site defense). */
 
 import { describe, expect, it } from 'vitest'
-import { assertTrustedAuthority, isTrustedApiRequest } from '../src/api-request-trust.ts'
+import {
+  assertTrustedAuthority,
+  isLoopbackRemoteAddress,
+  isTrustedApiRequest,
+} from '../src/api-request-trust.ts'
 
 function request(headers: Record<string, string | undefined>): { headers: Record<string, string | undefined> } {
   return { headers }
@@ -22,6 +26,32 @@ describe('isTrustedApiRequest', () => {
   it('accepts loopback Hosts in every spelling, with and without ports, for browser requests', () => {
     for (const host of ['localhost', 'localhost:3080', '127.0.0.1', '127.0.0.1:3080', '127.8.9.10:80', '[::1]', '[::1]:3080', 'LOCALHOST:3080']) {
       expect(isTrustedApiRequest(request({ host, origin: `http://${host}` }), [])).toBe(true)
+    }
+  })
+
+  it('requires a loopback TCP peer when a real Node request claims a loopback Host', () => {
+    const local = {
+      headers: { host: 'localhost:3080' },
+      socket: { remoteAddress: '::ffff:127.0.0.8' },
+    }
+    const spoofed = {
+      headers: { host: 'localhost:3080' },
+      socket: { remoteAddress: '192.168.1.9' },
+    }
+    expect(isTrustedApiRequest(local, [])).toBe(true)
+    expect(isTrustedApiRequest(spoofed, [])).toBe(false)
+    expect(isTrustedApiRequest({
+      headers: { host: 'harness.internal:3080' },
+      socket: { remoteAddress: '192.168.1.9' },
+    }, ['harness.internal'])).toBe(true)
+  })
+
+  it('classifies Node loopback peer spellings without admitting adjacent addresses', () => {
+    for (const address of ['127.0.0.1', '127.8.9.10', '::1', '::ffff:127.0.0.1', '::FFFF:127.9.8.7']) {
+      expect(isLoopbackRemoteAddress(address)).toBe(true)
+    }
+    for (const address of [undefined, '128.0.0.1', '::ffff:128.0.0.1', '192.168.1.9', '::2']) {
+      expect(isLoopbackRemoteAddress(address)).toBe(false)
     }
   })
 
