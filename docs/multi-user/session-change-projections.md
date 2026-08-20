@@ -45,7 +45,7 @@ Invalid UTF-8, invalid or non-object JSON, an unexpected field set, unknown vers
 
 ## Redis invalidation
 
-`upsert` and `delete` both remove the complete session-context cache entry. The key namespace contains a configured deployment identity, a fixed key-format version, and encoded `userId` and `sessionId` segments. A missing key is successful, and repeated deletion is idempotent.
+`upsert` and `delete` both remove the complete session-context cache entry. The key namespace contains a configured deployment identity, a fixed key-format version, and encoded `userId` and `sessionId` segments. A missing key is successful, and repeated deletion is idempotent. `@deepseek-ai/dsh-session-cache-invalidation-redis` is the opt-in Consumer.
 
 The invalidation Consumer does not read MySQL and does not refill Redis. Active sessions continue from their owned in-process state. The session read owner handles a cold cache miss by reading the complete authoritative session and repopulating Redis. This event does not make Redis authoritative or prove authorization.
 
@@ -69,4 +69,4 @@ Disposal stops polling and waits for the active handler and borrowed dependency 
 
 The first package is `@deepseek-ai/dsh-session-message-change-protocol`, a pure library that owns event types, strict encoding and decoding, brands not owned by existing session or message packages, byte-bound enforcement, and Kafka key derivation. It creates no Cordis service and performs no I/O.
 
-The Redis and Elasticsearch Consumers, their test producer, cache read-through behavior, producer capture, search API, retries, dead-letter handling, projection rebuild, and default bundle assembly require separate package reviews.
+The Redis Consumer is the opt-in Host plugin `@deepseek-ai/dsh-session-cache-invalidation-redis`. The Elasticsearch Consumer, their test producer, cache read-through behavior, producer capture, search API, retries, dead-letter handling, projection rebuild, and default bundle assembly require separate package reviews.

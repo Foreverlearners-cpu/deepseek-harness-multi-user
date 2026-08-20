@@ -34,6 +34,7 @@ Defines content-free durable identities shared by out-of-process cache and searc
 | Package | Role |
 |---|---|
 | [`session-message-change-protocol/`](session-message-change-protocol/README.md) | Strict Kafka codec and partition key for user-scoped complete-message changes |
+| [`session-cache-invalidation-redis/`](session-cache-invalidation-redis/README.md) | Host-only Kafka Consumer that deletes the complete session-context Redis key |
 
 ## Titles
 

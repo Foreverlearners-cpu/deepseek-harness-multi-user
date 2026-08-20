@@ -16,10 +16,10 @@ Status: proposed
 
 新增 `@deepseek-ai/dsh-session-message-change-protocol`，这是位于 `packages/session/session-message-change-protocol` 的纯线协议库。它负责一项严格、不含内容的 `session.message.changed` 事件、二进制编码与解码，以及确定性的 Kafka 分区键。它不注册 Cordis 服务，也不执行 I/O。
 
-后续两个单一职责消费方使用该协议：
+两个单一职责消费方使用该协议：
 
-- `@deepseek-ai/dsh-session-cache-invalidation-redis` 通过 `ctx.kafka` 订阅，派生一项部署／用户／会话缓存键，并通过 `ctx.redis` 删除它。`upsert` 与 `delete` 都会使完整上下文缓存失效。缓存回填仍由会话读取所有者负责。
-- `@deepseek-ai/dsh-session-search-projection-elasticsearch` 通过独立消费组订阅，经 `ctx.sessionQuery` 读取已标识的完整消息，并通过 `ctx.elasticsearch` 建立索引。删除操作写入带版本的墓碑，而不是丢弃顺序证据。
+- `@deepseek-ai/dsh-session-cache-invalidation-redis` 是已交付的 Redis 消费方。[Redis 失效 Agent Note](../../implemented/architecture/2026-08-20-session-cache-invalidation-redis.md)记录其键编码、fail-stop 与 dispose（资源释放）决策。
+- `@deepseek-ai/dsh-session-search-projection-elasticsearch` 仍属后续工作：它通过独立消费组订阅，经 `ctx.sessionQuery` 读取已标识的完整消息，并通过 `ctx.elasticsearch` 建立索引。删除操作写入带版本的墓碑，而不是丢弃顺序证据。
 
 该协议只适用于一个部署组合、Kafka topic、Redis 目标和 Elasticsearch 写入目标属于一个租户或另一个物理隔离管理域的场景。`userId` 标识该部署内私有会话的所有者。共享的多租户传输或数据目标仍须遵循更广泛的[多用户控制面与数据面](2026-08-18-multi-user-control-and-data-planes.md)和[租户级 Elasticsearch](2026-08-18-tenant-scoped-elasticsearch-search-projections.md)提案，携带显式 `tenantId` scope。本说明不取代任一提案。
 

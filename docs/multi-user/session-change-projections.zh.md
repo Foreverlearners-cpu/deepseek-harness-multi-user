@@ -45,7 +45,7 @@ value 不包含消息文本、推理、失败的部分输出、缓存键、索�
 
 ## Redis invalidation
 
-`upsert` 与 `delete` 都会移除完整会话上下文缓存项。键命名空间包含已配置部署身份、固定键格式版本，以及经过编码的 `userId` 与 `sessionId` 段。键不存在也算成功，重复删除具有幂等性。
+`upsert` 与 `delete` 都会移除完整会话上下文缓存项。键命名空间包含已配置部署身份、固定键格式版本，以及经过编码的 `userId` 与 `sessionId` 段。键不存在也算成功，重复删除具有幂等性。`@deepseek-ai/dsh-session-cache-invalidation-redis` 是选择加入的消费方。
 
 失效消费方不读取 MySQL，也不回填 Redis。活跃会话继续使用其拥有的进程内状态。会话读取所有者在冷缓存未命中时读取完整权威会话并重新填充 Redis。本事件不会使 Redis 成为权威，也不能证明授权。
 
@@ -69,4 +69,4 @@ dispose 会停止拉取，并等待活跃 handler 和借用的依赖 callback �
 
 首个包是 `@deepseek-ai/dsh-session-message-change-protocol`，它是一项纯库，负责事件类型、严格编码与解码、既有会话或消息包未负责的品牌类型、字节限制执行，以及 Kafka key 派生。它不创建 Cordis 服务，也不执行 I/O。
 
-Redis 与 Elasticsearch 消费方、它们的测试生产者、缓存 read-through 行为、生产者捕获、搜索 API、重试、死信处理、投影重建和默认组合包装配需要单独进行包评审。
+Redis 消费方是选择加入的 Host 插件 `@deepseek-ai/dsh-session-cache-invalidation-redis`。Elasticsearch 消费方、它们的测试生产者、缓存 read-through 行为、生产者捕获、搜索 API、重试、死信处理、投影重建和默认组合包装配需要单独进行包评审。

@@ -1676,6 +1676,34 @@ Depends on: `Readable` (`node:stream`) · `Writable` (`node:stream`)
 
 Source: [`packages/sdk/server/src/index.ts:25`](../packages/sdk/server/src/index.ts)
 
+<a id="deepseek-aidsh-session-cache-invalidation-redis"></a>
+
+## `@deepseek-ai/dsh-session-cache-invalidation-redis`
+
+Requires: `kafka` · `redis`
+
+```ts config-catalog
+/** Explicit Host Consumer configuration with no hidden business defaults. */
+export interface Config {
+  /** Authorized Kafka topic that carries session message change events. */
+  topic: string
+  /** Authorized Kafka consumer group for this invalidation Consumer. */
+  groupId: string
+  /** Subscription identity unique within the Kafka service. */
+  subscriptionId: string
+  /** Start position used when the group has no committed offset. */
+  mode: KafkaSubscriptionMode
+  /** Complete-payload byte limit forwarded to `decodeSessionMessageChange`. */
+  maxBytes: number
+  /** Deployment identity embedded in every cache key. */
+  deploymentId: string
+}
+```
+
+Depends on: [`KafkaSubscriptionMode`](subsystems/kafka.md)
+
+Source: [`packages/session/session-cache-invalidation-redis/src/index.ts:64`](../packages/session/session-cache-invalidation-redis/src/index.ts)
+
 <a id="deepseek-aidsh-session-persistence-jsonl"></a>
 
 ## `@deepseek-ai/dsh-session-persistence-jsonl`

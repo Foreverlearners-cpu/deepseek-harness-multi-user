@@ -34,6 +34,7 @@
 | 包 | 职责 |
 |---|---|
 | [`session-message-change-protocol/`](session-message-change-protocol/README.md) | 用户级完整消息变更的严格 Kafka 编解码器和分区键 |
+| [`session-cache-invalidation-redis/`](session-cache-invalidation-redis/README.md) | 仅限 Host 的 Kafka 消费方，删除完整会话上下文 Redis 键 |
 
 ## 标题
 

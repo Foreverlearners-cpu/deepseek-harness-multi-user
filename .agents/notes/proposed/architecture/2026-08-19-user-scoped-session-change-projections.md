@@ -16,10 +16,10 @@ The first delivery omits the MySQL-to-Kafka producer. Tests publish fixed events
 
 Add `@deepseek-ai/dsh-session-message-change-protocol`, a pure wire library under `packages/session/session-message-change-protocol`. It owns a strict, content-free `session.message.changed` event, binary encoding and decoding, and the deterministic Kafka partition key. It registers no Cordis service and performs no I/O.
 
-Two later single-purpose Consumers use the protocol:
+Two single-purpose Consumers use the protocol:
 
-- `@deepseek-ai/dsh-session-cache-invalidation-redis` subscribes through `ctx.kafka`, derives one deployment/user/session cache key, and deletes it through `ctx.redis`. Both `upsert` and `delete` invalidate the complete cached context. Cache refill remains with the session read owner.
-- `@deepseek-ai/dsh-session-search-projection-elasticsearch` subscribes through an independent group, reads the identified complete message through `ctx.sessionQuery`, and indexes it through `ctx.elasticsearch`. A deletion writes a versioned tombstone rather than discarding ordering evidence.
+- `@deepseek-ai/dsh-session-cache-invalidation-redis` is the shipped Redis Consumer. The [Redis invalidation Agent Note](../../implemented/architecture/2026-08-20-session-cache-invalidation-redis.md) records its key encoding, fail-stop, and disposal decisions.
+- `@deepseek-ai/dsh-session-search-projection-elasticsearch` remains later: it subscribes through an independent group, reads the identified complete message through `ctx.sessionQuery`, and indexes it through `ctx.elasticsearch`. A deletion writes a versioned tombstone rather than discarding ordering evidence.
 
 The protocol applies only where one deployment composition, Kafka topic, Redis target, and Elasticsearch write target belong to one tenant or another physically isolated administrative domain. `userId` identifies the private session owner inside that deployment. A shared multi-tenant transport or data target still requires explicit `tenantId` scope under the broader [multi-user control and data planes](2026-08-18-multi-user-control-and-data-planes.md) and [tenant-scoped Elasticsearch](2026-08-18-tenant-scoped-elasticsearch-search-projections.md) proposals. This note does not supersede either proposal.
 
