@@ -9,7 +9,7 @@ import type {
 export class FakeKafka extends Service {
   readonly subscriptions = new Map<string, KafkaSubscribeRequest>()
   readonly committed: Array<{ topic: string; partition: number; offset: bigint }> = []
-  private inFlight?: Promise<void>
+  private inFlight: Promise<void> | undefined
 
   constructor(ctx: Context) {
     super(ctx, 'kafka')
