@@ -637,6 +637,7 @@ const CTX_VERBS = new Set(['effect', 'on', 'once', 'provide', 'timeout', 'interv
 const TIMER_VERBS = new Set(['timeout', 'interval', 'setTimeout', 'setInterval', 'throttle', 'debounce'])
 /** Services that model-authored dynamic packages can neither consume nor provide. */
 const TRUSTED_HOST_SERVICE_KEYS: ReadonlySet<string> = new Set([
+  'cdc',
   'elasticsearch',
   'kafka',
   'mysql',

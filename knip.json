@@ -272,6 +272,16 @@
         "tests/**/*.ts"
       ]
     },
+    "packages/multi/cdc": {
+      "entry": [
+        "tests/**/*.spec.ts",
+        "tests/live-smoke.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ]
+    },
     "packages/multi/mysql": {
       "entry": [
         "tests/**/*.spec.ts",

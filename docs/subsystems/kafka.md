@@ -24,6 +24,8 @@ The binding is an operator-defined branded id. Health forces a metadata refresh 
 
 Configured topic and consumer-group allowlists bound all transport access, and automatic topic creation is disabled. `publish()` sends a non-empty binary batch through an idempotent Producer with all-replica acknowledgement. `subscribe()` creates a caller-owned Consumer, invokes one handler at a time, and commits each offset only after handler success. Kafka transactions, event schemas, outbox state, deduplication, retries, and dead-letter policy are not part of this infrastructure API.
 
+`requestTimeoutMs` also bounds stream close, graceful Consumer close, and forced Consumer close. A stream or graceful-close failure or timeout triggers a forced-close attempt, while the classified shutdown error still propagates to the caller.
+
 ```ts type-equiv
 /** Binary message accepted by the trusted Host producer. */
 interface KafkaPublishMessage {
@@ -49,8 +51,8 @@ interface KafkaSubscribeRequest {
   groupId: KafkaConsumerGroupId
   /** Non-empty authorized topic set. */
   topics: readonly KafkaTopic[]
-  /** Initial offset behavior. */
-  mode: KafkaSubscriptionMode
+  /** Start position used only for partitions without a committed offset. */
+  fallbackMode: KafkaSubscriptionFallbackMode
   /** Sequential handler; its successful settlement commits the record offset. */
   handle(message: KafkaConsumedMessage): void | Promise<void>
 }
@@ -92,12 +94,12 @@ async publish(messages: readonly KafkaPublishMessage[]): Promise<readonly KafkaP
 
 /**
  * Attach one sequential, manual-commit consumer to the calling plugin's Cordis effect.
- * @param request - unique identity, authorized group/topics, start mode, and awaited handler.
- * @returns a subscription handle; caller disposal closes it automatically.
+ * @param request - unique identity, authorized group/topics, missing-offset fallback, and awaited handler.
+ * @returns a subscription handle whose `done` promise must be supervised by the caller.
  * @throws {@link KafkaError} when unavailable, unauthorized, duplicated, or rejected by Kafka.
  */
 async subscribe(request: KafkaSubscribeRequest): Promise<KafkaSubscription>
 ```
 
-Source: [`packages/multi/kafka/src/index.ts:375`](../../packages/multi/kafka/src/index.ts)
+Source: [`packages/multi/kafka/src/index.ts:507`](../../packages/multi/kafka/src/index.ts)
 <!-- END GENERATED cordis-surface -->

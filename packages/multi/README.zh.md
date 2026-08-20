@@ -10,6 +10,9 @@
 | [`@deepseek-ai/dsh-mysql`](mysql/README.md) | `ctx.mysql` | MySQL 连接池生命周期与 callback 作用域的连接租用 |
 | [`@deepseek-ai/dsh-redis`](redis/README.md) | `ctx.redis` | Redis client 生命周期与回调范围内的共享客户端操作 |
 | [`@deepseek-ai/dsh-kafka`](kafka/README.md) | `ctx.kafka` | Kafka broker 生命周期、metadata health、生产与订阅 |
+| [`@deepseek-ai/dsh-cdc`](cdc/README.md) | `ctx.cdc` | MySQL 行变更采集与至少一次 Kafka 发布 |
+| [`@deepseek-ai/dsh-cdc-redis`](cdc-redis/README.md) | - | 将 Kafka CDC 事件投影到 Redis |
+| [`@deepseek-ai/dsh-cdc-elasticsearch`](cdc-elasticsearch/README.md) | - | 将 Kafka CDC 事件投影到 Elasticsearch |
 
 [Elasticsearch 基础设施参考](../../docs/infrastructure/dsh-elasticsearch.md)说明当前所有权，并链接拟议的 projection、隔离与一致性设计。
 

@@ -64,7 +64,7 @@ export interface Config {
   tls: boolean
   /** Optional username/password SASL authentication. */
   sasl?: KafkaSaslConfig
-  /** Per-operation timeout, including startup and health metadata requests. */
+  /** Deadline for requests, subscription readiness, shutdown drains, and client close attempts. */
   requestTimeoutMs?: number
   /** TCP/TLS connection timeout. */
   connectionTimeoutMs?: number
@@ -164,8 +164,8 @@ export interface KafkaConsumedMessage {
   headers: readonly KafkaConsumedHeader[]
 }
 
-/** Start position used when a consumer group has no committed offset. */
-export type KafkaSubscriptionMode = 'committed' | 'earliest' | 'latest'
+/** Start position used only when a consumer-group partition has no committed offset. */
+export type KafkaSubscriptionFallbackMode = 'earliest' | 'latest' | 'fail'
 
 /** Trusted Host consumer registration. */
 export interface KafkaSubscribeRequest {
@@ -175,17 +175,18 @@ export interface KafkaSubscribeRequest {
   groupId: KafkaConsumerGroupId
   /** Non-empty authorized topic set. */
   topics: readonly KafkaTopic[]
-  /** Initial offset behavior. */
-  mode: KafkaSubscriptionMode
+  /** Start position used only for partitions without a committed offset. */
+  fallbackMode: KafkaSubscriptionFallbackMode
   /** Sequential handler; its successful settlement commits the record offset. */
   handle(message: KafkaConsumedMessage): void | Promise<void>
 }
 
-/** Caller-owned subscription whose completion reports handler or client failure. */
+/** Caller-owned subscription whose completion rejects after every unexpected stop. */
 export interface KafkaSubscription {
   readonly id: KafkaSubscriptionId
+  /** Resolves only after caller-initiated close; rejects on handler, stream, or client failure. */
   readonly done: Promise<void>
-  /** Stop fetching, await the active handler, leave the group, and release the caller effect. */
+  /** Stop fetching, bound active-handler wait, leave the group, and propagate shutdown failures. */
   close(): Promise<void>
 }
 
@@ -202,7 +203,7 @@ const SASL_SCHEMA = z.object({
     z.const('SCRAM-SHA-512'),
   ] as const).required(),
   username: z.string().min(1).required(),
-  password: z.string().min(1).required(),
+  password: z.string().min(1).role('secret').required(),
 })
 
 interface ResolvedConfig extends Config {
@@ -306,15 +307,20 @@ class ConsumerSubscription {
 
   private readonly readyState = Promise.withResolvers<void>()
   private stream?: Awaited<ReturnType<Consumer['consume']>>
-  private closeClientsPromise?: Promise<void>
+  private gracefulCloseAttempt?: Promise<void>
+  private gracefulClosePromise?: Promise<void>
+  private forceClosePromise?: Promise<void>
   private closePromise?: Promise<void>
+  private gracefulCloseSucceeded = false
   private closing = false
+  private processing = false
 
   constructor(
     readonly id: KafkaSubscriptionId,
     private readonly consumer: Consumer,
     private readonly request: KafkaSubscribeRequest,
     private readonly highWaterMark: number,
+    private readonly closeTimeoutMs: number,
     private readonly binding: string,
   ) {
     this.ready = this.readyState.promise
@@ -322,49 +328,175 @@ class ConsumerSubscription {
   }
 
   private async run(): Promise<void> {
+    let operationFailure: KafkaError | undefined
     try {
-      this.stream = await this.consumer.consume({
-        topics: [...this.request.topics],
-        mode: this.request.mode,
-        autocommit: false,
-        highWaterMark: this.highWaterMark,
-      })
-      this.readyState.resolve()
-      for await (const message of this.stream) {
+      const stream = await this.openStream()
+      for await (const message of stream) {
+        this.processing = true
         await this.request.handle(consumedMessage(message))
         await message.commit()
+        this.processing = false
       }
+      if (!this.closing) throw new KafkaError('unavailable', this.binding)
     } catch (cause) {
       const failure = classifyKafkaError(cause, this.binding)
       this.readyState.reject(failure)
-      if (this.closing) return
-      throw failure
-    } finally {
-      await this.closeClients()
+      if (!this.closing || this.processing) operationFailure = failure
     }
+
+    let closeFailure: KafkaError | undefined
+    try {
+      await this.closeClients()
+    } catch (cause) {
+      closeFailure = classifyKafkaError(cause, this.binding)
+    }
+
+    if (operationFailure !== undefined && closeFailure !== undefined) {
+      throw new KafkaError(operationFailure.code, this.binding, {
+        cause: new AggregateError(
+          [operationFailure, closeFailure],
+          'Kafka subscription and consumer close failed',
+        ),
+      })
+    }
+    if (operationFailure !== undefined) throw operationFailure
+    if (closeFailure !== undefined) throw closeFailure
   }
 
   close(): Promise<void> {
     this.closePromise ??= (async () => {
       this.closing = true
-      const stopping = await Promise.allSettled([
-        this.stream?.close(),
-        this.closeClients(),
-      ])
-      await this.done.catch(() => {})
-      const failure = stopping.find(
-        (result): result is PromiseRejectedResult => result.status === 'rejected',
-      )
-      if (failure !== undefined) throw failure.reason
+      const failures: unknown[] = []
+      try {
+        if (this.stream === undefined) await this.closeClients(true)
+        else await withTimeout(this.stream.close(), this.closeTimeoutMs, this.binding)
+      } catch (cause) {
+        failures.push(new KafkaError('shutdown', this.binding, { cause }))
+        try {
+          await this.closeClients(true)
+        } catch (forceCause) {
+          failures.push(forceCause)
+        }
+      }
+      try {
+        await withTimeout(this.done, this.closeTimeoutMs, this.binding)
+      } catch (cause) {
+        if (cause instanceof KafkaError && cause.code === 'timeout') {
+          failures.push(new KafkaError('shutdown', this.binding, { cause }))
+          try {
+            await this.closeClients(true)
+          } catch (forceCause) {
+            failures.push(forceCause)
+          }
+        } else if (!failures.includes(cause)) {
+          failures.push(cause)
+        }
+      }
+      if (failures.length === 1) throw failures[0]
+      if (failures.length > 1) {
+        throw new KafkaError('shutdown', this.binding, {
+          cause: new AggregateError(failures, 'Kafka subscription close failed'),
+        })
+      }
     })()
     return this.closePromise
   }
 
-  private closeClients(): Promise<void> {
-    this.closeClientsPromise ??= this.consumer.close().catch((cause: unknown) => {
+  private closeClients(force = false): Promise<void> {
+    if (force) return this.forceCloseClients()
+    if (this.forceClosePromise !== undefined) return this.forceClosePromise
+    const gracefulCloseAttempt = this.gracefulCloseAttempt ??= Promise.resolve()
+      .then(async () => this.consumer.close())
+      .then(() => { this.gracefulCloseSucceeded = true })
+    this.gracefulClosePromise ??= (async () => {
+      let gracefulFailure: unknown
+      try {
+        await withTimeout(gracefulCloseAttempt, this.closeTimeoutMs, this.binding)
+        return
+      } catch (cause) {
+        gracefulFailure = cause
+      }
+      try {
+        await this.forceCloseClients()
+      } catch (forceFailure) {
+        throw new KafkaError('shutdown', this.binding, {
+          cause: new AggregateError(
+            [gracefulFailure, forceFailure],
+            'Kafka consumer graceful and forced close failed',
+          ),
+        })
+      }
+      throw new KafkaError('shutdown', this.binding, { cause: gracefulFailure })
+    })()
+    return this.gracefulClosePromise
+  }
+
+  private forceCloseClients(): Promise<void> {
+    if (this.gracefulCloseSucceeded) return Promise.resolve()
+    this.forceClosePromise ??= (async () => {
+      await withTimeout(
+        new Promise<void>((resolve, reject) => {
+          this.consumer.close(true, (error) => {
+            if (error === null) resolve()
+            else reject(error)
+          })
+        }),
+        this.closeTimeoutMs,
+        this.binding,
+      )
+    })().catch((cause: unknown) => {
+      if (cause instanceof KafkaError && cause.code === 'shutdown') throw cause
       throw new KafkaError('shutdown', this.binding, { cause })
     })
-    return this.closeClientsPromise
+    return this.forceClosePromise
+  }
+
+  private openStream(): Promise<NonNullable<ConsumerSubscription['stream']>> {
+    return new Promise((resolve, reject) => {
+      this.consumer.consume({
+        topics: [...this.request.topics],
+        mode: 'committed',
+        fallbackMode: this.request.fallbackMode,
+        autocommit: false,
+        highWaterMark: this.highWaterMark,
+      }, (error, stream) => {
+        if (error !== null) {
+          reject(error)
+          return
+        }
+        if (stream === undefined) {
+          reject(new KafkaError('protocol', this.binding))
+          return
+        }
+        this.stream = stream
+        this.observeInitialOffsets(stream)
+        resolve(stream)
+      })
+    })
+  }
+
+  private observeInitialOffsets(stream: NonNullable<ConsumerSubscription['stream']>): void {
+    let settled = false
+    const cleanup = (): void => {
+      stream.off('offsets', onOffsets)
+      stream.off('error', onError)
+      stream.off('close', onClose)
+    }
+    const settle = (failure?: KafkaError): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      if (failure === undefined) this.readyState.resolve()
+      else this.readyState.reject(failure)
+    }
+    const onOffsets = (): void => { settle() }
+    const onError = (cause: Error): void => { settle(classifyKafkaError(cause, this.binding)) }
+    const onClose = (): void => {
+      settle(new KafkaError(this.closing ? 'shutdown' : 'unavailable', this.binding))
+    }
+    stream.once('offsets', onOffsets)
+    stream.once('error', onError)
+    stream.once('close', onClose)
   }
 }
 
@@ -517,8 +649,8 @@ export class KafkaService extends Service {
 
   /**
    * Attach one sequential, manual-commit consumer to the calling plugin's Cordis effect.
-   * @param request - unique identity, authorized group/topics, start mode, and awaited handler.
-   * @returns a subscription handle; caller disposal closes it automatically.
+   * @param request - unique identity, authorized group/topics, missing-offset fallback, and awaited handler.
+   * @returns a subscription handle whose `done` promise must be supervised by the caller.
    * @throws {@link KafkaError} when unavailable, unauthorized, duplicated, or rejected by Kafka.
    */
   async subscribe(request: KafkaSubscribeRequest): Promise<KafkaSubscription> {
@@ -546,6 +678,7 @@ export class KafkaService extends Service {
       consumer,
       request,
       this.consumerHighWaterMark,
+      this.requestTimeoutMs,
       this.binding,
     )
     this.subscriptions.set(request.id, subscription)
@@ -559,10 +692,20 @@ export class KafkaService extends Service {
       await subscription.close()
     }, `kafka.subscribe:${request.id}`)
     try {
-      await subscription.ready
+      await withTimeout(subscription.ready, this.requestTimeoutMs, this.binding)
     } catch (cause) {
-      await owned()
-      throw cause
+      const failure = classifyKafkaError(cause, this.binding)
+      try {
+        await owned()
+      } catch (cleanupCause) {
+        throw new KafkaError(failure.code, this.binding, {
+          cause: new AggregateError(
+            [failure, cleanupCause],
+            'Kafka subscription readiness and cleanup failed',
+          ),
+        })
+      }
+      throw failure
     }
     return {
       id: request.id,
@@ -615,7 +758,12 @@ export class KafkaService extends Service {
         ...(message.value === undefined ? {} : { value: Buffer.from(message.value) }),
         ...(message.headers === undefined
           ? {}
-          : { headers: Object.fromEntries(Object.entries(message.headers).map(([key, value]) => [key, Buffer.from(value)])) }),
+          : {
+            headers: new Map(Object.entries(message.headers).map(([key, value]) => [
+              Buffer.from(key),
+              Buffer.from(value),
+            ])),
+          }),
         ...(message.timestamp === undefined ? {} : { timestamp: message.timestamp }),
       }))
       const result = await producer.send({
@@ -638,8 +786,7 @@ export class KafkaService extends Service {
 
   private async shutdown(): Promise<void> {
     this.available = false
-    const producerShutdown = Promise.allSettled([...this.publishOperations])
-      .then(async () => { await this.closeProducer() })
+    const producerShutdown = this.drainPublishesAndCloseProducer()
     const results = await Promise.allSettled([
       this.closeAdmin(),
       producerShutdown,
@@ -659,7 +806,13 @@ export class KafkaService extends Service {
 
   private closeAdmin(): Promise<void> {
     this.adminClosePromise ??= Promise.resolve()
-      .then(async () => { await this.admin?.close() })
+      .then(async () => {
+        await withTimeout(
+          Promise.resolve().then(async () => { await this.admin?.close() }),
+          this.requestTimeoutMs,
+          this.binding,
+        )
+      })
       .catch((cause: unknown) => {
         throw new KafkaError('shutdown', this.binding, { cause })
       })
@@ -668,11 +821,50 @@ export class KafkaService extends Service {
 
   private closeProducer(): Promise<void> {
     this.producerClosePromise ??= Promise.resolve()
-      .then(async () => { await this.producer?.close() })
+      .then(async () => {
+        await withTimeout(
+          Promise.resolve().then(async () => { await this.producer?.close() }),
+          this.requestTimeoutMs,
+          this.binding,
+        )
+      })
       .catch((cause: unknown) => {
         throw new KafkaError('shutdown', this.binding, { cause })
       })
     return this.producerClosePromise
+  }
+
+  private async drainPublishesAndCloseProducer(): Promise<void> {
+    let drainFailure: unknown
+    try {
+      await withTimeout(
+        Promise.allSettled([...this.publishOperations]),
+        this.requestTimeoutMs,
+        this.binding,
+      )
+    } catch (cause) {
+      drainFailure = cause
+    }
+
+    let closeFailure: KafkaError | undefined
+    try {
+      await this.closeProducer()
+    } catch (cause) {
+      closeFailure = classifyKafkaError(cause, this.binding)
+    }
+
+    if (drainFailure !== undefined && closeFailure !== undefined) {
+      throw new KafkaError('shutdown', this.binding, {
+        cause: new AggregateError(
+          [drainFailure, closeFailure],
+          'Kafka publish drain and producer close failed',
+        ),
+      })
+    }
+    if (drainFailure !== undefined) {
+      throw new KafkaError('shutdown', this.binding, { cause: drainFailure })
+    }
+    if (closeFailure !== undefined) throw closeFailure
   }
 }
 

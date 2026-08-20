@@ -238,6 +238,9 @@ flowchart TD
     pkg_mcp_client["mcp-client"]
   end
   subgraph group_multi["packages/multi"]
+    pkg_cdc["cdc"]
+    pkg_cdc_elasticsearch["cdc-elasticsearch"]
+    pkg_cdc_redis["cdc-redis"]
     pkg_elasticsearch["elasticsearch"]
     pkg_kafka["kafka"]
     pkg_mysql["mysql"]
@@ -421,6 +424,9 @@ flowchart TD
   pkg_credentials_local --> pkg_home_paths
   pkg_credentials_local --> pkg_invariants
   pkg_credentials_local --> pkg_launch_environment
+  pkg_cdc --> pkg_invariants
+  pkg_cdc --> pkg_kafka
+  pkg_cdc --> pkg_timeout
   pkg_settings_file --> pkg_atomic_write
   pkg_settings_file --> pkg_home_paths
   pkg_settings_file --> pkg_invariants
@@ -455,6 +461,16 @@ flowchart TD
   pkg_lsp --> pkg_brand
   pkg_lsp --> pkg_invariants
   pkg_lsp --> pkg_llm
+  pkg_cdc_elasticsearch --> pkg_cdc
+  pkg_cdc_elasticsearch --> pkg_elasticsearch
+  pkg_cdc_elasticsearch --> pkg_invariants
+  pkg_cdc_elasticsearch --> pkg_kafka
+  pkg_cdc_elasticsearch --> pkg_timeout
+  pkg_cdc_redis --> pkg_cdc
+  pkg_cdc_redis --> pkg_invariants
+  pkg_cdc_redis --> pkg_kafka
+  pkg_cdc_redis --> pkg_redis
+  pkg_cdc_redis --> pkg_timeout
   pkg_agent --> pkg_invariants
   pkg_agent --> pkg_llm
   pkg_agent --> pkg_scope
@@ -1491,6 +1507,7 @@ flowchart TD
 | [`api-gateway`](../packages/api/gateway) | `api` | [`client-connection`](../packages/client/connection), [`invariants`](../packages/runtime-diagnostics/invariants), [`typert-registry`](../packages/typert/registry) |
 | [`attachment-local`](../packages/attachment/attachment-local) | `attachment` | [`attachment`](../packages/attachment/attachment), [`home-paths`](../packages/util/home-paths), [`invariants`](../packages/runtime-diagnostics/invariants) |
 | [`credentials-local`](../packages/credentials/credentials-local) | `credentials` | [`atomic-write`](../packages/util/atomic-write), [`credentials`](../packages/credentials/credentials), [`home-paths`](../packages/util/home-paths), [`invariants`](../packages/runtime-diagnostics/invariants), [`launch-environment`](../packages/util/launch-environment) |
+| [`cdc`](../packages/multi/cdc) | `multi` | [`invariants`](../packages/runtime-diagnostics/invariants), [`kafka`](../packages/multi/kafka), [`timeout`](../packages/util/timeout) |
 | [`settings-file`](../packages/settings/settings-file) | `settings` | [`atomic-write`](../packages/util/atomic-write), [`home-paths`](../packages/util/home-paths), [`invariants`](../packages/runtime-diagnostics/invariants), [`settings`](../packages/settings/settings) |
 | [`llm-deepseek`](../packages/llm/llm-deepseek) | `llm` | [`anonymous-user-id`](../packages/identity/anonymous-user-id), [`credentials`](../packages/credentials/credentials), [`invariants`](../packages/runtime-diagnostics/invariants), [`launch-environment`](../packages/util/launch-environment), [`llm`](../packages/llm/llm), [`settings`](../packages/settings/settings), [`timeout`](../packages/util/timeout) |
 | [`llm-pi-ai`](../packages/llm/llm-pi-ai) | `llm` | [`attachment`](../packages/attachment/attachment), [`credentials`](../packages/credentials/credentials), [`invariants`](../packages/runtime-diagnostics/invariants), [`launch-environment`](../packages/util/launch-environment), [`llm`](../packages/llm/llm), [`settings`](../packages/settings/settings), [`timeout`](../packages/util/timeout) |
@@ -1499,6 +1516,8 @@ flowchart TD
 | [`skill`](../packages/skill/skill) | `skill` | [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope) |
 | [`web`](../packages/web/web) | `web` | [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm) |
 | [`lsp`](../packages/lsp/lsp) | `lsp` | [`brand`](../packages/util/brand), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm) |
+| [`cdc-elasticsearch`](../packages/multi/cdc-elasticsearch) | `multi` | [`cdc`](../packages/multi/cdc), [`elasticsearch`](../packages/multi/elasticsearch), [`invariants`](../packages/runtime-diagnostics/invariants), [`kafka`](../packages/multi/kafka), [`timeout`](../packages/util/timeout) |
+| [`cdc-redis`](../packages/multi/cdc-redis) | `multi` | [`cdc`](../packages/multi/cdc), [`invariants`](../packages/runtime-diagnostics/invariants), [`kafka`](../packages/multi/kafka), [`redis`](../packages/multi/redis), [`timeout`](../packages/util/timeout) |
 | [`agent`](../packages/core/agent) | `core` | [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`system-prompt`](../packages/core/system-prompt), [`typert-protocol`](../packages/typert/protocol) |
 | [`skill-badge`](../packages/skill/skill-badge) | `skill` | [`invariants`](../packages/runtime-diagnostics/invariants), [`skill`](../packages/skill/skill) |
 | [`web-fetch-http`](../packages/web/web-fetch-http) | `web` | [`invariants`](../packages/runtime-diagnostics/invariants), [`timeout`](../packages/util/timeout), [`web`](../packages/web/web) |

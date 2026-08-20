@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/kafka.md
-kafka.md: f422cb9677b606476be0f1df7e8512858ee0d645
-kafka.zh.md: eca266736d223c38bcce5ad5feab9dbf6cb1d982
+kafka.md: 7beb117b2f1fc0be7f5b2aac7b3b79534cf81b14
+kafka.zh.md: a5b5f61edb4897706524ec960e087804772596e6

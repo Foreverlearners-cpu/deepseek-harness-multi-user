@@ -5516,6 +5516,81 @@ importers:
         specifier: ^2026.7.4
         version: 2026.7.10(zod@4.4.3)
 
+  packages/multi/cdc:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      '@vlasky/zongji':
+        specifier: 0.9.0
+        version: 0.9.0(@types/node@22.20.0)
+      mysql2:
+        specifier: 3.23.3
+        version: 3.23.3(@types/node@22.20.0)
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-kafka':
+        specifier: workspace:^
+        version: link:../kafka
+      '@deepseek-ai/dsh-timeout':
+        specifier: workspace:^
+        version: link:../../util/timeout
+
+  packages/multi/cdc-elasticsearch:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-cdc':
+        specifier: workspace:^
+        version: link:../cdc
+      '@deepseek-ai/dsh-elasticsearch':
+        specifier: workspace:^
+        version: link:../elasticsearch
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-kafka':
+        specifier: workspace:^
+        version: link:../kafka
+      '@deepseek-ai/dsh-timeout':
+        specifier: workspace:^
+        version: link:../../util/timeout
+
+  packages/multi/cdc-redis:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-cdc':
+        specifier: workspace:^
+        version: link:../cdc
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-kafka':
+        specifier: workspace:^
+        version: link:../kafka
+      '@deepseek-ai/dsh-redis':
+        specifier: workspace:^
+        version: link:../redis
+      '@deepseek-ai/dsh-timeout':
+        specifier: workspace:^
+        version: link:../../util/timeout
+
   packages/multi/elasticsearch:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -11620,6 +11695,10 @@ packages:
   '@vitest/utils@4.1.8':
     resolution: {integrity: sha512-uOJamYALNhfJ6iolExyQM40yIQwDqYnkKtQ5VCiSe17E33H0aQ/u+1GlRuz4LZBk6Mm3sg90G9hEbmEt37C1Zg==}
 
+  '@vlasky/zongji@0.9.0':
+    resolution: {integrity: sha512-MF3HiPZLolUdU/jIcRw2qgwYvFQB14xNPCyU/cPMAvVyo4ogxqwpOmdIwdOw8YM0deC6DT/hAKcTlXQs5+sHvQ==}
+    engines: {node: '>= 18.0'}
+
   '@vscode/ripgrep-darwin-arm64@1.18.0':
     resolution: {integrity: sha512-r3ktHSvbFycQNF6sl7sNDPocpsI7J+mEzh1IaZFkY0spm3k2Z9t8hPAeOK7+p0l6p6/swkQC14XWX01low+94Q==}
     cpu: [arm64]
@@ -12713,6 +12792,10 @@ packages:
 
   iconv-lite@0.6.3:
     resolution: {integrity: sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw==}
+    engines: {node: '>=0.10.0'}
+
+  iconv-lite@0.7.2:
+    resolution: {integrity: sha512-im9DjEDQ55s9fL4EYzOAv0yMqmMBSZp6G0VvFyTMPKWxiSBHUj9NW/qqLmXUwXrrM7AvqSlTCfvqRb0cM8yYqw==}
     engines: {node: '>=0.10.0'}
 
   iconv-lite@0.7.3:
@@ -16930,6 +17013,13 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
+  '@vlasky/zongji@0.9.0(@types/node@22.20.0)':
+    dependencies:
+      iconv-lite: 0.7.2
+      mysql2: 3.23.3(@types/node@22.20.0)
+    transitivePeerDependencies:
+      - '@types/node'
+
   '@vscode/ripgrep-darwin-arm64@1.18.0':
     optional: true
 
@@ -18151,6 +18241,10 @@ snapshots:
   human-signals@8.0.1: {}
 
   iconv-lite@0.6.3:
+    dependencies:
+      safer-buffer: 2.1.2
+
+  iconv-lite@0.7.2:
     dependencies:
       safer-buffer: 2.1.2
 

@@ -31,21 +31,21 @@
 
 ## 消费
 
-`subscribe({ id, groupId, topics, mode, handle })` 为获准的 group 和非空 topic 集创建一个 Consumer。`mode` 可为 `committed`、`earliest` 或 `latest`。记录按顺序交给 awaited handler，且只在 handler 成功后提交。Handler 失败会让记录保持未提交、拒绝 `subscription.done` 并关闭 Consumer。
+`subscribe({ id, groupId, topics, fallbackMode, handle })` 为获准的 group 和非空 topic 集创建一个 Consumer。已有 committed offset 始终优先；partition 没有 committed offset 时，`fallbackMode` 选择 `earliest`、`latest` 或 `fail`。调用只在 stream 报告首次 offset 初始化后返回，因此返回后发布的记录不会被尚未完成的初始 `latest` 查询跳过。记录按顺序交给 awaited handler，且只在 handler 成功后提交。
 
-订阅归属于准确调用 `subscribe()` 的 Cordis effect。处置该插件或调用 `subscription.close()` 会停止拉取、等待当前 handler、退出 group 并关闭 Consumer。订阅 id 在服务内必须唯一。持久化副作用顺序、去重、schema 校验、重试策略和 poison-event 处理仍由 handler 负责。
+订阅归属于准确调用 `subscribe()` 的 Cordis effect。处置该插件或调用 `subscription.close()` 会停止拉取、等待当前 handler、退出 group、关闭 Consumer，并传播关闭失败。`subscription.done` 仅在调用方主动关闭后 resolve；handler 失败、client 失败或 stream 意外结束都会使其 reject，调用方必须监督该 Promise，并自行决定重启或停止插件。订阅 id 在服务内必须唯一。持久化副作用顺序、去重、schema 校验、重试策略和 poison-event 处理仍由 handler 负责。
 
 ## 访问边界与生命周期
 
 `ctx.kafka` 只对可信 Host 插件可用。动态 Cordis sandbox 会拒绝对 `kafka` 的属性访问、`get`、`provide` 和成员探测；模型运行时 API catalog 也会省略它。该应用边界不能替代 broker ACL；生产凭据仍必须独立限制已配置的 topic 和 consumer group。
 
-处置会停止接纳新的健康检查、发布和订阅，等待已接纳的健康检查、发布操作和当前 handler，然后只关闭一次 Admin、Producer 与 Consumer。Client 没有独立 forced-close deadline，因此部署仍需提供外层进程关闭时限。
+处置会停止接纳新的健康检查、发布和订阅。发布排空、当前 handler 等待，以及 Admin、Producer 与 Consumer 的关闭尝试均受 `requestTimeoutMs` 限制；已经超时的依赖操作仍可能在内部继续运行，因此部署仍需提供外层进程关闭时限。
 
 ## 错误与验证
 
 `KafkaError.code` 为 `authentication`、`configuration`、`protocol`、`shutdown`、`timeout`、`unavailable` 或 `unknown`。错误消息只含 binding 与稳定类别。依赖固定为 `@platformatic/kafka@1.34.0`，兼容本仓库 Node 范围及 Kafka `3.5` 至 `4.2`。
 
-聚焦单元测试覆盖配置、启动清理、健康检查、错误分类、二进制发布、授权、提交顺序、handler 失败、effect 归属和关闭排空。环境门控的 e2e 测试目前验证真实 broker 的启动与健康检查：
+聚焦单元测试覆盖配置、启动清理、健康检查、错误分类、二进制发布、授权、offset readiness 与 fallback 选择、提交顺序、handler 和 stream 失败、effect 归属及关闭排空。环境门控的 e2e 测试目前验证真实 broker 的启动与健康检查：
 
 ```sh
 DSH_KAFKA_BROKERS=127.0.0.1:9092 pnpm exec vitest run --config vitest.e2e.config.ts packages/multi/kafka/tests/kafka.e2e.ts

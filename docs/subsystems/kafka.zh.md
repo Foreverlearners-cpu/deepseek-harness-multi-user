@@ -24,6 +24,8 @@ Binding 是运维方定义的 branded id。Health 强制刷新 metadata，但不
 
 配置的 topic 与 consumer-group allowlist 限制全部传输访问，且系统禁用自动创建 topic。`publish()` 通过幂等 Producer 和全副本确认发送非空二进制批次。`subscribe()` 创建调用方拥有的 Consumer，每次只调用一个 handler，并且只在 handler 成功后提交 offset。Kafka transaction、事件 schema、outbox 状态、去重、重试和 dead-letter 策略不属于该基础设施 API。
 
+`requestTimeoutMs` 也会限制 stream 关闭、Consumer 优雅关闭和强制关闭的等待时间。Stream 或优雅关闭失败或超时后，系统会尝试强制关闭 Consumer，同时仍把分类后的 shutdown 错误传播给调用方。
+
 ```ts type-equiv
 /** Binary message accepted by the trusted Host producer. */
 interface KafkaPublishMessage {
@@ -49,8 +51,8 @@ interface KafkaSubscribeRequest {
   groupId: KafkaConsumerGroupId
   /** Non-empty authorized topic set. */
   topics: readonly KafkaTopic[]
-  /** Initial offset behavior. */
-  mode: KafkaSubscriptionMode
+  /** Start position used only for partitions without a committed offset. */
+  fallbackMode: KafkaSubscriptionFallbackMode
   /** Sequential handler; its successful settlement commits the record offset. */
   handle(message: KafkaConsumedMessage): void | Promise<void>
 }
@@ -92,12 +94,12 @@ async publish(messages: readonly KafkaPublishMessage[]): Promise<readonly KafkaP
 
 /**
  * Attach one sequential, manual-commit consumer to the calling plugin's Cordis effect.
- * @param request - unique identity, authorized group/topics, start mode, and awaited handler.
- * @returns a subscription handle; caller disposal closes it automatically.
+ * @param request - unique identity, authorized group/topics, missing-offset fallback, and awaited handler.
+ * @returns a subscription handle whose `done` promise must be supervised by the caller.
  * @throws {@link KafkaError} when unavailable, unauthorized, duplicated, or rejected by Kafka.
  */
 async subscribe(request: KafkaSubscribeRequest): Promise<KafkaSubscription>
 ```
 
-Source: [`packages/multi/kafka/src/index.ts:375`](../../packages/multi/kafka/src/index.ts)
+Source: [`packages/multi/kafka/src/index.ts:507`](../../packages/multi/kafka/src/index.ts)
 <!-- END GENERATED cordis-surface -->

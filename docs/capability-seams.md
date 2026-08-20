@@ -35,6 +35,10 @@ flowchart LR
   pkg_scope["scope"]
   pkg_kafka["kafka"]
   svc_kafka["ctx.kafka<br/>Host Kafka connectivity"]
+  pkg_cdc["cdc"]
+  pkg_cdc_redis["cdc-redis"]
+  pkg_cdc_elasticsearch["cdc-elasticsearch"]
+  svc_cdc["ctx.cdc<br/>MySQL row-change capture"]
   pkg_typert_registry["typert-registry"]
   svc_typert["ctx.typert<br/>Runtime type registry"]
   pkg_typert_loader["typert-loader"]
@@ -213,6 +217,7 @@ flowchart LR
   pkg_attachment_local --> svc_attachments
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
+  pkg_cdc --> svc_cdc
   pkg_code_runtime --> svc_codeRuntime
   pkg_code_runtime_worker --> svc_codeRuntime
   pkg_commands --> svc_commands
@@ -328,6 +333,7 @@ flowchart LR
   svc_dynamicCordisRunner --> pkg_tool_cordis
   svc_e2b --> pkg_fs_e2b
   svc_e2b --> pkg_subprocess_e2b
+  svc_elasticsearch --> pkg_cdc_elasticsearch
   svc_fs --> pkg_tool_fs
   svc_invariants --> pkg_agent
   svc_invariants --> pkg_agent_loop
@@ -337,9 +343,13 @@ flowchart LR
   svc_jobs --> pkg_tool_jobs
   svc_jobs --> pkg_tool_subagent
   svc_jobs --> pkg_tool_terminal
+  svc_kafka --> pkg_cdc
+  svc_kafka --> pkg_cdc_elasticsearch
+  svc_kafka --> pkg_cdc_redis
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
+  svc_redis --> pkg_cdc_redis
   svc_sandbox --> pkg_bash_sandbox
   svc_sandbox --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_bash_sandbox
@@ -429,7 +439,8 @@ flowchart LR
 | `ctx.toolResultPruner` | `core` | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Rewrites oversized current tool results through replayable single-node surface replacements before summary compaction. |
 | `ctx.sessions` | `core` | [`session`](../packages/core/session) | - | [`agent-loop`](../packages/core/agent-loop), [`agent`](../packages/core/agent), [`session-persistence`](../packages/session/session-persistence), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), `subagent-inprocess`, [`invariants`](../packages/runtime-diagnostics/invariants), [`message-feedback`](../packages/feedback/message-feedback) | - | Owns append-only Session instances and emits the durable session event feed. |
 | `ctx.invariants` | `core` | [`invariants`](../packages/runtime-diagnostics/invariants) | - | [`session`](../packages/core/session), [`agent`](../packages/core/agent), [`scope`](../packages/core/scope), [`agent-loop`](../packages/core/agent-loop) | - | Companion subpaths register owner-local checks; the service owns selection, uniqueness, child fibers, and package-attributed failures. |
-| `ctx.kafka` | `core` | [`kafka`](../packages/multi/kafka) | - | - | - | Owns one named Admin client, startup metadata verification, bounded health metadata, classified failures, and scoped shutdown; producer and consumer operations are deferred. |
+| `ctx.kafka` | `core` | [`kafka`](../packages/multi/kafka) | - | [`cdc`](../packages/multi/cdc), [`cdc-redis`](../packages/multi/cdc-redis), [`cdc-elasticsearch`](../packages/multi/cdc-elasticsearch) | - | Owns one named Admin client, startup metadata verification, bounded health metadata, classified failures, and scoped shutdown; producer and consumer operations are deferred. |
+| `ctx.cdc` | `core` | [`cdc`](../packages/multi/cdc) | - | - | - | Captures configured MySQL row changes and publishes versioned events to Kafka; downstream projections consume the Kafka stream independently. |
 | `ctx.typert` | `core` | [`typert-registry`](../packages/typert/registry) | - | [`typert-loader`](../packages/typert/loader), [`api-gateway`](../packages/api/gateway) | - | Plugins register live zod contributions directly or through dsh-typert-loader; the API gateway consumes invocation descriptors and providers, while other runtime consumers query schemas and reflection metadata at their own edges. |
 | `ctx.typertGateway` | `core` | [`api-gateway`](../packages/api/gateway) | - | - | - | Associates generated Remote descriptors with live Cordis services, resolves registered identities, and exposes unary calls through the shared Connection RPC carrier. |
 | `ctx.sessionPersistence` | `seam` | [`session-persistence`](../packages/session/session-persistence) | [`session-persistence-jsonl`](../packages/session/session-persistence-jsonl), [`session-persistence-sqlite`](../packages/session/session-persistence-sqlite) | [`agent-loop`](../packages/core/agent-loop), [`tool-bash`](../packages/shell/tool-bash), [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`hooks-codex`](../packages/hooks/hooks-codex), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), [`message-feedback`](../packages/feedback/message-feedback) | - | Backends persist the same SessionEvent vocabulary; apps choose a backend at composition time. |
@@ -439,8 +450,8 @@ flowchart LR
 | `ctx.sessionTelemetry` | `seam` | [`session-telemetry`](../packages/session/session-telemetry) | [`session-telemetry-otel`](../packages/session/session-telemetry-otel) | - | - | The seam captures, redacts, and hands session records to one backend; nothing else consumes the service — its output leaves the process. |
 | `ctx.storage` | `seam` | [`storage`](../packages/storage/storage) | [`storage-json`](../packages/storage/storage-json), [`storage-sqlite`](../packages/storage/storage-sqlite) | [`storage-domain`](../packages/storage/storage-domain) | - | Backends register side by side under names; data forms (domain first) mount on the hub and translate typed operations into opaque KV-unit primitives. |
 | `ctx.storageDomain` | `core` | [`storage-domain`](../packages/storage/storage-domain) | - | [`workspace`](../packages/workspace/workspace), [`message-feedback`](../packages/feedback/message-feedback) | - | Waits for every configured backend, then publishes the domain form as one lifecycle-bound service for typed durable state. |
-| `ctx.elasticsearch` | `core` | [`elasticsearch`](../packages/multi/elasticsearch) | - | - | - | Owns one official Host client, validates target, authentication, and TLS policy, verifies startup with one bounded ping, and drains admitted operations; domain plugins own indexes, documents, tenant scoping, and rebuild policy. |
-| `ctx.redis` | `core` | [`redis`](../packages/multi/redis) | - | - | - | Owns one Host non-blocking client, disables offline queuing, and drains admitted callbacks; domain plugins own namespaces, TTLs, atomic commands, tenant scoping, and outage policy. |
+| `ctx.elasticsearch` | `core` | [`elasticsearch`](../packages/multi/elasticsearch) | - | [`cdc-elasticsearch`](../packages/multi/cdc-elasticsearch) | - | Owns one official Host client, validates target, authentication, and TLS policy, verifies startup with one bounded ping, and drains admitted operations; domain plugins own indexes, documents, tenant scoping, and rebuild policy. |
+| `ctx.redis` | `core` | [`redis`](../packages/multi/redis) | - | [`cdc-redis`](../packages/multi/cdc-redis) | - | Owns one Host non-blocking client, disables offline queuing, and drains admitted callbacks; domain plugins own namespaces, TTLs, atomic commands, tenant scoping, and outage policy. |
 | `ctx.messageFeedback` | `core` | [`message-feedback`](../packages/feedback/message-feedback) | - | - | - | Owns local per-assistant-message feedback, lifecycle and target validation, per-item compare-and-set, and the Host unary Remote contract without entering Session history or telemetry. |
 | `ctx.workspaceRegistry` | `core` | [`workspace`](../packages/workspace/workspace) | - | `apiproxy` | - | Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections. |
 | `ctx.sessionQuery` | `seam` | [`session-query`](../packages/session-query/session-query) | [`session-query-sqlite`](../packages/session-query/session-query-sqlite) | [`session-reference`](../packages/context/session-reference), [`tool-session-query`](../packages/session-query/tool-session-query) | - | The interface supplies exact reads, filters, and traces; its concrete backend adds full-text reconciliation, ranking, snippets, and cursor generations, while the model consumer owns workspace authority and cursor-free rendering. |

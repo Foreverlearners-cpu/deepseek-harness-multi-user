@@ -333,6 +333,54 @@ describe('sandbox context façade — inject gate on services', () => {
     expect(harness.ctx.get('kafka')).toBeUndefined()
   })
 
+  it.each([
+    [
+      'declared property access',
+      `
+        return {
+          name: 'cdc-property-reader',
+          inject: ['cdc'],
+          apply(ctx) {
+            console.log(ctx.cdc.config.password)
+            ctx.cdc.close()
+          },
+        }
+      `,
+    ],
+    [
+      'ctx.get lookup',
+      `
+        return {
+          name: 'cdc-optional-reader',
+          apply(ctx) {
+            const cdc = ctx.get('cdc')
+            console.log(cdc.config.password)
+            cdc.close()
+          },
+        }
+      `,
+    ],
+  ])('denies CDC %s before configuration or lifecycle access', async (_path, source) => {
+    const harness = await setup()
+    let closeCalls = 0
+    await harness.ctx.plugin({
+      name: 'cdc-test-provider',
+      apply(ctx) {
+        ctx.provide('cdc', {
+          config: { password: 'test-only-cdc-secret' },
+          close() { closeCalls++ },
+        })
+      },
+    })
+
+    const failure = await mount(harness, source)
+      .catch((error: unknown) => error instanceof Error ? error.message : String(error))
+
+    expect(failure).toContain('service "cdc" is restricted to trusted Host plugins')
+    expect(failure).not.toContain('test-only-cdc-secret')
+    expect(closeCalls).toBe(0)
+  })
+
   it('a cross-package consumer must declare the provider — the undeclared path is refused, not left as a zombie tool', async () => {
     // Without declared inject, Cordis cannot park the consumer when its provider stops. The
     // façade refuses access up front instead of leaving a zombie tool.
