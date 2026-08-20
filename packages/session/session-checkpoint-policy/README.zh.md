@@ -2,11 +2,11 @@
 
 [English](README.md) | 中文
 
-已持久化的 agent（智能体）的语义持久性策略。它会在模型适配器收到请求前、顶层工具正文可产生外部副作用前，以及每个 `agent/pre-step` 边界为事件溯源会话创建检查点，使前一响应与有序工具结果在下一个请求前已持久化。
+已持久化的 agent（智能体）的检查点策略插件。它会在模型适配器收到请求前、顶层工具正文可产生外部副作用前，以及每个 `agent/pre-step` 边界创建强制检查点；普通后台检查点第一阶段默认按时间间隔触发，并支持通过策略注册表扩展。
 
 ## 插件（命名空间：`session-checkpoint-policy`）
 
-该零配置函数插件消费 `ctx.sessions`、`ctx.llm`、`ctx.tools` 以及 `ctx.sessionPersistence` 的存在性。将其与一个持久化后端一起加载：
+该函数插件消费 `ctx.sessions`、`ctx.llm`、`ctx.tools` 以及 `ctx.sessionPersistence` 的存在性。默认配置为每个会话变脏后等待 3 秒再异步 flush，也可以显式配置：
 
 ```yaml
 - id: session-persistence
@@ -14,13 +14,35 @@
 
 - id: session-checkpoints
   name: '@deepseek-ai/dsh-session-checkpoint-policy'
+  config:
+    strategy: time
+    intervalMs: 3000
+    forceAtTurnEnd: true
+    forceAtShutdown: true
 ```
 
-持久化与检查点调度刻意拆分为独立 Cordis 插件。持久化后端会为追加的 `session/event` 启动有界后台批次，并把每个已请求的 `session/flush` 变成即时完全停稳屏障；该策略选择请求、工具分派和下一步骤屏障。不带此策略加载后端是有效的，但崩溃可能丢失仍位于已配置批处理窗口内的事件，或尚未完成的写入。第一方持久化应用和运行时显式挂载两个插件；专用部署可以刻意省略或替换策略。
+持久化与检查点调度刻意拆分为独立 Cordis 插件。持久化后端会为追加的 `session/event` 启动有界后台批次，并把每个已请求的 `session/flush` 变成即时完全停稳屏障；该策略选择普通时间检查点以及请求、工具分派和下一步骤屏障。不带此策略加载后端是有效的，但崩溃可能丢失仍位于已配置批处理窗口内的事件，或尚未完成的写入。第一方持久化应用和运行时显式挂载两个插件；专用部署可以刻意省略或替换策略。
+
+时间调度只把 `user/message`、`assistant/message`、`tool/result` 和标题等可持久化事件视为 dirty；`assistant/chunk` 不参与计数，也不会因为 token 流而频繁触发 flush。使用 message-only MySQL 投影时，chunk 也不会写入消息表；使用 JSONL 等事件日志后端时，是否保存 chunk 仍由后端自身契约决定。
 
 策略延迟包装 `llm/stream`，因此下游流只会在活动会话中缓冲的请求事件已持久化后构造。它在预执行策略和防护机制之后包装 `tools/execute`；只有在已记录调用已持久化后，顶层工具正文才会运行。如果取消在 flush 等待期间到达，包装层会返回规范的 `ABORTED_BEFORE_DISPATCH` 结果，不进入工具正文。嵌套工具分派重用外层模型可见调用的检查点。`agent/pre-step` 在派生请求前持久化前一响应/结果批次。
 
 在模型和工具边界，检查点被拒绝时会按失败即阻止原则处理：适配器和顶层工具正文都不运行。步骤边界处的检查点被拒绝会在另一个请求开始前使轮次失败。并发工具检查点共享会话存储的串行持久化排空流程，不会产生重复的序列号。
+
+### 策略扩展
+
+策略实现依赖 `CheckpointPolicy` 接口。部署可以在加载本插件前注册新的策略 factory，再通过 `strategy` 选择它：
+
+```ts
+import { registerCheckpointPolicy } from '@deepseek-ai/dsh-session-checkpoint-policy'
+import type { CheckpointInput, ResolvedConfig } from '@deepseek-ai/dsh-session-checkpoint-policy'
+
+registerCheckpointPolicy('event-count', (_config: ResolvedConfig) => ({
+  shouldCheckpoint: (input: CheckpointInput) => input.durableEventCount >= 10,
+}))
+```
+
+后续可以增加 `event-count`、`hybrid` 或 `manual`，调度器、Session 和持久化后端无需修改。
 
 ## 模型体验
 
@@ -41,5 +63,5 @@
 ## 已知限制与暂缓事项
 
 - 该策略以持久方式记录执行意图，而非为通用副作用提供恰好一次保证。当提供方支持时，有副作用的工具应将 `exec.callId` 作为幂等键转发。
-- 流式 `assistant/chunk` 事件没有逐分片检查点。有界后台批次通常会在下一个语义检查点之前将其持久化，但硬崩溃可能丢失当前内存批次或尚未完成的写入。
+- 流式 `assistant/chunk` 事件不参与本插件的时间检查点，也没有逐分片检查点；message-only 投影不会保存它们。事件日志后端是否保存 chunk 由后端自身契约决定，硬崩溃可能丢失当前内存批次或尚未完成的写入。
 - 已持久化的调用没有结果时，无法证明其外部副作用是否完成。因此，恢复会记录未知结果，而不是自动重试。

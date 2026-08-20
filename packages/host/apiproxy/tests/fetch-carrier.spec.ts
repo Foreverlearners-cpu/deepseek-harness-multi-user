@@ -293,6 +293,12 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async sessionLog() {
         return new Response('stub', { status: 404 })
       },
+      async conversationFile() {
+        return new Response('stub', { status: 404 })
+      },
+      async conversationFileUpload() {
+        return new Response('stub', { status: 501 })
+      },
     },
   }
 }
@@ -643,6 +649,27 @@ describe('handler carrier-layer statuses', () => {
     const body = JSON.stringify({ type: 'client-request', rpcId: 'r-12', method: 'session.list', payload: {} })
     const response = await handler.fetch('http://x/api/session.list', { method: 'POST', headers: { 'content-type': 'application/json' }, body })
     expect(response.status).toBe(200)
+  })
+
+  it('routes conversation file upload/download outside the RPC envelope', async () => {
+    const api = fakeApi()
+    let uploaded: { sessionId: string; originalName: string; data: Uint8Array } | undefined
+    api.downloads.conversationFileUpload = async (request) => {
+      uploaded = { sessionId: String(request.sessionId), originalName: request.originalName, data: request.data }
+      return Response.json({ fileId: 'file-1' }, { status: 201 })
+    }
+    api.downloads.conversationFile = async request =>
+      new Response('downloaded', { headers: { 'content-type': 'text/plain', 'x-file-id': request.fileId } })
+    const handler = toFetchHandler(api)
+    const upload = await handler.fetch(new Request('http://x/api/conversation.file.upload', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId: 's1', originalName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }),
+    }))
+    expect(upload.status).toBe(201)
+    expect(uploaded).toMatchObject({ sessionId: 's1', originalName: 'a.txt', data: Uint8Array.of(104, 105) })
+    const download = await handler.fetch('http://x/api/conversation.file?sessionId=s1&fileId=file-1')
+    expect(download.status).toBe(200)
+    expect(await download.text()).toBe('downloaded')
   })
 })
 

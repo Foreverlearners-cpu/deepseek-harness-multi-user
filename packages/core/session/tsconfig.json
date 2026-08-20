@@ -24,6 +24,9 @@
       "path": "../../core/scope"
     },
     {
+      "path": "../../identity/user"
+    },
+    {
       "path": "../../runtime-diagnostics/invariants"
     },
     {

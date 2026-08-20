@@ -533,6 +533,28 @@ export interface ToolResultPruneConfig {
 
 来源：[`packages/compaction/compaction-tool-result-pruner/src/types.ts:4`](../packages/compaction/compaction-tool-result-pruner/src/types.ts)
 
+<a id="deepseek-aidsh-conversation-persistence-mysql"></a>
+
+## `@deepseek-ai/dsh-conversation-persistence-mysql`
+
+需要：`mysql` · `users` · `fileStorage`
+
+```ts config-catalog
+/** Cordis configuration for the user-scoped MySQL projection. */
+export interface Config {
+  /** Trusted authenticated user whose conversations this plugin instance serves. */
+  userId: string
+  /** Maximum accepted byte size for one conversation file. */
+  maxFileBytes?: number
+  /** Durable root for final-message retry records awaiting MySQL commit. */
+  spoolRoot?: string
+  /** Delay between retry attempts for pending durable spool records. */
+  spoolRetryMs?: number
+}
+```
+
+来源：[`packages/session/conversation-persistence-mysql/src/index.ts:174`](../packages/session/conversation-persistence-mysql/src/index.ts)
+
 <a id="deepseek-aidsh-cordis-host-runner"></a>
 
 ## `@deepseek-ai/dsh-cordis-host-runner`
@@ -624,6 +646,20 @@ export interface ElasticsearchAuthConfig {
 ```
 
 来源：[`packages/multi/elasticsearch/src/index.ts:30`](../packages/multi/elasticsearch/src/index.ts)
+
+<a id="deepseek-aidsh-file-storage"></a>
+
+## `@deepseek-ai/dsh-file-storage`
+
+```ts config-catalog
+/** Service configuration. The root is deliberately explicit. */
+export interface Config {
+  /** Durable root for local content-addressed objects. */
+  root: string
+}
+```
+
+来源：[`packages/storage/file-storage/src/index.ts:27`](../packages/storage/file-storage/src/index.ts)
 
 <a id="deepseek-aidsh-fs-local"></a>
 
@@ -790,6 +826,8 @@ export interface Config {
    * @default 1024
    */
   coldBlankProbeMaxBytes?: number
+  /** Trusted user identity stamped onto new sessions when a user provider is mounted. */
+  userId?: string
 }
 ```
 
@@ -1678,6 +1716,28 @@ export interface JsonRpcConfig {
 
 来源：[`packages/sdk/server/src/index.ts:29`](../packages/sdk/server/src/index.ts)
 
+<a id="deepseek-aidsh-session-checkpoint-policy"></a>
+
+## `@deepseek-ai/dsh-session-checkpoint-policy`
+
+需要：`llm` · `sessionPersistence` · `sessions` · `tools`
+
+```ts config-catalog
+/** Plugin configuration. Time is the default strategy; other strategies are extension points. */
+export interface Config {
+  /** Registered strategy name used for ordinary background checkpoints. */
+  strategy?: string
+  /** Milliseconds a dirty session may remain before the time strategy flushes it. */
+  intervalMs?: number
+  /** Flush at the end of each model turn. */
+  forceAtTurnEnd?: boolean
+  /** Flush dirty sessions while the plugin is shutting down. */
+  forceAtShutdown?: boolean
+}
+```
+
+来源：[`packages/session/session-checkpoint-policy/src/index.ts:64`](../packages/session/session-checkpoint-policy/src/index.ts)
+
 <a id="deepseek-aidsh-session-persistence-jsonl"></a>
 
 ## `@deepseek-ai/dsh-session-persistence-jsonl`
@@ -1716,6 +1776,26 @@ export type JsonlCompression = 'zstd' | 'none'
 ```
 
 来源：[`packages/session/session-persistence-jsonl/src/index.ts:60`](../packages/session/session-persistence-jsonl/src/index.ts)
+
+<a id="deepseek-aidsh-session-persistence-mysql"></a>
+
+## `@deepseek-ai/dsh-session-persistence-mysql`
+
+需要：`sessions` · `mysql` · `users`
+
+```ts config-catalog
+/** MySQL session persistence configuration. One provider instance owns one user scope. */
+export interface Config {
+  /** Trusted authenticated user identity for this provider instance. */
+  ownerUserId: string
+  /** Maximum cold preparations retained by the coordinator. */
+  preparedSessionCacheSize?: number
+  /** Maximum intentional write-behind delay. */
+  writeBatchMaxDelayMs?: number
+}
+```
+
+来源：[`packages/session/session-persistence-mysql/src/index.ts:27`](../packages/session/session-persistence-mysql/src/index.ts)
 
 <a id="deepseek-aidsh-session-persistence-sqlite"></a>
 
@@ -2977,6 +3057,24 @@ export type ApprovalPolicy = 'ask' | 'never'
 
 来源：[`packages/interaction/user-approval/src/index.ts:177`](../packages/interaction/user-approval/src/index.ts)
 
+<a id="deepseek-aidsh-user-mysql"></a>
+
+## `@deepseek-ai/dsh-user-mysql`
+
+需要：`mysql`
+
+```ts config-catalog
+/** MySQL user provider configuration. */
+export interface Config {
+  /** Optional local-development user created during provider startup. */
+  bootstrapUserId?: string
+  /** Display name for the optional local-development bootstrap user. */
+  bootstrapDisplayName?: string
+}
+```
+
+来源：[`packages/identity/user-mysql/src/index.ts:11`](../packages/identity/user-mysql/src/index.ts)
+
 <a id="deepseek-aidsh-web"></a>
 
 ## `@deepseek-ai/dsh-web`
@@ -3209,7 +3307,6 @@ export interface Config {
 - `@deepseek-ai/dsh-lsp`（[`packages/lsp/lsp/src/index.ts`](../packages/lsp/lsp/src/index.ts)）
 - `@deepseek-ai/dsh-schedule` — 需要 `agents` · `sessions` · `tools` · `sessionPersistence`（[`packages/schedule/schedule/src/index.ts`](../packages/schedule/schedule/src/index.ts)）
 - `@deepseek-ai/dsh-session`（[`packages/core/session/src/index.ts`](../packages/core/session/src/index.ts)）
-- `@deepseek-ai/dsh-session-checkpoint-policy` — 需要 `llm` · `sessionPersistence` · `sessions` · `tools`（[`packages/session/session-checkpoint-policy/src/index.ts`](../packages/session/session-checkpoint-policy/src/index.ts)）
 - `@deepseek-ai/dsh-session-log-export` — 需要 `commands`（[`packages/session-query/session-log-export/src/index.ts`](../packages/session-query/session-log-export/src/index.ts)）
 - `@deepseek-ai/dsh-session-projection`（[`packages/session/session-projection/src/index.ts`](../packages/session/session-projection/src/index.ts)）
 - `@deepseek-ai/dsh-session-stats` — 需要 `sessionProjections`（[`packages/session/session-stats/src/index.ts`](../packages/session/session-stats/src/index.ts)）
@@ -3243,6 +3340,7 @@ export interface Config {
 - `@deepseek-ai/dsh-shell` — 抽象 `ShellExecutor`（[`packages/shell/shell/src/index.ts`](../packages/shell/shell/src/index.ts)）
 - `@deepseek-ai/dsh-spill` — 抽象 `SpillStore`（[`packages/spill/spill/src/index.ts`](../packages/spill/spill/src/index.ts)）
 - `@deepseek-ai/dsh-subprocess` — 抽象 `SubprocessRuntime`（[`packages/subprocess/subprocess/src/index.ts`](../packages/subprocess/subprocess/src/index.ts)）
+- `@deepseek-ai/dsh-user` — 抽象 `UserService`（[`packages/identity/user/src/index.ts`](../packages/identity/user/src/index.ts)）
 - `@deepseek-ai/dsh-workflow` — 抽象 `WorkflowEngine`（[`packages/workflow/workflow/src/index.ts`](../packages/workflow/workflow/src/index.ts)）
 ## 库包（无插件入口）
 

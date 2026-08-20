@@ -9,7 +9,7 @@
 import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import type { ApiProxy, MuxFrame, HostFrame } from '../api/index.ts'
-import { sessionLogQuerySchema } from '../api/downloads.schema.ts'
+import { conversationFileQuerySchema, conversationFileUploadSchema, sessionLogQuerySchema } from '../api/downloads.schema.ts'
 import type { RequestPayload, ResponseValue, RpcMethodMap } from '../api/rpc-map.ts'
 import type { ClientRequest, RpcError, RpcRequest, RpcResponse, ServerRequest, ServerResponse } from '../api/rpc.ts'
 import { RpcId } from '../api/rpc.ts'
@@ -268,6 +268,40 @@ export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
         if (req.method === 'GET') return response
         await response.body?.cancel()
         return new Response(null, { status: response.status, headers: response.headers })
+      }
+
+      if (path === '/api/conversation.file' && (req.method === 'GET' || req.method === 'HEAD')) {
+        const parsed = conversationFileQuerySchema.safeParse(Object.fromEntries(url.searchParams))
+        if (!parsed.success) return new Response('missing or invalid conversation file query parameters', { status: 400 })
+        const response = await api.downloads.conversationFile(parsed.data, req.signal)
+        if (req.method === 'GET') return response
+        await response.body?.cancel()
+        return new Response(null, { status: response.status, headers: response.headers })
+      }
+
+      if (path === '/api/conversation.file.upload' && req.method === 'POST') {
+        const mediaType = req.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
+        if (mediaType !== 'application/json') return new Response('content type must be application/json', { status: 415 })
+        let body: unknown
+        try { body = await req.json() } catch { return new Response('body is not JSON', { status: 400 }) }
+        const parsed = conversationFileUploadSchema.safeParse(body)
+        if (!parsed.success) return new Response('invalid conversation file upload', { status: 400 })
+        // Keep the carrier contract platform-neutral.  Buffer is a Uint8Array
+        // subclass, but exposing it here leaks the Node implementation into
+        // host adapters and makes browser/test consumers observe a different
+        // runtime shape.  Normalize to a plain Uint8Array at the boundary.
+        const bytes = Uint8Array.from(Buffer.from(parsed.data.data, 'base64'))
+        if (bytes.length === 0 || Buffer.from(bytes).toString('base64') !== parsed.data.data) {
+          return new Response('file data must be canonical base64', { status: 400 })
+        }
+        return api.downloads.conversationFileUpload({
+          sessionId: parsed.data.sessionId,
+          originalName: parsed.data.originalName,
+          mediaType: parsed.data.mediaType,
+          ...parsed.data.purpose === undefined ? {} : { purpose: parsed.data.purpose },
+          data: bytes,
+          ...parsed.data.expectedSha256 === undefined ? {} : { expectedSha256: parsed.data.expectedSha256 },
+        }, req.signal)
       }
 
       if (req.method !== 'POST' || !path.startsWith('/api/')) {

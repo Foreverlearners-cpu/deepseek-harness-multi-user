@@ -39,7 +39,7 @@ import type {
   ModelCatalogFailure, ModelProviderGroup,
   ModelReasoning, MuxFrame, PromptContentPart, QuestionResponsePayload, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem,
   QueuedInboxItem, SessionSummary, SettingsNamespaceView, SubagentAddress, JobView, ToolEventView,
-  WorkspaceId, WorkspaceView,
+  WorkspaceId, WorkspaceView, HostStorageDescription,
 } from './api/index.ts'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
@@ -119,6 +119,33 @@ const SESSION_SEARCH_PROVIDER_CALL_LIMIT = 100
 const COLD_SUMMARY_BATCH_SIZE = 16
 /** Default maximum artifact size eligible for one cold blankness read. */
 export const DEFAULT_COLD_BLANK_PROBE_MAX_BYTES = 1024
+
+/** Minimal optional face used by the API to merge the message-only ToC store into session.list. */
+interface ConversationListStore {
+  listConversations(options?: { includeDeleted?: boolean; limit?: number; offset?: number }): Promise<readonly {
+    sessionId: string
+    updatedAt: number
+    title: string
+    status: string
+    nextMessageOrdinal: number
+    parentSessionId: string | null
+    origin: string | null
+    cwd: string | null
+    agentPreset: string | null
+  }[]>
+  getFile?(sessionId: string, fileId: string): Promise<unknown>
+  readFile?(sessionId: string, fileId: string, signal?: AbortSignal): Promise<{
+    metadata: { originalName: string; mediaType: string; byteSize: number }
+    data: Buffer
+  }>
+  saveFile?(sessionId: string, input: {
+    originalName: string
+    mediaType: string
+    purpose?: string
+    data: Uint8Array
+    expectedSha256?: string
+  }): Promise<unknown>
+}
 
 /** Conversation message event types (the pagination counting unit). */
 const MESSAGE_TYPES = new Set(['user/message', 'assistant/message'])
@@ -620,6 +647,8 @@ export interface ApiProxyDefaults {
   saveDefaultModelSelection?: (selection: ModelSelection) => Promise<void>
   /** Default project directory for new sessions whose create request carries no cwd. */
   cwd: string
+  /** Trusted application user identity for user-scoped session creation. */
+  userId?: string
   /** Native open-with-default-application; injectable for carrier tests. */
   openPath?: (path: string, signal: AbortSignal) => Promise<void>
   /** Native text-editor handoff; injectable for settings-document tests. */
@@ -636,6 +665,54 @@ export interface ApiProxyDefaults {
    * falls back to platform detection ({@link canOpenNativePath}).
    */
   canOpenPath?: () => boolean
+}
+
+/** Service methods needed for the read-only storage status projection. */
+interface StorageListService {
+  readonly name?: string
+  list?: () => Promise<readonly unknown[]>
+}
+
+/** Classify an implementation without exposing its class name to the browser. */
+function storageBackend(service: unknown): HostStorageDescription['persistence'] {
+  if (service === undefined) return 'unavailable'
+  const name = typeof service === 'object' && service !== null && 'name' in service
+    ? String((service as { name?: unknown }).name ?? '')
+    : ''
+  const constructorName = typeof service === 'object' && service !== null
+    ? service.constructor.name
+    : ''
+  return `${name}:${constructorName}`.toLowerCase().includes('mysql') ? 'mysql' : 'other'
+}
+
+/** Count a list-capable storage service without making status discovery fatal. */
+async function storageCount(service: unknown): Promise<number | undefined> {
+  if (typeof service !== 'object' || service === null) return undefined
+  const list = (service as StorageListService).list
+  if (typeof list !== 'function') return undefined
+  try {
+    return (await list.call(service)).length
+  } catch {
+    // The status card is diagnostic only; a transient database error must not
+    // make the connection handshake fail or hide the rest of the application.
+    return undefined
+  }
+}
+
+/** Build the browser-safe storage facts used by the Web settings card. */
+async function describeStorage(ctx: Context): Promise<HostStorageDescription> {
+  const persistence = ctx.get('sessionPersistence')
+  const users = ctx.get('users')
+  const [persistedSessions, userCount] = await Promise.all([
+    storageCount(persistence),
+    storageCount(users),
+  ])
+  return {
+    persistence: storageBackend(persistence),
+    users: storageBackend(users),
+    ...persistedSessions === undefined ? {} : { persistedSessions },
+    ...userCount === undefined ? {} : { userCount },
+  }
 }
 
 /** The tool/call payload fields the presenter path reads. */
@@ -1082,6 +1159,9 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     const { provider, model } = defaults.defaultModelSelection()
     return { provider, model }
   }
+  // The value is supplied by trusted Host configuration, never by an RPC
+  // payload. Session boundary validation still checks the resulting header.
+  const configuredUserId = defaults.userId as NonNullable<SessionHeader['userId']> | undefined
   type WebModelSelectionRef = ModelSelectionRef & { current: ModelSelection }
   const selections = new WeakMap<Agent, WebModelSelectionRef>()
   /**
@@ -1612,7 +1692,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           if (hasSubagentOwner({ header: inspected.meta }, undefined)) {
             throw new SubagentSessionOwnership(sessionId)
           }
-          if (inspected.meta.cwd !== cwd) {
+          if (inspected.meta.cwd !== undefined && inspected.meta.cwd !== cwd) {
             throw new SessionCwdConflict(sessionId, cwd, inspected.meta.cwd)
           }
           // Resolved from the log, not the header: a session that switched
@@ -1641,6 +1721,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           agentOptions: agentOptions(),
           meta: {
             cwd,
+            ...configuredUserId === undefined ? {} : { userId: configuredUserId },
             ...composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset },
           },
           setup: composition.setup,
@@ -1669,7 +1750,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     // covers every path that yields a live agent — freshly created, adopted
     // live, resumed from disk, or recovered by the concurrent-creation catch.
     assertPresetUnchanged(sessionId, presetId, resolveSessionPreset(agent.session))
-    if (agent.session.header.cwd !== cwd) {
+    if (agent.session.header.cwd !== undefined && agent.session.header.cwd !== cwd) {
       throw new SessionCwdConflict(sessionId, cwd, agent.session.header.cwd)
     }
     return agent
@@ -1747,6 +1828,48 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         if (rejected) throw failure
         signal?.throwIfAborted()
         items.push(...summaries)
+      }
+    }
+    // The ToC message store is an independent read model. When mounted, its
+    // title/ownership row is merged into the ordinary Session list so a
+    // restart can render conversations from MySQL without loading chunks.
+    const conversationStore = ctx.get('conversationPersistence' as never) as ConversationListStore | undefined
+    if (conversationStore !== undefined) {
+      const durable = await conversationStore.listConversations({ limit: 500 })
+      const byId = new Map(items.map(item => [String(item.sessionId), item]))
+      for (const conversation of durable) {
+        const title = conversation.title.length === 0 ? null : conversation.title
+        const projection = {
+          asOfSeq: -1,
+          values: {
+            title,
+            sessionListMetadata: {
+              blank: conversation.nextMessageOrdinal === 0,
+              lastPromptAt: conversation.nextMessageOrdinal === 0 ? null : conversation.updatedAt,
+            },
+          },
+        } as SessionProjectionsBlock
+        const existing = byId.get(conversation.sessionId)
+        if (existing !== undefined) {
+          existing.updatedAt = Math.max(existing.updatedAt, conversation.updatedAt)
+          existing.projections = existing.projections === undefined
+            ? projection
+            : { ...existing.projections, values: { ...existing.projections.values, title } }
+          continue
+        }
+        const summary: SessionSummary = {
+          sessionId: conversation.sessionId as SessionId,
+          updatedAt: conversation.updatedAt,
+          running: false,
+          blank: conversation.nextMessageOrdinal === 0,
+          ...conversation.parentSessionId === null ? {} : { parentSessionId: conversation.parentSessionId as SessionId },
+          ...conversation.origin === 'subagent' ? { origin: 'subagent' as const } : {},
+          ...conversation.cwd === null ? {} : { cwd: conversation.cwd },
+          ...conversation.agentPreset === null ? {} : { agentPreset: conversation.agentPreset },
+          projections: projection,
+        }
+        items.push(summary)
+        byId.set(conversation.sessionId, summary)
       }
     }
     items.sort((a, b) => b.updatedAt - a.updatedAt)
@@ -2365,6 +2488,9 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             seed: events.slice(0, cut),
             meta: {
               ...source.header.cwd === undefined ? {} : { cwd: source.header.cwd },
+              ...source.header.userId === undefined
+                ? configuredUserId === undefined ? {} : { userId: configuredUserId }
+                : { userId: source.header.userId },
               parentSession: source.id,
               seedLength: cut,
               ...forkComposition.agentPreset === undefined
@@ -2399,7 +2525,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
 
       async prompt(request) {
-        const { sessionId, mode, content, clientTimeZone } = request.payload
+        const { sessionId, mode, content, clientTimeZone, fileIds } = request.payload
         const canonicalTimeZone = clientTimeZone === undefined
           ? undefined
           : canonicalClientTimeZone(clientTimeZone)
@@ -2418,10 +2544,31 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           kind: 'user',
           rpcId: request.rpcId,
           ...(canonicalTimeZone === undefined ? {} : { clientTimeZone: canonicalTimeZone }),
+          ...(fileIds === undefined || fileIds.length === 0 ? {} : { fileIds: [...fileIds] }),
         }
         const hasImage = content.some(part => part.type === 'image')
         const admit = async (): Promise<RpcResponse<{ accepted: true }>> => {
           try {
+            if (fileIds !== undefined && fileIds.length > 0) {
+              const conversationStore = ctx.get('conversationPersistence' as never) as ConversationListStore | undefined
+              if (conversationStore?.getFile === undefined) {
+                return err(request, {
+                  code: 'attachment-error',
+                  message: 'Conversation file storage is unavailable.',
+                  details: { reason: 'FILE_STORAGE_UNAVAILABLE' },
+                })
+              }
+              for (const fileId of fileIds) {
+                const file = await conversationStore.getFile(String(sessionId), fileId)
+                if (file === undefined) {
+                  return err(request, {
+                    code: 'attachment-error',
+                    message: 'One or more conversation files are not available for this session.',
+                    details: { reason: 'FILE_NOT_FOUND' },
+                  })
+                }
+              }
+            }
             if (hasImage) {
               const current = selectionFor(agent).current
               const modelInfo = await ctx.llm.resolveModelInfo(current.provider, current.model)
@@ -2861,10 +3008,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     },
 
     host: {
-      describe(request) {
+      async describe(request) {
         // TODO: version should read apps/cli's package.json; placeholder for now.
         const selection = defaults.defaultModelSelection()
-        return Promise.resolve(ok(request, {
+        return ok(request, {
           version: '0.0.1',
           // Same source as session.create's fallback: the UI's default project
           // must match where an unspecified-cwd session actually lands.
@@ -2875,7 +3022,8 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           model: selection.model,
           attachedSessions: ctx.agents.list().length,
           canOpenPath: canOpenPaths(),
-        }))
+          storage: await describeStorage(ctx),
+        })
       },
 
       async pickDirectory(request, signal) {
@@ -3627,6 +3775,54 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             },
           },
         )
+      },
+
+      async conversationFile(request, signal) {
+        signal.throwIfAborted()
+        const store = ctx.get('conversationPersistence' as never) as ConversationListStore | undefined
+        if (store?.readFile === undefined) return new Response('conversation file storage is unavailable', { status: 501 })
+        try {
+          const file = await store.readFile(String(request.sessionId), request.fileId, signal)
+          signal.throwIfAborted()
+          const encodedName = encodeURIComponent(file.metadata.originalName)
+          return new Response(new Uint8Array(file.data), {
+            status: 200,
+            headers: {
+              'content-type': file.metadata.mediaType,
+              'content-length': String(file.metadata.byteSize),
+              'content-disposition': `attachment; filename*=UTF-8''${encodedName}`,
+              'cache-control': 'private, no-store',
+            },
+          })
+        } catch (error: unknown) {
+          signal.throwIfAborted()
+          if (error instanceof Error && /not found/i.test(error.message)) return new Response('file not found', { status: 404 })
+          ctx.logger.warn(`conversation file read failed: ${String(error)}`)
+          return new Response('conversation file read failed', { status: 500 })
+        }
+      },
+
+      async conversationFileUpload(request, signal) {
+        signal.throwIfAborted()
+        const store = ctx.get('conversationPersistence' as never) as ConversationListStore | undefined
+        if (store?.saveFile === undefined) return new Response('conversation file storage is unavailable', { status: 501 })
+        try {
+          const metadata = await store.saveFile(String(request.sessionId), {
+            originalName: request.originalName,
+            mediaType: request.mediaType,
+            ...request.purpose === undefined ? {} : { purpose: request.purpose },
+            data: request.data,
+            ...request.expectedSha256 === undefined ? {} : { expectedSha256: request.expectedSha256 },
+          })
+          signal.throwIfAborted()
+          return Response.json(metadata, { status: 201, headers: { 'cache-control': 'no-store' } })
+        } catch (error: unknown) {
+          signal.throwIfAborted()
+          if (error instanceof Error && /not found/i.test(error.message)) return new Response('session not found', { status: 404 })
+          if (error instanceof Error && /exceeds|checksum|invalid/i.test(error.message)) return new Response(error.message, { status: 400 })
+          ctx.logger.warn(`conversation file upload failed: ${String(error)}`)
+          return new Response('conversation file upload failed', { status: 500 })
+        }
       },
     },
 

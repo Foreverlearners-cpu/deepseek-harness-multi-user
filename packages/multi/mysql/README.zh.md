@@ -22,6 +22,8 @@
 
 `connection(callback)` 接纳一个操作，等待连接池分配连接，然后使用 `MysqlConnection` façade 调用 callback。该 façade 不包含连接池生命周期方法和原始驱动状态；callback 结算后，它以及通过它获取的 prepared statement 都会拒绝操作，而从 callback 返回其中任一对象会使该租用操作失败。Callback 结算后，服务会发送 MySQL `COM_RESET_CONNECTION`，从而回滚未结束的 transaction 并清除 session variable 和临时状态，然后在释放租用连接前重新选择配置的 database。Reset 或 database 恢复失败时，服务会销毁该连接，不会把状态不确定的连接放回池中；清理过程不会覆盖 callback 原本的结果或错误。资源释放会停止接纳新操作，等待所有已接纳回调，包括仍在连接池中排队的调用方和连接重置，并且只在清理完成后调用 `pool.end()`。
 
+`transaction(callback)` 复用同一租约，并由服务负责 `BEGIN`、`COMMIT` 和 `ROLLBACK`。Callback 收到的事务 façade 只能查询，不能自行结束事务或释放连接。Callback 或 commit 失败时执行 rollback；清理状态不确定时销毁连接。
+
 ## 模型体验
 
 ### MySQL 连接
@@ -40,6 +42,6 @@
 
 ## 已知限制与暂缓事项
 
-- **仅提供连接 API**：尚未实现事务、migration、错误分类、查询超时、取消、健康状态报告和可观测性。
+- **基础设施 API 仍较窄**：尚未实现 migration、错误分类、查询超时、取消、健康状态报告和可观测性。
 - **仅支持一个 TCP 目标**：具名 binding、Unix socket、TLS 策略、replica 和独立 migration credential 仍暂缓实现。
 - **回调等待没有时限**：资源释放会无限等待已接纳回调；调用方必须让数据库工作结算。

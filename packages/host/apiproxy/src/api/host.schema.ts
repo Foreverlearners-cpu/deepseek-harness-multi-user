@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod'
-import type { DirectoryEntry } from './host.ts'
+import type { DirectoryEntry, HostStorageDescription } from './host.ts'
 import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
 
@@ -18,6 +18,12 @@ export const hostDescribeValueSchema = z.object({
   model: z.string().optional(),
   attachedSessions: z.number().int().nonnegative(),
   canOpenPath: z.boolean(),
+  storage: z.object({
+    persistence: z.union([z.literal('mysql'), z.literal('other'), z.literal('unavailable')]),
+    users: z.union([z.literal('mysql'), z.literal('other'), z.literal('unavailable')]),
+    persistedSessions: z.number().int().nonnegative().optional(),
+    userCount: z.number().int().nonnegative().optional(),
+  }).optional() satisfies z.ZodType<Wire<HostStorageDescription> | undefined>,
 }) satisfies z.ZodType<Wire<ResponseValue<'host.describe'>>>
 
 /** host.pickDirectory request payload (empty object literal). */

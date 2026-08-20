@@ -58,6 +58,8 @@ The session execution world provides the stronger boundary for model-controlled 
 
 ## Document map
 
+- [Message and file storage](message-and-file-storage.zh.md) records the shipped message-only MySQL model, independent file-object service, and checkpoint boundaries (Chinese source document).
+- [File storage and checkpoint plan](file-storage-and-checkpoint-policy-plan.zh.md) records the design, shipped implementation status, and deferred work so Redis, admin surfaces, and object-storage providers are not mistaken for delivered features (Chinese source document).
 - [Identity and access](identity-and-access.md) defines principals, authentication, authorization, administrative roles, session ownership, and transport requirements.
 - [Data and runtime isolation](data-and-runtime-isolation.md) defines tenant-aware persistence, event and audit logs, settings, credentials, assets, streams, caches, and execution isolation.
 - [Stream chunk retention](stream-chunk-retention.md) defines bounded storage and cleanup for streamed response chunks.

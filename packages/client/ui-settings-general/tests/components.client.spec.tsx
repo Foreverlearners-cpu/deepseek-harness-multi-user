@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import type { GeneralSectionComponentProps } from '../src/client/GeneralSection.tsx'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
+import { StorageStatus } from '../src/client/StorageStatus.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
 import type { TriggerContentProps } from '../src/client/chrome.tsx'
 import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
@@ -55,6 +56,28 @@ describe('GeneralSection', () => {
     const { renderSlot } = mount()
     expect(renderSlot).toHaveBeenCalledWith('settings.general.item', {})
     expect(screen.getByTestId('slot-settings.general.item')).toBeTruthy()
+  })
+})
+
+describe('StorageStatus', () => {
+  it('renders the selected MySQL providers and safe counts', () => {
+    const snapshot = {
+      version: '0', cwd: '/workspace', attachedSessions: 1, canOpenPath: true,
+      storage: { persistence: 'mysql' as const, users: 'mysql' as const, persistedSessions: 3, userCount: 2 },
+    }
+    const source = {
+      getSnapshot: () => snapshot,
+      subscribe: () => () => {},
+    }
+    const { container } = render(<StorageStatus
+      {...kit}
+      t={t}
+      useHostDescription={bindSnapshotSelector(source)}
+    />)
+    expect(container.querySelector('[data-storage-persistence]')?.textContent).toBe('MySQL')
+    expect(container.querySelector('[data-storage-users]')?.textContent).toBe('MySQL')
+    expect(container.querySelector('[data-storage-sessions]')?.textContent).toBe('3')
+    expect(container.querySelector('[data-storage-user-count]')?.textContent).toBe('2')
   })
 })
 

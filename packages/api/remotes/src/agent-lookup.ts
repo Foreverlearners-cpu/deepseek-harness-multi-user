@@ -95,6 +95,21 @@ export async function inspectApiRemoteSession(
   ctx: Context,
   sessionId: SessionId,
 ): Promise<{ meta: SessionHeader; events: SessionEvent[] }> {
+  // The ToC message store is a semantic read model and may not have a
+  // project cwd (for example a user-created cloud conversation). Prefer it
+  // when present; unlike the legacy project-backed log it is still a valid
+  // servable identity for history and resume.
+  const conversationStore = ctx.get('conversationPersistence' as never) as {
+    getConversation(id: string): Promise<unknown>
+    hydrate(id: string): Promise<{ meta: SessionHeader; events: SessionEvent[] } | undefined>
+  } | undefined
+  if (conversationStore !== undefined) {
+    const conversation = await conversationStore.getConversation(String(sessionId))
+    if (conversation !== undefined) {
+      const hydrated = await conversationStore.hydrate(String(sessionId))
+      if (hydrated !== undefined) return hydrated
+    }
+  }
   const persistence = ctx.get('sessionPersistence')
   if (persistence === undefined) {
     throw new Error('session persistence is not configured (load a dsh-session-persistence backend)')

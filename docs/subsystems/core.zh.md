@@ -728,7 +728,7 @@ list(): Agent[]
 roots(): Agent[]
 ```
 
-Source: [`packages/core/agent/src/index.ts:256`](../../packages/core/agent/src/index.ts)
+Source: [`packages/core/agent/src/index.ts:258`](../../packages/core/agent/src/index.ts)
 
 <a id="agent-events"></a>
 

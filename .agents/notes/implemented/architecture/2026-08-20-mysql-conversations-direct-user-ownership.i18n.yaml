@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-20-mysql-conversations-direct-user-ownership.md
+2026-08-20-mysql-conversations-direct-user-ownership.md: 2c910d6469689cd60b94271cca3a83ee2262a907
+2026-08-20-mysql-conversations-direct-user-ownership.zh.md: 7a5ffa4772d0f4e9ebb4395fd8b40c9e23fc95fe

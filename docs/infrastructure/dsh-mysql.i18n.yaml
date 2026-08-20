@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/infrastructure/dsh-mysql.md
-dsh-mysql.md: 54239ba4612376618b6650f36d6c39641297abf9
-dsh-mysql.zh.md: b4086a5d81db2688fc19afcf8cd2f50369a9a2c7
+dsh-mysql.md: 46934e8b96977aa66f1d42bdbf60ad59fbe46b92
+dsh-mysql.zh.md: abdedf9d9bbdc19f0c45554731a25d5f8e79ac9f
