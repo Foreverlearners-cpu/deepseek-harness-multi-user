@@ -26,7 +26,7 @@ The shared revision intentionally serializes simultaneous password resets and id
 
 Identifier `resolve()` returns `UserId | undefined` only to trusted authentication and administration Consumers. A transport does not expose it as an account-discovery endpoint. Login composition resolves an identifier and verifies credentials behind one generic public failure, rate limit, and audit policy.
 
-`verifyPassword()` returns only a boolean. Unknown users, users without an enabled password, and incorrect passwords all return `false`. The Provider performs comparable password-verifier work, using private dummy verifier material where necessary, before returning those results. Operational Provider failures remain `provider-unavailable`; a false credential result never carries a narrower reason.
+`verifyPassword()` returns only a boolean. An authentication Consumer omits `userId` when identifier resolution misses, and the Provider still performs comparable dummy-verifier work. Unknown users, users without an enabled password, and incorrect passwords also return `false`. Provider errors are rebuilt from an operation-specific code allowlist with fixed messages and no Provider cause; a false credential result never carries a narrower reason.
 
 ## Metadata and events
 
@@ -36,7 +36,7 @@ Every committed mutation emits `user-credential/changed` after commit with only 
 
 ## Provider verification
 
-The package exports no concrete Provider, but its package-level contract suite is reusable by every Provider. The suite covers normalization and global uniqueness, identifier lifecycle, password set/change/verify/disable, false-result enumeration resistance, optimistic concurrency, post-commit timing, event redaction, and detached metadata. Provider-specific suites additionally prove real hash verification, dummy verification behavior, uniqueness indexes, transactions, durability, and migration behavior.
+The package exports no concrete Provider, but its `./testing` entry exposes a framework-neutral contract suite reusable by every Provider. A harness supplies a fresh service and an explicit password-verification work probe. The suite covers normalization and global uniqueness, identifier lifecycle, password set/change/verify/disable, false-result enumeration resistance, concurrent compare-and-swap, post-commit timing, event redaction, and detached metadata. Provider-specific suites additionally prove real hash verification, dummy verification behavior, uniqueness indexes, transactions, durability, and migration behavior.
 
 ## Alternatives considered
 

@@ -104,7 +104,7 @@ export interface DisablePasswordRequest {
 
 /** Password verification input whose result never distinguishes absent state. */
 export interface VerifyPasswordRequest {
-  readonly userId: UserId
+  readonly userId?: UserId
   readonly password: string
 }
 

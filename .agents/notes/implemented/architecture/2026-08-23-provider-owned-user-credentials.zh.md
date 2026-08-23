@@ -26,7 +26,7 @@ Status: implemented
 
 标识 `resolve()` 只向受信任的认证与管理 Consumer 返回 `UserId | undefined`。传输层不能把它暴露为账号发现端点。登录组合在同一种通用公开失败、速率限制和审计策略之后解析标识并验证 Credential。
 
-`verifyPassword()` 只返回 boolean。未知用户、未启用密码的用户和错误密码都返回 `false`。Provider 在返回这些结果前执行可比的密码 verifier 工作，必要时使用私有 dummy verifier 材料。Provider 运行故障仍为 `provider-unavailable`；false Credential 结果绝不携带更具体原因。
+`verifyPassword()` 只返回 boolean。标识解析失败时，认证 Consumer 省略 `userId`，Provider 仍执行可比的 dummy verifier 工作。未知用户、未启用密码的用户和错误密码也都返回 `false`。Provider 错误按 operation-specific code allowlist 使用固定 message 且不带 Provider cause 地重建；false Credential 结果绝不携带更具体原因。
 
 ## Metadata and events
 
@@ -36,7 +36,7 @@ Status: implemented
 
 ## Provider verification
 
-该包不导出具体 Provider，但包级 contract suite 可由每个 Provider 复用。套件覆盖归一化与全局唯一性、标识生命周期、密码设置/修改/验证/禁用、false 结果防枚举、乐观并发、提交后事件时机、事件脱敏和分离元数据。Provider-specific 套件还要证明真实 hash 验证、dummy verification 行为、唯一索引、事务、持久性和 migration 行为。
+该包不导出具体 Provider，但 `./testing` 入口提供每个 Provider 都能复用的框架无关 contract suite。Harness 提供 fresh service 和显式密码验证工作探针。套件覆盖归一化与全局唯一性、标识生命周期、密码设置/修改/验证/禁用、false 结果防枚举、并发 compare-and-swap、提交后事件时机、事件脱敏和分离元数据。Provider-specific 套件还要证明真实 hash 验证、dummy verification 行为、唯一索引、事务、持久性和 migration 行为。
 
 ## Alternatives considered
 

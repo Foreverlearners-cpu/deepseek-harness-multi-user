@@ -17,7 +17,12 @@ interface StoredCredential {
 export class MemoryUserCredentialService extends UserCredentialService {
   private readonly records = new Map<UserId, StoredCredential>()
   private clock = 1_000
-  verificationWork = 0
+  private verificationWork = 0
+
+  /** @returns number of password verification attempts performed by this test Provider. */
+  readPasswordVerificationCount(): number {
+    return this.verificationWork
+  }
 
   protected normalizeLoginIdentifier(input: LoginIdentifierInput): Promise<string> {
     const value = input.value.trim().toLowerCase()
@@ -87,9 +92,9 @@ export class MemoryUserCredentialService extends UserCredentialService {
     return Promise.resolve({ ...(previous === undefined ? {} : { previous }), current })
   }
 
-  protected verifyPasswordSecret(userId: UserId, password: string): Promise<boolean> {
+  protected verifyPasswordSecret(userId: UserId | undefined, password: string): Promise<boolean> {
     this.verificationWork += 1
-    const stored = this.records.get(userId)
+    const stored = userId === undefined ? undefined : this.records.get(userId)
     return Promise.resolve(stored?.record.passwordEnabled === true && stored.password === password)
   }
 

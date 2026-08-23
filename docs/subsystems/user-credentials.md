@@ -10,7 +10,7 @@ An identifier is an extensible `(kind, value)` pair. The Provider owns kind-spec
 
 ## Password semantics
 
-Password secrets enter only Provider methods and never appear in metadata or events. A Provider owns verifier derivation and storage and performs comparable dummy verifier work for missing accounts and disabled passwords. Public verification collapses missing, disabled, and incorrect credentials to `false`.
+Password secrets enter only Provider methods and never appear in metadata or events. A Provider owns verifier derivation and storage and performs comparable dummy verifier work for unresolved identifiers, missing accounts, and disabled passwords. Public verification accepts an omitted `userId` and collapses missing, disabled, and incorrect credentials to `false`; Provider errors are rebuilt without Provider messages or causes.
 
 ## Concurrency and events
 
@@ -18,7 +18,7 @@ Identifiers and password state share one aggregate revision. Every mutation comp
 
 ## Composition
 
-Authentication Consumers resolve an identifier, verify its credential, then require the resulting user to be active through `ctx.users` before issuing an authenticated call. Administrative Consumers authenticate and authorize the actor before mutations; operation context supplies audit metadata but proves no permission.
+Authentication Consumers resolve an identifier and always invoke password verification, passing no `userId` to trigger dummy work when resolution misses. After successful verification they require the user to be active through `ctx.users` before issuing an authenticated call. Administrative Consumers authenticate and authorize the actor before mutations; operation context supplies audit metadata but proves no permission.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -90,7 +90,7 @@ async changePassword(request: ChangePasswordRequest): Promise<UserCredentialReco
 async disablePassword(request: DisablePasswordRequest): Promise<UserCredentialRecord>
 
 /** Verify a password with an enumeration-resistant boolean result.
- * @param request - target user and candidate password.
+ * @param request - resolved target when present and candidate password.
  * @returns true only for a matching enabled password; otherwise false.
  */
 async verifyPassword(request: VerifyPasswordRequest): Promise<boolean>
@@ -98,7 +98,7 @@ async verifyPassword(request: VerifyPasswordRequest): Promise<boolean>
 
 Types: [UserId](user-directory.md)
 
-Source: [`packages/identity/user-credential/src/index.ts:207`](../../packages/identity/user-credential/src/index.ts)
+Source: [`packages/identity/user-credential/src/index.ts:334`](../../packages/identity/user-credential/src/index.ts)
 
 <a id="user-credential-events"></a>
 

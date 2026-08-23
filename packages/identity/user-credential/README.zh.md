@@ -34,9 +34,9 @@ Revision 0 表示 Credential 聚合尚不存在。第一个标识或密码操作
 
 Provider 继承 `UserCredentialService`，实现五个 protected 操作：规范化标识、读取元数据、解析规范化标识、原子修改 Credential 和验证密码。`mutateCredentialRecord()` 只在密码修改中接收 Secret，并且只返回元数据。Hash、salt、pepper 引用、verifier 版本和 dummy hash 始终属于 Provider 私有状态。
 
-`verifyPasswordSecret()` 对未知用户、没有密码的用户和错误密码执行可比的密码 verifier 工作。公开 `verifyPassword()` 对这三种情况都返回 `false`，因此调用方不能从结果枚举账号或密码状态。Provider 意外故障仍转换为 `provider-unavailable`；传输层还应使用通用提示和速率限制。
+`verifyPasswordSecret()` 对标识未解析、未知用户、没有密码的用户和错误密码执行可比的密码 verifier 工作。公开 `verifyPassword()` 允许省略 `userId`，并对所有 Credential 失败返回 `false`，因此调用方不能从结果枚举账号或密码状态。`dsh-auth-password` Consumer 在 `resolve()` 返回 `undefined` 后必须调用 `verifyPassword({ password })`，不能提前返回并跳过 Provider 的 dummy verifier。Provider 意外故障转换为固定 `provider-unavailable` 错误；Provider message、cause、诊断和 Secret 绝不跨出服务 API。
 
-可预期的存储失败使用 `UserCredentialError`：`identifier-conflict`、`identifier-not-found`、`password-not-set`、`invalid-credential` 和 `revision-conflict`。`tests/contract.ts` 中的共享套件是 Provider 规范测试，每个实现都必须运行它。
+可预期的存储失败使用 `UserCredentialError`：`identifier-conflict`、`identifier-not-found`、`password-not-set`、`invalid-credential` 和 `revision-conflict`。公开 `@deepseek-ai/dsh-user-credential/testing` 入口导出与测试框架无关的 Provider 规范套件。每个 Provider 提供 fresh harness 和显式密码验证工作探针，并在该套件之外补充存储特有的持久性、哈希、时序和事务测试。
 
 ## 授权与账号生命周期
 
