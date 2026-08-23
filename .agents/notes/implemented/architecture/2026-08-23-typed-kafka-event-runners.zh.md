@@ -1,8 +1,8 @@
 # Agent Note: 强类型 Kafka 事件运行器
 
-[English](2026-08-23-typed-kafka-event-runners.md) | 中文
-
 Status: implemented
+
+[English](2026-08-23-typed-kafka-event-runners.md) | 中文
 
 ## Problem
 

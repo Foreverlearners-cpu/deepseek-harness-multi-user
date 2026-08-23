@@ -43,6 +43,7 @@
       "@deepseek-ai/dsh-cdc/invariant": ["./packages/multi/cdc/src/invariant.ts"],
       "@deepseek-ai/dsh-cdc-protocol": ["./packages/multi/cdc-protocol/src/index.ts"],
       "@deepseek-ai/dsh-cdc-protocol/invariant": ["./packages/multi/cdc-protocol/src/invariant.ts"],
+      "@deepseek-ai/dsh-session-cache-invalidation-redis/invariant": ["./packages/session/session-cache-invalidation-redis/src/invariant.ts"],
       "@deepseek-ai/dsh-cdc-redis": ["./packages/multi/cdc-redis/src/index.ts"],
       "@deepseek-ai/dsh-cdc-elasticsearch": ["./packages/multi/cdc-elasticsearch/src/index.ts"],
       "@deepseek-ai/dsh-tool-call-timeout-policy": ["./packages/guard/timeout-policy/src"],

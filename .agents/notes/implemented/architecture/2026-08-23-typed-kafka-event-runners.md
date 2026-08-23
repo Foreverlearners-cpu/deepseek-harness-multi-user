@@ -1,8 +1,8 @@
 # Agent Note: Typed Kafka event runners
 
-English | [中文](2026-08-23-typed-kafka-event-runners.zh.md)
-
 Status: implemented
+
+English | [中文](2026-08-23-typed-kafka-event-runners.zh.md)
 
 ## Problem
 
