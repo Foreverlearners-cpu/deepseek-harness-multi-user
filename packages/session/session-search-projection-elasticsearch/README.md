@@ -12,7 +12,15 @@ Only `status=completed` and `visibility=user` rows store role and visible text. 
 
 The configured index must already map tenant, user, session, message, status, visibility, and role as `keyword`; content as `text`; source_time as `date`; revision as `long`; and deleted as `boolean`. The plugin validates mapping before subscribing and never creates indexes or mappings.
 
-This package does not provide search APIs, index creation, historical backfill, reconciliation, or authorization. Callers must filter every search by authenticated tenant and user. The operator must rebuild the index if authoritative revisions reset.
+## Authoritative record API
+
+`applySessionSearchProjectionRecord(elasticsearch, index, record)` applies one Kafka-independent `SessionSearchProjectionRecord`. It uses the same tenant-safe document id, authoritative external revision, visibility rules, tombstone document, conflict handling, and Elasticsearch error classification as the CDC handler. A reconciler adapter can wrap it directly as a named sink because the record is structurally compatible with the reconciler contract; this package deliberately does not depend on or register the reconciler.
+
+The API validates its authoritative input. An explicit `deleted` record, a record not in `status=completed`, or a record not in `visibility=user` becomes a versioned tombstone without role or content. HTTP 409 external-version conflicts remain successful no-ops.
+
+The Kafka subscription is supervised after startup. If its `done` promise rejects, the plugin logs a content-free error and disposes its own scope; normal scope disposal closes and drains the subscription.
+
+This package does not provide search APIs, index creation, a snapshot source, reconciliation scheduling, or authorization. Callers must filter every search by authenticated tenant and user. The operator must rebuild the index if authoritative revisions reset.
 
 ## Model Experience
 

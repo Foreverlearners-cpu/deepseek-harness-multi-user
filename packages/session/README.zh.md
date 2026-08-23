@@ -26,6 +26,7 @@
 | [`session-projection/`](session-projection/README.md) | 定义并驱动会话投影单元 | `ctx.sessionProjections` |
 | [`session-projection-cache/`](session-projection-cache/README.md) | 持久化并恢复投影检查点 | `ctx.sessionProjectionCache` |
 | [`session-stats/`](session-stats/README.md) | 提供全日志会话计数与墙钟时间（`sessionStats` 单元） | 注册到 `ctx.sessionProjections` |
+| [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | 将通过校验的 CDC 会话消息行投影为租户隔离的搜索文档 | `ctx.kafkaEvents`、`ctx.elasticsearch` |
 
 ## 标题
 
@@ -37,7 +38,6 @@
 | [`session-title-llm/`](session-title-llm/README.md) | 提供共享的模型标题生成能力 | — |
 | [`session-title-first-prompt-llm/`](session-title-first-prompt-llm/README.md) | 根据第一条合格的人类消息生成会话标题 | 注册到 `ctx.sessionTitle` |
 | [`session-title-all-prompts-llm/`](session-title-all-prompts-llm/README.md) | 根据所有合格的人类消息生成会话标题 | 注册到 `ctx.sessionTitle` |
-| [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | 将通过校验的 CDC 会话消息行投影为租户隔离的搜索文档 | `ctx.kafkaEvents`、`ctx.elasticsearch` |
 
 部署可以注册一个模型驱动提供方；未注册时，服务仍保留确定性回退机制。
 

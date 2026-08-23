@@ -26,6 +26,7 @@ Serves current, log-derived per-session state to client carriers.
 | [`session-projection/`](session-projection/README.md) | Defines and drives session projection units | `ctx.sessionProjections` |
 | [`session-projection-cache/`](session-projection-cache/README.md) | Persists and restores projection checkpoints | `ctx.sessionProjectionCache` |
 | [`session-stats/`](session-stats/README.md) | Serves whole-log conversation counts and wall times (`sessionStats` unit) | registers on `ctx.sessionProjections` |
+| [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | Projects validated CDC session-message rows into tenant-scoped search documents | `ctx.kafkaEvents`, `ctx.elasticsearch` |
 
 ## Titles
 
@@ -37,7 +38,6 @@ Derives durable session titles from the session log, with an optional model-back
 | [`session-title-llm/`](session-title-llm/README.md) | Provides shared model-backed title generation | — |
 | [`session-title-first-prompt-llm/`](session-title-first-prompt-llm/README.md) | Titles a session from its first eligible human message | registers on `ctx.sessionTitle` |
 | [`session-title-all-prompts-llm/`](session-title-all-prompts-llm/README.md) | Titles a session from all eligible human messages | registers on `ctx.sessionTitle` |
-| [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | Projects validated CDC session-message rows into tenant-scoped search documents | `ctx.kafkaEvents`, `ctx.elasticsearch` |
 
 Deployments may register one model-backed provider; the service retains a deterministic fallback when none is present.
 

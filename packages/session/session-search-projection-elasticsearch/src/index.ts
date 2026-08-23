@@ -88,6 +88,26 @@ interface SessionMessageRow {
   occurredAt: string
 }
 
+/** Kafka-independent authoritative input accepted by the projection writer. */
+export interface SessionSearchProjectionRecord {
+  tenantId: string
+  userId: string
+  sessionId: string
+  messageId: string
+  revision: number
+  status: string
+  visibility: string
+  role: string
+  visibleText: string
+  occurredAt: string
+  deleted: boolean
+}
+
+/** Minimal Elasticsearch operation boundary required by the projection writer. */
+export interface SessionSearchProjectionElasticsearch {
+  operation<T>(callback: (client: ElasticsearchClient) => T | Promise<T>): Promise<T>
+}
+
 function invalidEvent(cause?: unknown): SessionSearchProjectionError {
   return new SessionSearchProjectionError(
     'invalid-event',
@@ -162,20 +182,76 @@ function shouldProcess(event: CdcEvent): boolean {
 }
 
 async function writeDocument(
-  ctx: Context,
+  elasticsearch: SessionSearchProjectionElasticsearch,
   index: string,
   id: string,
   version: number,
   document: Record<string, unknown>,
 ): Promise<void> {
   try {
-    await ctx.elasticsearch.operation(async (client: ElasticsearchClient) => {
+    await elasticsearch.operation(async (client: ElasticsearchClient) => {
       await client.index({ index, id, version, version_type: 'external', document })
     })
   } catch (cause) {
     if (isExternalVersionConflict(cause)) return
     throw new SessionSearchProjectionError('elasticsearch-failed', { cause })
   }
+}
+
+function validRecord(record: SessionSearchProjectionRecord): boolean {
+  const required = [
+    record.tenantId,
+    record.userId,
+    record.sessionId,
+    record.messageId,
+    record.status,
+    record.visibility,
+    record.occurredAt,
+  ]
+  const visible = !record.deleted && record.status === COMPLETED_STATUS && record.visibility === USER_VISIBILITY
+  return required.every(value => typeof value === 'string' && value.trim().length > 0)
+    && Number.isSafeInteger(record.revision) && record.revision > 0
+    && typeof record.deleted === 'boolean'
+    && typeof record.role === 'string'
+    && typeof record.visibleText === 'string'
+    && (!visible || ((record.role === 'user' || record.role === 'assistant') && record.visibleText.trim().length > 0))
+    && Number.isFinite(Date.parse(record.occurredAt))
+    && new Date(Date.parse(record.occurredAt)).toISOString() === record.occurredAt
+}
+
+/**
+ * Apply one authoritative projection record without Kafka or CDC metadata.
+ * Structurally compatible reconciler records can call this function from a named sink.
+ */
+export async function applySessionSearchProjectionRecord(
+  elasticsearch: SessionSearchProjectionElasticsearch,
+  index: string,
+  record: SessionSearchProjectionRecord,
+): Promise<void> {
+  if (index.trim().length === 0 || !validRecord(record)) {
+    throw new SessionSearchProjectionError('invalid-record')
+  }
+  const deleted = record.deleted
+    || record.status !== COMPLETED_STATUS
+    || record.visibility !== USER_VISIBILITY
+  await writeDocument(
+    elasticsearch,
+    index,
+    sessionSearchProjectionDocumentId(record.tenantId, record.userId, record.messageId),
+    record.revision,
+    {
+      tenant: record.tenantId,
+      user: record.userId,
+      session: record.sessionId,
+      message: record.messageId,
+      status: record.status,
+      visibility: record.visibility,
+      ...(deleted ? {} : { role: record.role, content: record.visibleText }),
+      source_time: record.occurredAt,
+      revision: record.revision,
+      deleted,
+    },
+  )
 }
 
 class ProjectionHandler implements EventHandler<CdcEvent> {
@@ -185,21 +261,9 @@ class ProjectionHandler implements EventHandler<CdcEvent> {
     validateRoute(this.config, delivery)
     if (!shouldProcess(delivery.event)) return
     const row = messageRow(imageFor(delivery.event))
-    const id = sessionSearchProjectionDocumentId(row.tenantId, row.userId, row.messageId)
-    const deleted = delivery.event.operation === 'delete'
-      || row.status !== COMPLETED_STATUS
-      || row.visibility !== USER_VISIBILITY
-    await writeDocument(this.ctx, this.config.index, id, row.revision, {
-      tenant: row.tenantId,
-      user: row.userId,
-      session: row.sessionId,
-      message: row.messageId,
-      status: row.status,
-      visibility: row.visibility,
-      ...(deleted ? {} : { role: row.role, content: row.visibleText }),
-      source_time: row.occurredAt,
-      revision: row.revision,
-      deleted,
+    await applySessionSearchProjectionRecord(this.ctx.elasticsearch, this.config.index, {
+      ...row,
+      deleted: delivery.event.operation === 'delete',
     })
   }
 }
