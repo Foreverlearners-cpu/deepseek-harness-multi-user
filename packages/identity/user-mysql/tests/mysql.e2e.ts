@@ -27,20 +27,26 @@ function targetConfig(): Config {
 }
 
 describe.skipIf(target === undefined)('real MySQL user directory', () => {
-  it('persists profile and lifecycle revisions across Provider calls', async () => {
+  it('persists Unicode profiles and serializes stale concurrent revisions', async () => {
     ctx = new Context()
     await ctx.plugin(Mysql, targetConfig())
     await ctx.plugin(UserMysqlDirectory)
 
     const created = await ctx.users.create({
-      displayName: 'MySQL E2E',
+      displayName: '\u7528\u6237\u76ee\u5f55',
       extensions: { 'dsh-user-mysql/test': true },
     })
-    const updated = await ctx.users.update({
+    const competing = await Promise.allSettled(['\u66f4\u65b0\u7532', '\u66f4\u65b0\u4e59'].map(async displayName => ctx!.users.update({
       userId: created.userId,
       expectedRevision: created.revision,
-      patch: { displayName: 'MySQL E2E updated' },
-    })
+      patch: { displayName },
+    })))
+    const successes = competing.filter(result => result.status === 'fulfilled')
+    const failures = competing.filter(result => result.status === 'rejected')
+    expect(successes).toHaveLength(1)
+    expect(failures).toHaveLength(1)
+    expect(failures[0]).toMatchObject({ reason: { code: 'revision-conflict' } })
+    const updated = successes[0]!.value
     const deleted = await ctx.users.delete({
       userId: updated.userId,
       expectedRevision: updated.revision,

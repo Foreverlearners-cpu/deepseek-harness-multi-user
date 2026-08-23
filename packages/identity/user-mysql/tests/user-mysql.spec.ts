@@ -33,10 +33,33 @@ async function setup(mysql = new FakeMysql()): Promise<{
 describe('UserMysqlDirectory', () => {
   it('initializes the current schema and rejects an incompatible version', async () => {
     expect(USER_MYSQL_SCHEMA_VERSION).toBe(1)
+    const initialized = new FakeMysql()
+    await setup(initialized)
+    expect(initialized.schemaVersion).toBe(1)
+    expect(initialized.userTableExists).toBe(true)
+    expect(initialized.queries).toContainEqual(expect.stringContaining(
+      'display_name VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin',
+    ))
+
+    const existing = new FakeMysql()
+    existing.schemaVersion = USER_MYSQL_SCHEMA_VERSION
+    existing.userTableExists = true
+    await expect(setup(existing)).resolves.toMatchObject({ mysql: existing })
+
     const mysql = new FakeMysql()
     mysql.schemaVersion = 2
 
     await expect(setup(mysql)).rejects.toThrow(/incompatible schema version/)
+  })
+
+  it('rejects unversioned or incomplete existing schema state', async () => {
+    const unversioned = new FakeMysql()
+    unversioned.userTableExists = true
+    await expect(setup(unversioned)).rejects.toThrow(/unversioned dsh_users table/)
+
+    const missing = new FakeMysql()
+    missing.schemaVersion = USER_MYSQL_SCHEMA_VERSION
+    await expect(setup(missing)).rejects.toThrow(/versioned user table is missing/)
   })
 
   it('binds keyset cursors to their status filter', () => {

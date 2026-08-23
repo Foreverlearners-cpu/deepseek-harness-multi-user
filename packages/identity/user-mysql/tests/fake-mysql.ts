@@ -17,7 +17,9 @@ function copyRows(rows: Map<string, FakeUserRow>): Map<string, FakeUserRow> {
 /** Minimal stateful MySQL service that executes this Provider's owned SQL. */
 export class FakeMysql {
   readonly rows = new Map<string, FakeUserRow>()
-  schemaVersion = 1
+  readonly queries: string[] = []
+  schemaVersion: number | undefined
+  userTableExists = false
   failNext: Error | undefined
   failSql: string | undefined
   rollbackFailure: Error | undefined
@@ -44,14 +46,25 @@ export class FakeMysql {
         throw failure
       }
       const normalized = sql.replaceAll(/\s+/g, ' ').trim()
+      this.queries.push(normalized)
       if (this.failSql !== undefined && normalized.includes(this.failSql)) {
         this.failSql = undefined
         throw new Error('targeted SQL failure')
       }
-      if (normalized.startsWith('CREATE TABLE')) return [{ affectedRows: 0 }, []]
-      if (normalized.startsWith('INSERT IGNORE INTO dsh_user_schema')) return [{ affectedRows: 1 }, []]
+      if (normalized.startsWith('CREATE TABLE IF NOT EXISTS dsh_user_schema')) return [{ affectedRows: 0 }, []]
+      if (normalized.startsWith('CREATE TABLE dsh_users')) {
+        this.userTableExists = true
+        return [{ affectedRows: 0 }, []]
+      }
+      if (normalized.startsWith('INSERT INTO dsh_user_schema')) {
+        this.schemaVersion = parameters[1] as number
+        return [{ affectedRows: 1 }, []]
+      }
       if (normalized.startsWith('SELECT version FROM dsh_user_schema')) {
-        return [[{ version: this.schemaVersion }], []]
+        return [this.schemaVersion === undefined ? [] : [{ version: this.schemaVersion }], []]
+      }
+      if (normalized.startsWith('SELECT TABLE_NAME AS table_name FROM information_schema.TABLES')) {
+        return [this.userTableExists ? [{ table_name: 'dsh_users' }] : [], []]
       }
       return this.executeSql(normalized, parameters)
     }
