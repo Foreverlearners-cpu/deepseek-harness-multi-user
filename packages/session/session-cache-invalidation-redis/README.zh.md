@@ -18,7 +18,9 @@ cache key 和 watermark key 都包含 `tenantId`、`userId` 与 `sessionId`。�
 
 `refillSessionContextCache()` 是 cache population 必须使用的 helper。它通过 Lua comparison 拒绝低于当前 watermark 的 candidate，并原子写入被接受的值，防止旧 database read 在失效后重新填充 cache。
 
-decode、route、identity、schema、Redis 和 script failure 都会拒绝 event handler，因此 `dsh-kafka-events` 无法允许 offset commit。dispose 会关闭并排空所属 typed subscription。
+`applySessionContextCacheSnapshot()` 在不依赖 Kafka metadata 的情况下公开相同的原子 watermark 推进和失效操作。reconciler 提供 tenant/user/session identity 与权威 revision，使实时 CDC 与修复流程不会产生不同的 Redis 排序行为。
+
+decode、route、identity、schema、Redis 和 script failure 都会拒绝 event handler，因此 `dsh-kafka-events` 无法允许 offset commit。非预期 subscription failure 会输出不含 broker detail 的固定诊断并卸载插件；常规 dispose 会关闭并排空所属 typed subscription。
 
 ## Model Experience
 
@@ -27,5 +29,5 @@ decode、route、identity、schema、Redis 和 script failure 都会拒绝 event
 ## Known Limitations and Deferred Work
 
 - 遇到无效记录与 Redis failure 时本包会 fail-stop；retry topic 与 dead-letter administration 位于包外。
-- 完整 cache rebuild 与 reconciliation 仍由 session read owner 负责。
+- snapshot enumeration 与完整 cache rebuild 仍由各自 source owner 负责；reconciler 通过 `applySessionContextCacheSnapshot()` 应用发现的 revision。
 - schema change 需要显式更新配置并协调部署。

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-23-session-cdc-cache-watermarks.md
-2026-08-23-session-cdc-cache-watermarks.md: 4a5ee3359a00026d65b9c1aacd4ae20032a4375d
-2026-08-23-session-cdc-cache-watermarks.zh.md: 170fa87cd12b52fc3bb0b9f56f48b8d71190d471
+2026-08-23-session-cdc-cache-watermarks.md: 374a092bcabe70fb774434a36e995714351a53e6
+2026-08-23-session-cdc-cache-watermarks.zh.md: b6db0f4c10296dcd5cfa028f74b071a63f186513
