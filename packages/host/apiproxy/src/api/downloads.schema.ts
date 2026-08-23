@@ -24,26 +24,3 @@ export const sessionLogQuerySchema = z
     sessionId: query.sessionId,
     ...(query.includeDescendants === 'true' ? { includeDescendants: true } : {}),
   })) satisfies z.ZodType<Parameters<DownloadsApi['sessionLog']>[0]>
-
-/** Query used by the authenticated Conversation File download route. */
-export const conversationFileQuerySchema = z.object({
-  sessionId: sessionIdSchema,
-  fileId: z.string().min(1).max(128),
-}).transform(query => ({ sessionId: query.sessionId, fileId: query.fileId }))
-
-/** JSON upload carrier. Bytes are canonical base64 at this transport boundary. */
-export const conversationFileUploadSchema = z.object({
-  sessionId: sessionIdSchema,
-  originalName: z.string().min(1).max(255),
-  mediaType: z.string().min(1).max(128),
-  purpose: z.string().min(1).max(32).optional(),
-  data: z.string().min(1),
-  expectedSha256: z.string().regex(/^[0-9a-fA-F]{64}$/).optional(),
-}).transform(input => ({
-  sessionId: input.sessionId,
-  originalName: input.originalName,
-  mediaType: input.mediaType,
-  ...input.purpose === undefined ? {} : { purpose: input.purpose },
-  data: input.data,
-  ...input.expectedSha256 === undefined ? {} : { expectedSha256: input.expectedSha256 },
-}))

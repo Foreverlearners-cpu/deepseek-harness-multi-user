@@ -15,14 +15,11 @@ const CONFIG = {
 }
 
 interface FakeConnection {
-  beginTransaction: ReturnType<typeof vi.fn>
-  commit: ReturnType<typeof vi.fn>
   destroy: ReturnType<typeof vi.fn>
   ping: ReturnType<typeof vi.fn>
   prepare: ReturnType<typeof vi.fn>
   query: ReturnType<typeof vi.fn>
   release: ReturnType<typeof vi.fn>
-  rollback: ReturnType<typeof vi.fn>
   reset: ReturnType<typeof vi.fn>
 }
 
@@ -31,28 +28,17 @@ interface FakePool {
   end: ReturnType<typeof vi.fn>
 }
 
-function deferred<T>(): { promise: Promise<T>; resolve(value: T | PromiseLike<T>): void } {
-  let resolvePromise: (value: T | PromiseLike<T>) => void = () => {}
-  const promise = new Promise<T>((resolve) => {
-    resolvePromise = resolve
-  })
-  return { promise, resolve: resolvePromise }
-}
-
 let connection: FakeConnection
 let pool: FakePool
 const contexts: Context[] = []
 
 beforeEach(() => {
   connection = {
-    beginTransaction: vi.fn().mockResolvedValue(undefined),
-    commit: vi.fn().mockResolvedValue(undefined),
     destroy: vi.fn(),
     ping: vi.fn().mockResolvedValue(undefined),
     prepare: vi.fn(),
     query: vi.fn().mockResolvedValue([[], []]),
     release: vi.fn(),
-    rollback: vi.fn().mockResolvedValue(undefined),
     reset: vi.fn().mockResolvedValue(undefined),
   }
   pool = {
@@ -163,43 +149,6 @@ describe('Mysql', () => {
     expect(connection.release).toHaveBeenCalledTimes(2)
   })
 
-  it('commits a transaction and hides transaction lifecycle methods', async () => {
-    const { ctx } = await boot()
-
-    await expect(ctx.mysql.transaction(async (transaction) => {
-      await transaction.query('INSERT INTO test_table (value) VALUES (?)', [1])
-      expect(() => (transaction as unknown as Record<string, unknown>).commit).toThrow(/does not expose/)
-      expect(() => (transaction as unknown as Record<string, unknown>).rollback).toThrow(/does not expose/)
-      return 'committed'
-    })).resolves.toBe('committed')
-
-    expect(connection.beginTransaction).toHaveBeenCalledOnce()
-    expect(connection.commit).toHaveBeenCalledOnce()
-    expect(connection.rollback).not.toHaveBeenCalled()
-  })
-
-  it('rolls back a transaction when the callback rejects and preserves the error', async () => {
-    const { ctx } = await boot()
-    const failure = new Error('transaction failed')
-
-    await expect(ctx.mysql.transaction(() => {
-      throw failure
-    })).rejects.toBe(failure)
-
-    expect(connection.beginTransaction).toHaveBeenCalledOnce()
-    expect(connection.commit).not.toHaveBeenCalled()
-    expect(connection.rollback).toHaveBeenCalledOnce()
-  })
-
-  it('rolls back when commit fails and preserves the commit error', async () => {
-    const { ctx } = await boot()
-    const failure = new Error('commit failed')
-    connection.commit.mockRejectedValueOnce(failure)
-
-    await expect(ctx.mysql.transaction(() => 'result')).rejects.toBe(failure)
-    expect(connection.rollback).toHaveBeenCalledOnce()
-  })
-
   it('destroys a connection after a failed reset without replacing a callback result', async () => {
     const { ctx } = await boot()
     connection.reset.mockRejectedValueOnce(new Error('reset failed'))
@@ -274,8 +223,8 @@ describe('Mysql', () => {
   it('drains admitted callbacks before closing and rejects work after disposal', async () => {
     const { ctx, fiber } = await boot()
     const service = ctx.mysql
-    const entered = deferred<undefined>()
-    const unblock = deferred<undefined>()
+    const entered = Promise.withResolvers<undefined>()
+    const unblock = Promise.withResolvers<undefined>()
     const running = service.connection(async () => {
       entered.resolve(undefined)
       await unblock.promise

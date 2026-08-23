@@ -13,13 +13,6 @@
 
 # ── surface-specific values the base deliberately omits ─────────────────────
 
-# Optional MySQL-backed multi-user mode. The default Web profile remains
-# JSONL; setting DSH_STORAGE_BACKEND=mysql activates the rows below and
-# disables the base JSONL provider. Credentials are read only from the Host
-# environment and are never sent to the browser.
-- id: session-persistence-jsonl
-  disabled: !!js process.env.DSH_STORAGE_BACKEND === 'mysql'
-
 - id: system-prompt
   config:
     persona: >-
@@ -68,54 +61,6 @@
       config:
         backend: json
 
-    - id: mysql
-      name: '@deepseek-ai/dsh-mysql'
-      disabled: !!js process.env.DSH_STORAGE_BACKEND !== 'mysql'
-      config:
-        host: !!js process.env.DSH_MYSQL_HOST
-        port: !!js Number(process.env.DSH_MYSQL_PORT ?? '3306')
-        user: !!js process.env.DSH_MYSQL_USER
-        password: !!js process.env.DSH_MYSQL_PASSWORD
-        database: !!js process.env.DSH_MYSQL_DATABASE
-
-    - id: users
-      name: '@deepseek-ai/dsh-user-mysql'
-      disabled: !!js process.env.DSH_STORAGE_BACKEND !== 'mysql'
-      config:
-        bootstrapUserId: !!js process.env.DSH_USER_ID
-        bootstrapDisplayName: !!js process.env.DSH_USER_NAME ?? 'Demo User'
-
-    - id: file-storage
-      name: '@deepseek-ai/dsh-file-storage'
-      config:
-        root: !!js dshHomePath('conversation-files/v1')
-
-    - id: session-persistence-mysql
-      name: '@deepseek-ai/dsh-conversation-persistence-mysql/session-persistence'
-      disabled: !!js process.env.DSH_STORAGE_BACKEND !== 'mysql'
-
-    - id: conversation-persistence-mysql
-      name: '@deepseek-ai/dsh-conversation-persistence-mysql'
-      disabled: !!js process.env.DSH_STORAGE_BACKEND !== 'mysql'
-      config:
-        userId: !!js process.env.DSH_USER_ID
-        spoolRoot: !!js dshHomePath('conversation-spool/v1')
-
-    - id: runtime-configs-mysql
-      name: '@deepseek-ai/dsh-conversation-persistence-mysql/runtime-configs'
-      disabled: !!js process.env.DSH_STORAGE_BACKEND !== 'mysql'
-
-    - id: conversation-outbox
-      name: '@deepseek-ai/dsh-conversation-persistence-mysql/outbox-consumer'
-      disabled: !!js process.env.DSH_STORAGE_BACKEND !== 'mysql'
-      config:
-        enabled: !!js process.env.DSH_CONVERSATION_OUTBOX === 'true'
-        stateFile: !!js dshHomePath('conversation-outbox/watermark.json')
-        kafkaTopic: !!js process.env.DSH_CONVERSATION_KAFKA_TOPIC
-        kafkaGroup: !!js process.env.DSH_CONVERSATION_KAFKA_GROUP
-        redisPrefix: !!js process.env.DSH_CONVERSATION_REDIS_PREFIX ?? 'dsh:conversation:event'
-        elasticsearchIndex: !!js process.env.DSH_CONVERSATION_ES_INDEX
-
     - id: message-feedback
       name: '@deepseek-ai/dsh-message-feedback'
       config:
@@ -153,8 +98,6 @@
     # shares. The base layer's agent-default-model service owns the default model.
     - id: api-gateway
       name: '@deepseek-ai/dsh-host-apiproxy'
-      config:
-        userId: !!js process.env.DSH_USER_ID
 
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'

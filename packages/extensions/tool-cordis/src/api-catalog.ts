@@ -513,139 +513,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
-    key: 'conversationPersistence',
-    summary: 'MySQL message-only persistence.',
-    description: 'MySQL message-only persistence. Streaming chunks remain in the live Session only.',
-    methods: [
-      {
-        signature: 'readonly userId: UserId',
-        description: 'Authenticated user served by this plugin instance.',
-        parameters: [],
-      },
-      {
-        signature: 'readonly fileStorage: FileObjectStore',
-        description: 'Provider-neutral object store used for file bytes.',
-        parameters: [],
-      },
-      {
-        signature: 'readonly maxFileBytes: number',
-        description: 'Maximum bytes accepted by saveFile.',
-        parameters: [],
-      },
-      {
-        signature: 'readonly spool: DurableMessageSpool | undefined',
-        description: 'Optional durable retry spool for failed message commits.',
-        parameters: [],
-      },
-      {
-        signature: 'async flushSession(sessionId: string): Promise<void>',
-        description: 'Wait until all event projections already admitted for one session settle.',
-        parameters: [{ name: 'sessionId', description: 'Session whose pending projection writes should settle.' }],
-      },
-      {
-        signature: 'async listAttempts(sessionId: string): Promise<ModelAttempt[]>',
-        description: 'List model attempts belonging to one user-owned session.',
-        parameters: [{ name: 'sessionId', description: 'Session to query.' }],
-        returns: 'Attempts ordered by turn, step, and retry number.',
-      },
-      {
-        signature: 'async readOutbox(options: { afterSequence?: number; afterOccurredAt?: number; afterEventId?: string; limit?: number } = {}): Promise<ConversationOutboxEvent[]>',
-        description: 'Read committed semantic outbox events for this user.',
-        parameters: [{ name: 'options', description: 'Cursor and page-size options.' }],
-        returns: 'A bounded page of outbox events.',
-      },
-      {
-        signature: 'async createConversation(input: CreateConversationInput): Promise<Conversation>',
-        description: 'Create one user-owned conversation.',
-        parameters: [{ name: 'input', description: 'Conversation metadata and optional title.' }],
-        returns: 'The committed conversation row.',
-      },
-      {
-        signature: 'async getConversation(sessionId: string): Promise<Conversation | undefined>',
-        description: 'Read one user-owned conversation.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }],
-        returns: 'The conversation, or undefined when it is not owned by this user.',
-      },
-      {
-        signature: 'async listConversations(options: { includeDeleted?: boolean; limit?: number; offset?: number } = {}): Promise<Conversation[]>',
-        description: 'List this user\'s conversations.',
-        parameters: [{ name: 'options', description: 'Deletion filter and pagination options.' }],
-        returns: 'Conversations ordered by most recent update.',
-      },
-      {
-        signature: 'async readMessages(sessionId: string, options: { afterOrdinal?: number; limit?: number } = {}): Promise<ConversationMessage[]>',
-        description: 'Read final semantic messages for one conversation.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }, { name: 'options', description: 'Cursor and page-size options.' }],
-        returns: 'Messages ordered by their conversation ordinal.',
-      },
-      {
-        signature: 'async hydrate(sessionId: string): Promise<HydratedSession | undefined>',
-        description: 'Rebuild a compact, contiguous SessionEvent log from semantic rows. This is intentionally a projection, not a token replay: assistant/chunk rows are absent by construction and only final messages/tool results remain.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }],
-        returns: 'A restored header and message-only event list, or undefined when absent/deleted.',
-      },
-      {
-        signature: 'async appendMessage(sessionId: string, input: AppendMessageInput): Promise<ConversationMessage>',
-        description: 'Append one final semantic message.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }, { name: 'input', description: 'Message and optional file links.' }],
-        returns: 'The committed message row.',
-      },
-      {
-        signature: 'async appendMessages(sessionId: string, inputs: readonly AppendMessageInput[], expectedRevision?: number): Promise<ConversationMessage[]>',
-        description: 'Append a final-message batch atomically.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }, { name: 'inputs', description: 'Messages in their intended turn order.' }, { name: 'expectedRevision', description: 'Optional optimistic conversation revision.' }],
-        returns: 'The committed message rows.',
-      },
-      {
-        signature: 'async updateTitle( sessionId: string, title: string, status: ConversationTitleStatus, source: string = status, expectedRevision?: number, expectedTitleRevision?: number, ): Promise<Conversation>',
-        description: 'Update a conversation title and publish its semantic outbox event.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }, { name: 'title', description: 'New title.' }, { name: 'status', description: 'Title state.' }, { name: 'source', description: 'Title source label.' }, { name: 'expectedRevision', description: 'Optional optimistic conversation revision.' }, { name: 'expectedTitleRevision', description: 'Optional optimistic title revision.' }],
-        returns: 'The updated conversation row.',
-      },
-      {
-        signature: 'async updateExtensions(sessionId: string, extensions: JsonObject, expectedRevision?: number): Promise<Conversation>',
-        description: 'Replace the conversation extension object.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }, { name: 'extensions', description: 'JSON extension fields.' }, { name: 'expectedRevision', description: 'Optional optimistic conversation revision.' }],
-        returns: 'The updated conversation row.',
-      },
-      {
-        signature: 'async saveFile(sessionId: string, input: RegisterFileInput): Promise<ConversationFile>',
-        description: 'Publish file bytes through the independent file-storage service and commit metadata.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }, { name: 'input', description: 'File metadata and bytes.' }],
-        returns: 'The committed conversation-file metadata row.',
-      },
-      {
-        signature: 'async getFile(sessionId: string, fileId: string): Promise<ConversationFile | undefined>',
-        description: 'Read one file metadata row owned by the current user.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }, { name: 'fileId', description: 'File identifier.' }],
-        returns: 'File metadata, or undefined when it is not owned by this user.',
-      },
-      {
-        signature: 'async listFiles(sessionId: string): Promise<ConversationFile[]>',
-        description: 'List ready and quarantined file metadata for a conversation.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }],
-        returns: 'Files ordered by creation time.',
-      },
-      {
-        signature: 'async listMessageFiles(sessionId: string, messageId: string): Promise<ConversationFile[]>',
-        description: 'List files linked to one message.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }, { name: 'messageId', description: 'Message identifier.' }],
-        returns: 'Linked files in message ordinal order.',
-      },
-      {
-        signature: 'async readFile(sessionId: string, fileId: string, signal?: AbortSignal): Promise<{ metadata: ConversationFile; data: Buffer }>',
-        description: 'Read file metadata and verified bytes.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }, { name: 'fileId', description: 'File identifier.' }, { name: 'signal', description: 'Optional cancellation signal.' }],
-        returns: 'Metadata and bytes from the independent file-storage service.',
-      },
-      {
-        signature: 'async linkMessageFiles(sessionId: string, messageId: string, fileIds: readonly string[], relation: string = \'content\'): Promise<void>',
-        description: 'Link existing user-owned files to one message.',
-        parameters: [{ name: 'sessionId', description: 'Conversation identifier.' }, { name: 'messageId', description: 'Message identifier.' }, { name: 'fileIds', description: 'File identifiers in display order.' }, { name: 'relation', description: 'Semantic relation label.' }],
-      },
-    ],
-  },
-  {
     key: 'credentials',
     summary: 'Abstract credential service.',
     description: 'Abstract credential service. Providers implement the four operations over their source layers; one seam-wide rule binds them all: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.',
@@ -708,30 +575,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
         returns: 'the created sandbox after the configured cwd exists.',
         throws: ['when E2B rejects creation or the service is disposing.'],
-      },
-    ],
-  },
-  {
-    key: 'fileStorage',
-    summary: 'Local content-addressed implementation of FileObjectStore.',
-    description: 'Local content-addressed implementation of FileObjectStore.',
-    methods: [
-      {
-        signature: 'readonly root: string',
-        description: 'Absolute root containing content-addressed object files.',
-        parameters: [],
-      },
-      {
-        signature: 'async put(data: Uint8Array, expectedSha256?: string): Promise<FileObjectRef>',
-        description: 'Publish bytes idempotently under `objects/<prefix>/<sha256>`.',
-        parameters: [{ name: 'data', description: 'Bytes to publish.' }, { name: 'expectedSha256', description: 'Optional digest supplied by the caller for validation.' }],
-        returns: 'The immutable object reference published by this provider.',
-      },
-      {
-        signature: 'async get(storageKey: string, expectedSha256: string, signal?: AbortSignal): Promise<Buffer>',
-        description: 'Read and verify an object by provider-local key and expected digest.',
-        parameters: [{ name: 'storageKey', description: 'Provider-local object key returned by {@link put}.' }, { name: 'expectedSha256', description: 'Digest that the returned bytes must match.' }, { name: 'signal', description: 'Optional cancellation signal.' }],
-        returns: 'The verified object bytes.',
       },
     ],
   },
@@ -1133,31 +976,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Select whether plan mode should be active. Between turns the method appends the change immediately because no in-turn pre-step will run until another prompt starts a turn. The open-turn fold is the idle signal: agent status stays `running` through post-turn checkpointing, when no further in-turn pre-step runs. During an open turn the selection remains pending until the next accepted in-turn pre-step. Repeated selection of the current or already-pending state is a no-op.',
         parameters: [{ name: 'agent', description: 'The agent to switch.' }, { name: 'active', description: 'Whether plan mode should be active.' }],
         returns: 'what happened: `committed` (logged now), `queued` (awaiting the next accepted in-turn pre-step), `cancelled` (an opposite pending selection was cleared; the logged state already matches), or `noop` (already in that state).',
-      },
-    ],
-  },
-  {
-    key: 'runtimeConfigs',
-    summary: 'MySQL-backed runtime configuration store for title and other dynamic knobs.',
-    description: 'MySQL-backed runtime configuration store for title and other dynamic knobs.',
-    methods: [
-      {
-        signature: 'async get(key: string): Promise<RuntimeConfig | undefined>',
-        description: 'Read one active runtime configuration value.',
-        parameters: [{ name: 'key', description: 'Configuration key.' }],
-        returns: 'The active value, or undefined when absent.',
-      },
-      {
-        signature: 'async set(input: RuntimeConfigInput): Promise<RuntimeConfig>',
-        description: 'Create or update one runtime configuration value.',
-        parameters: [{ name: 'input', description: 'Configuration value and optional optimistic revision.' }],
-        returns: 'The committed configuration row.',
-      },
-      {
-        signature: 'subscribe(listener: RuntimeConfigListener): () => void',
-        description: 'Subscribe to committed config changes; callers own the returned disposer.',
-        parameters: [{ name: 'listener', description: 'Callback invoked after a configuration commit.' }],
-        returns: 'A disposer that removes the listener.',
       },
     ],
   },
@@ -2222,42 +2040,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
-    key: 'users',
-    summary: 'User identity storage seam.',
-    description: 'User identity storage seam. Providers own the durable user records.',
-    methods: [
-      {
-        signature: 'abstract create(input: CreateUserInput): Promise<User>',
-        description: 'Create an active user; duplicate ids must reject.',
-        parameters: [{ name: 'input', description: 'User identity and optional display name.' }],
-        returns: 'The committed user record.',
-      },
-      {
-        signature: 'abstract get(id: UserId): Promise<User | undefined>',
-        description: 'Read one user, returning undefined when it is absent from this tenant.',
-        parameters: [{ name: 'id', description: 'User identifier.' }],
-        returns: 'The user record, or undefined when absent.',
-      },
-      {
-        signature: 'abstract requireActive(id: UserId): Promise<User>',
-        description: 'Read one active user or reject with a not-found/disabled error.',
-        parameters: [{ name: 'id', description: 'User identifier.' }],
-        returns: 'The active user record.',
-      },
-      {
-        signature: 'abstract disable(id: UserId): Promise<void>',
-        description: 'Disable a user without deleting owned data.',
-        parameters: [{ name: 'id', description: 'User identifier.' }],
-      },
-      {
-        signature: 'abstract list(): Promise<User[]>',
-        description: 'List users visible to this configured tenant runtime.',
-        parameters: [],
-        returns: 'Visible user records.',
-      },
-    ],
-  },
-  {
     key: 'web',
     summary: 'The web access service.',
     description: 'The web access service. Registered as `ctx.web` (one instance per context).\n\nSelection semantics (resolved at execution time, never order-dependent):\n\n- A configured id that is registered and `available()` → that provider.\n- A configured id not registered → `WEB_PROVIDER_CONFIGURED_MISSING`.\n- A configured id registered but unavailable → `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`.\n- No id configured, exactly one registered usable provider → that provider.\n- No id configured, multiple usable providers → `WEB_PROVIDER_AMBIGUOUS`.\n- No id configured, no usable provider → `WEB_PROVIDER_UNAVAILABLE`.',
@@ -2884,10 +2666,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AgentStatus = \'idle\' | \'running\';',
   },
   {
-    name: 'AppendMessageInput',
-    declaration: 'export interface AppendMessageInput {\n    messageId?: string;\n    eventType: MessageEventType;\n    role: MessageRole;\n    turnNo?: number;\n    stepNo?: number;\n    content: JsonValue;\n    source?: JsonValue | null;\n    toolCallId?: string | null;\n    usage?: JsonValue | null;\n    visibility?: \'user\' | \'internal\';\n    status?: MessageStatus;\n    extensions?: JsonObject;\n    fileIds?: readonly string[];\n}',
-  },
-  {
     name: 'ApprovalOutcome',
     declaration: 'export type ApprovalOutcome = \'allowed-once\' | \'rejected\' | \'cancelled\' | \'unavailable\';',
   },
@@ -3108,30 +2886,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'continuable\';\n    readonly label: string;\n    readonly agentProvider?: string;\n    readonly agentModel?: string;\n    readonly persona?: string;\n    readonly toolFilter?: ToolRestriction;\n}',
   },
   {
-    name: 'Conversation',
-    declaration: 'export interface Conversation {\n    sessionId: string;\n    version: number;\n    userId: string;\n    title: string;\n    titleStatus: ConversationTitleStatus;\n    titleSource: string;\n    titleRevision: number;\n    titleUpdatedAt: number;\n    status: ConversationStatus;\n    cwd: string | null;\n    parentSessionId: string | null;\n    seedLength: number | null;\n    origin: string | null;\n    delegationDepth: number | null;\n    agentPreset: string | null;\n    incarnation: string;\n    revision: number;\n    nextMessageOrdinal: number;\n    extensions: JsonObject;\n    createdAt: number;\n    updatedAt: number;\n}',
-  },
-  {
-    name: 'ConversationFile',
-    declaration: 'export interface ConversationFile {\n    fileId: string;\n    userId: string;\n    sessionId: string;\n    objectId: string;\n    originalName: string;\n    mediaType: string;\n    byteSize: number;\n    purpose: string;\n    status: \'ready\' | \'deleted\' | \'quarantined\';\n    extensions: JsonObject;\n    createdAt: number;\n}',
-  },
-  {
-    name: 'ConversationMessage',
-    declaration: 'export interface ConversationMessage {\n    messageId: string;\n    sessionId: string;\n    userId: string;\n    ordinal: number;\n    eventType: MessageEventType;\n    role: MessageRole;\n    turnNo: number;\n    stepNo: number;\n    content: JsonValue;\n    source: JsonValue | null;\n    toolCallId: string | null;\n    usage: JsonValue | null;\n    visibility: \'user\' | \'internal\';\n    status: MessageStatus;\n    extensions: JsonObject;\n    createdAt: number;\n    updatedAt: number;\n}',
-  },
-  {
-    name: 'ConversationOutboxEvent',
-    declaration: 'export interface ConversationOutboxEvent {\n    schemaVersion: number;\n    eventId: string;\n    eventType: \'conversation.message.committed\' | \'conversation.title.changed\' | \'conversation.attempt.completed\';\n    occurredAt: number;\n    userId: string;\n    sessionId: string;\n    messageId?: string;\n    aggregateRevision: number;\n    payload: JsonObject;\n    extensions: JsonObject;\n    outboxSequence?: number;\n}',
-  },
-  {
-    name: 'ConversationStatus',
-    declaration: 'export type ConversationStatus = \'active\' | \'archived\' | \'deleted\';',
-  },
-  {
-    name: 'ConversationTitleStatus',
-    declaration: 'export type ConversationTitleStatus = \'fallback\' | \'generating\' | \'generated\' | \'manual\';',
-  },
-  {
     name: 'CordisDynamicPackageId',
     declaration: 'export type CordisDynamicPackageId = Branded<\'CordisDynamicPackageId\'>;',
   },
@@ -3161,11 +2915,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateAgentOptions',
-    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly userId?: NonNullable<SessionHeader[\'userId\']>;\n        readonly parentSession?: SessionId;\n        readonly seedLength?: number;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly seed?: readonly SessionEvent[];\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
-  },
-  {
-    name: 'CreateConversationInput',
-    declaration: 'export interface CreateConversationInput {\n    sessionId: string;\n    version?: number;\n    title?: string;\n    titleStatus?: ConversationTitleStatus;\n    titleSource?: string;\n    cwd?: string | null;\n    parentSessionId?: string | null;\n    seedLength?: number | null;\n    origin?: string | null;\n    delegationDepth?: number | null;\n    agentPreset?: string | null;\n    extensions?: JsonObject;\n    createdAt?: number;\n}',
+    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly seedLength?: number;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly seed?: readonly SessionEvent[];\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
   {
     name: 'CreateGoalRequest',
@@ -3177,11 +2927,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateSessionOptions',
-    declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly meta?: {\n        readonly userId?: UserId;\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly createdAt?: number;\n        readonly seedLength?: number;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n}',
-  },
-  {
-    name: 'CreateUserInput',
-    declaration: 'export interface CreateUserInput {\n    readonly id: UserId;\n    readonly displayName?: string;\n}',
+    declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly createdAt?: number;\n        readonly seedLength?: number;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n}',
   },
   {
     name: 'CredentialInfo',
@@ -3265,7 +3011,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'DownloadsApi',
-    declaration: 'export interface DownloadsApi {\n    sessionLog(request: {\n        sessionId: SessionId;\n        includeDescendants?: boolean;\n    }, signal: AbortSignal): Promise<Response>;\n    conversationFile(request: {\n        sessionId: SessionId;\n        fileId: string;\n    }, signal: AbortSignal): Promise<Response>;\n    conversationFileUpload(request: {\n        sessionId: SessionId;\n        originalName: string;\n        mediaType: string;\n        purpose?: string;\n        data: Uint8Array;\n        expectedSha256?: string;\n    }, signal: AbortSignal): Promise<Response>;\n}',
+    declaration: 'export interface DownloadsApi {\n    sessionLog(request: {\n        sessionId: SessionId;\n        includeDescendants?: boolean;\n    }, signal: AbortSignal): Promise<Response>;\n}',
   },
   {
     name: 'DshEnvironment',
@@ -3274,10 +3020,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'DshEnvironmentKey',
     declaration: 'export type DshEnvironmentKey = `${typeof DSH_ENV_PREFIX}${string}`;',
-  },
-  {
-    name: 'DurableMessageSpool',
-    declaration: 'export class DurableMessageSpool {\n    constructor(private readonly root: string, private readonly userId: string, private readonly retryMs: number, private readonly save: (task: SpoolTask) => Promise<void>);\n    async init(): Promise<void>;\n    async enqueue(task: Omit<SpoolTask, \'operationId\' | \'createdAt\' | \'retryCount\'> & Partial<Pick<SpoolTask, \'operationId\' | \'createdAt\' | \'retryCount\'>>): Promise<string>;\n    async close(): Promise<void>;\n    get pendingCount(): number;\n}',
   },
   {
     name: 'DynamicCordisPackage',
@@ -3310,14 +3052,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'FileLocation',
     declaration: 'export interface FileLocation {\n    path: string;\n    line?: number;\n}',
-  },
-  {
-    name: 'FileObjectRef',
-    declaration: 'export interface FileObjectRef {\n    sha256: string;\n    storageKey: string;\n    storageBackend: string;\n    byteSize: number;\n}',
-  },
-  {
-    name: 'FileObjectStore',
-    declaration: 'export interface FileObjectStore {\n    readonly storageBackend: string;\n    put(data: Uint8Array, expectedSha256?: string): Promise<FileObjectRef>;\n    get(storageKey: string, expectedSha256: string, signal?: AbortSignal): Promise<Buffer>;\n}',
   },
   {
     name: 'FinishReason',
@@ -3410,10 +3144,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'GoalView',
     declaration: 'export interface GoalView extends GoalSnapshot {\n    readonly roundsStarted: number;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n    readonly activation: GoalActivation;\n}',
-  },
-  {
-    name: 'HydratedSession',
-    declaration: 'export interface HydratedSession {\n    meta: SessionHeader;\n    events: SessionEvent[];\n}',
   },
   {
     name: 'ImageAttachmentLimits',
@@ -3652,10 +3382,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface Message {\n    readonly id: MessageId;\n    readonly role: \'system\' | \'user\' | \'assistant\';\n    readonly content: ContentBlock[];\n    readonly source: MessageSource;\n}',
   },
   {
-    name: 'MessageEventType',
-    declaration: 'export type MessageEventType = \'user/message\' | \'assistant/message\' | \'tool/result\';',
-  },
-  {
     name: 'MessageFeedbackDeleteRequest',
     declaration: 'export interface MessageFeedbackDeleteRequest {\n    readonly sessionId: SessionId;\n    readonly messageId: MessageId;\n    readonly ifVersion: MessageFeedbackVersion;\n}',
   },
@@ -3736,24 +3462,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type MessageId = Branded<\'MessageId\'>;',
   },
   {
-    name: 'MessageRole',
-    declaration: 'export type MessageRole = \'user\' | \'assistant\' | \'tool\';',
-  },
-  {
     name: 'MessageSource',
     declaration: 'export type MessageSource = MessageSourceMap[keyof MessageSourceMap];',
   },
   {
     name: 'MessageSourceMap',
     declaration: 'export interface MessageSourceMap {\n    user: {\n        kind: \'user\';\n    };\n    plugin: {\n        kind: \'plugin\';\n        plugin: string;\n    } & ContextFormed;\n    model: ModelMessageSource;\n    tool: ToolMessageSource;\n}',
-  },
-  {
-    name: 'MessageStatus',
-    declaration: 'export type MessageStatus = \'completed\' | \'partial\' | \'failed\' | \'superseded\';',
-  },
-  {
-    name: 'ModelAttempt',
-    declaration: 'export interface ModelAttempt {\n    attemptId: string;\n    sessionId: string;\n    turnNo: number;\n    stepNo: number;\n    retryNo: number;\n    provider: string;\n    model: string;\n    status: \'started\' | \'completed\' | \'failed\' | \'cancelled\';\n    startedAt: number;\n    firstTokenAt: number | null;\n    finishedAt: number | null;\n    finishReason: string | null;\n    usage: JsonValue | null;\n    finalMessageId: string | null;\n    partialContent: JsonValue | null;\n    errorCode: string | null;\n    errorMessage: string | null;\n    extensions: JsonObject;\n}',
   },
   {
     name: 'ModelMessageSource',
@@ -3880,10 +3594,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RedactedSecret {\n    path: string[];\n    set: boolean;\n}',
   },
   {
-    name: 'RegisterFileInput',
-    declaration: 'export interface RegisterFileInput {\n    fileId?: string;\n    originalName: string;\n    mediaType: string;\n    purpose?: string;\n    data: Uint8Array;\n    expectedSha256?: string;\n    extensions?: JsonObject;\n}',
-  },
-  {
     name: 'ReplayEnvelope',
     declaration: 'export interface ReplayEnvelope {\n    response: unknown;\n    blocks?: readonly unknown[];\n}',
   },
@@ -3962,18 +3672,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RunnerFailureRule',
     declaration: 'export interface RunnerFailureRule {\n    allowedExitCodes?: readonly number[];\n    fatalSignatures: readonly string[];\n    informationalLines?: readonly string[];\n}',
-  },
-  {
-    name: 'RuntimeConfig',
-    declaration: 'export interface RuntimeConfig {\n    key: string;\n    value: JsonValue;\n    valueType: string;\n    schemaVersion: number;\n    description: string;\n    status: \'active\' | \'disabled\';\n    revision: number;\n    updatedBy: string | null;\n    extensions: JsonObject;\n    createdAt: number;\n    updatedAt: number;\n}',
-  },
-  {
-    name: 'RuntimeConfigInput',
-    declaration: 'export interface RuntimeConfigInput {\n    key: string;\n    value: JsonValue;\n    valueType?: string;\n    schemaVersion?: number;\n    description?: string;\n    updatedBy?: string | null;\n    extensions?: JsonObject;\n    expectedRevision?: number;\n}',
-  },
-  {
-    name: 'RuntimeConfigListener',
-    declaration: 'export type RuntimeConfigListener = (config: RuntimeConfig) => void;',
   },
   {
     name: 'SandboxEnforcement',
@@ -4117,7 +3815,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionHeader',
-    declaration: 'export interface SessionHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly userId?: UserId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly seedLength?: number;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
+    declaration: 'export interface SessionHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly seedLength?: number;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'SessionId',
@@ -4398,10 +4096,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SpillSource',
     declaration: 'export interface SpillSource {\n    toolName: string;\n    callId: CallId;\n    label: string;\n}',
-  },
-  {
-    name: 'SpoolTask',
-    declaration: 'export interface SpoolTask {\n    operationId: string;\n    userId: string;\n    sessionId: string;\n    messages: AppendMessageInput[];\n    attempts: ModelAttempt[];\n    reason: {\n        kind: string;\n        error?: {\n            code?: string;\n            message?: string;\n        };\n    };\n    createdAt: number;\n    retryCount: number;\n}',
   },
   {
     name: 'StorageBackend',
@@ -4848,24 +4542,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TypertTypeModel {\n    readonly name: string;\n    readonly declaration: string;\n}',
   },
   {
-    name: 'User',
-    declaration: 'export interface User {\n    readonly id: UserId;\n    readonly displayName?: string;\n    readonly status: UserStatus;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n    readonly revision: number;\n}',
-  },
-  {
-    name: 'UserId',
-    declaration: 'export type UserId = Branded<\'UserId\'>;',
-  },
-  {
     name: 'UserMessage',
     declaration: 'export interface UserMessage extends Message {\n    readonly role: \'user\';\n}',
   },
   {
     name: 'UserQuestionProvider',
     declaration: 'export interface UserQuestionProvider {\n    ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer>;\n}',
-  },
-  {
-    name: 'UserStatus',
-    declaration: 'export type UserStatus = \'active\' | \'disabled\' | \'deleted\';',
   },
   {
     name: 'WebBootEntry',

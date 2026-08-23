@@ -59,8 +59,6 @@ export interface Config {
    * @default 1024
    */
   coldBlankProbeMaxBytes?: number
-  /** Trusted user identity stamped onto new sessions when a user provider is mounted. */
-  userId?: string
 }
 
 /**
@@ -79,7 +77,6 @@ export class ApiProxyService extends Service implements ApiProxy {
     sessionExportCompressionLevel: z.number().step(1).min(0).max(9)
       .default(DEFAULT_SESSION_LOG_COMPRESSION_LEVEL) as z<SessionLogCompressionLevel>,
     coldBlankProbeMaxBytes: z.natural().default(DEFAULT_COLD_BLANK_PROBE_MAX_BYTES),
-    userId: z.string().min(1).max(128),
   })
 
   readonly sessions: ApiProxy['sessions']
@@ -102,7 +99,6 @@ export class ApiProxyService extends Service implements ApiProxy {
       defaultModelSelection: () => ctx.agentDefaultModel.currentSelection(),
       saveDefaultModelSelection: selection => ctx.agentDefaultModel.saveSelection(selection),
       cwd: process.cwd(),
-      ...config.userId === undefined ? {} : { userId: config.userId },
       ...config.nativeOpen === undefined ? {} : { canOpenPath: () => config.nativeOpen as boolean },
       ...(config.sessionExportCompressionLevel === undefined
         ? {}

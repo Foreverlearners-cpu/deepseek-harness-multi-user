@@ -2,9 +2,9 @@
 
 [English](storage.md) | 中文
 
-存储子系统持久保存一切不属于会话事件日志的数据（会话日志有自己的 seam——见 [persistence.md](persistence.md)）。它是一项可选能力，不属于 agent loop（智能体循环）主干，并按[能力 seam](../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.md) 拆分：枢纽（hub）与 Service Definition（[dsh-storage](../../packages/storage/storage)，`ctx.storage`）、Service Provider（注册为 `json` 的 [dsh-storage-json](../../packages/storage/storage-json) 与注册为 `sqlite` 的 [dsh-storage-sqlite](../../packages/storage/storage-sqlite)）、Consumer 数据形式（[dsh-storage-domain](../../packages/storage/storage-domain)，`ctx.storageDomain`，也可经 `ctx.storage.domain` 访问），以及独立的文件对象能力（[dsh-file-storage](../../packages/storage/file-storage)，`ctx.fileStorage`）。枢纽自身不做任何 IO：后端拥有介质，数据形式拥有语义，产品包绝不直接触碰后端。设计记录：[领域 KV 存储 Agent Note](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md)。
+存储子系统持久保存一切不属于会话事件日志的数据（会话日志有自己的 seam——见 [persistence.md](persistence.md)）。它是一项可选能力，不属于 agent loop（智能体循环）主干，并按[能力 seam](../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.md) 拆分：枢纽（hub）与 Service Definition（[dsh-storage](../../packages/storage/storage)，`ctx.storage`）、Service Provider（注册为 `json` 的 [dsh-storage-json](../../packages/storage/storage-json) 与注册为 `sqlite` 的 [dsh-storage-sqlite](../../packages/storage/storage-sqlite)），以及 Consumer 数据形式（[dsh-storage-domain](../../packages/storage/storage-domain)，`ctx.storageDomain`，也可经 `ctx.storage.domain` 访问）——它是后端约定的唯一 Consumer，也是其他一切所使用的类型化 API。枢纽自身不做任何 IO：后端拥有介质，数据形式拥有语义，产品包绝不直接触碰后端。设计记录：[领域 KV 存储 Agent Note](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md)。
 
-源码：[`packages/storage/storage/src/backend.ts`](../../packages/storage/storage/src/backend.ts) · [`packages/storage/storage-domain/src/spec.ts`](../../packages/storage/storage-domain/src/spec.ts) · [`packages/storage/storage-domain/src/events.ts`](../../packages/storage/storage-domain/src/events.ts) · [`packages/storage/file-storage/src/index.ts`](../../packages/storage/file-storage/src/index.ts)
+源码：[`packages/storage/storage/src/backend.ts`](../../packages/storage/storage/src/backend.ts) · [`packages/storage/storage-domain/src/spec.ts`](../../packages/storage/storage-domain/src/spec.ts) · [`packages/storage/storage-domain/src/events.ts`](../../packages/storage/storage-domain/src/events.ts)
 
 ## 枢纽：`ctx.storage`
 
@@ -131,33 +131,6 @@ type DomainChanged = DomainChangedPut | DomainChangedDeleted
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
-
-<a id="ctxfilestorage--filestorageservice"></a>
-
-### `ctx.fileStorage` — `FileStorageService`
-
-Local content-addressed implementation of FileObjectStore.
-
-```ts cordis-catalog
-/**
- * Publish bytes idempotently under `objects/<prefix>/<sha256>`.
- * @param data Bytes to publish.
- * @param expectedSha256 Optional digest supplied by the caller for validation.
- * @returns The immutable object reference published by this provider.
- */
-async put(data: Uint8Array, expectedSha256?: string): Promise<FileObjectRef>
-
-/**
- * Read and verify an object by provider-local key and expected digest.
- * @param storageKey Provider-local object key returned by {@link put}.
- * @param expectedSha256 Digest that the returned bytes must match.
- * @param signal Optional cancellation signal.
- * @returns The verified object bytes.
- */
-async get(storageKey: string, expectedSha256: string, signal?: AbortSignal): Promise<Buffer>
-```
-
-Source: [`packages/storage/file-storage/src/index.ts:40`](../../packages/storage/file-storage/src/index.ts)
 
 <a id="ctxstorage--storage"></a>
 

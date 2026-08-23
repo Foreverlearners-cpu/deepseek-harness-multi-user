@@ -5,18 +5,6 @@
 
 import type { RpcRequest, RpcResponse } from './rpc.ts'
 
-/** Read-only persistence and identity facts shown by the Web settings surface. */
-export interface HostStorageDescription {
-  /** Session persistence implementation selected by the Host. */
-  persistence: 'mysql' | 'other' | 'unavailable'
-  /** User-directory implementation selected by the Host. */
-  users: 'mysql' | 'other' | 'unavailable'
-  /** Number of durable session headers visible to this Host, when readable. */
-  persistedSessions?: number
-  /** Number of users visible to this Host, when readable. */
-  userCount?: number
-}
-
 /** One directory row of a listing: a child entry or a breadcrumb ancestor. */
 export interface DirectoryEntry {
   /** Base name shown in a browser row (a root crumb carries its full path). */
@@ -62,8 +50,6 @@ export interface HostApi {
     model?: string
     attachedSessions: number
     canOpenPath: boolean
-    /** Optional read-only storage facts; absent on older or non-storage Hosts. */
-    storage?: HostStorageDescription
   }>>
 
   /**

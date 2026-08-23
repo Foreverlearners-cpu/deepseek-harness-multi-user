@@ -11,7 +11,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { isPromise } from 'node:util/types'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
-import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { TypertContext, TypertLookup } from '@deepseek-ai/dsh-typert-protocol'
 import type { Agent, AgentOptions } from './runtime-types.ts'
 
@@ -81,10 +81,10 @@ export interface CreateAgentOptions {
   /** The live agent/session identity. */
   readonly sessionId: SessionId
   /**
-   * Session creation metadata: trusted `userId`, validated absolute `cwd`, `parentSession`
+   * Session creation metadata: validated absolute `cwd`, `parentSession`
    * fork lineage, the `seedLength` seed boundary, the coarse `origin`
    * classification, and the `delegationDepth` recursion budget. Mirrors the
-   * `userId`/`cwd`/`parentSession`/`seedLength`/`origin`/`delegationDepth` fields of
+   * `cwd`/`parentSession`/`seedLength`/`origin`/`delegationDepth` fields of
    * {@link CreateSessionOptions.meta} in dsh-session (the internal-only
    * `createdAt`, used when reconstructing a persisted session, is deliberately
    * excluded — a factory caller never sets it). This is durable session data,
@@ -93,8 +93,6 @@ export interface CreateAgentOptions {
    */
   readonly meta?: {
     readonly cwd?: string
-    /** Trusted application identity used by tenant-scoped persistence providers. */
-    readonly userId?: NonNullable<SessionHeader['userId']>
     readonly parentSession?: SessionId
     readonly seedLength?: number
     readonly origin?: 'subagent'

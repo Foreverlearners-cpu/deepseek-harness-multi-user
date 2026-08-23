@@ -7,16 +7,6 @@ A service can be a core spine service, a swappable capability seam, or a bundle/
 
 ```mermaid
 flowchart LR
-  pkg_conversation_persistence_mysql["conversation-persistence-mysql"]
-  svc_conversationPersistence["ctx.conversationPersistence<br/>MySQL conversation projection"]
-  pkg_session_persistence_mysql["session-persistence-mysql"]
-  pkg_file_storage["file-storage"]
-  svc_fileStorage["ctx.fileStorage<br/>Provider-neutral file object storage"]
-  svc_runtimeConfigs["ctx.runtimeConfigs<br/>MySQL runtime configuration store"]
-  pkg_session_title["session-title"]
-  pkg_user["user"]
-  svc_users["ctx.users<br/>User identity directory"]
-  pkg_user_mysql["user-mysql"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -85,6 +75,7 @@ flowchart LR
   pkg_session_reference["session-reference"]
   pkg_tool_session_query["tool-session-query"]
   svc_sessionReferenceResolver["ctx.sessionReferenceResolver<br/>Cross-session snapshot preparation"]
+  pkg_session_title["session-title"]
   svc_sessionTitle["ctx.sessionTitle<br/>Log-backed session titles"]
   pkg_session_title_first_prompt_llm["session-title-first-prompt-llm"]
   pkg_session_title_all_prompts_llm["session-title-all-prompts-llm"]
@@ -228,8 +219,6 @@ flowchart LR
   pkg_compaction --> svc_compaction
   pkg_compaction_basic --> svc_compaction
   pkg_compaction_tool_result_pruner --> svc_toolResultPruner
-  pkg_conversation_persistence_mysql --> svc_conversationPersistence
-  pkg_conversation_persistence_mysql --> svc_runtimeConfigs
   pkg_cordis_host_runner --> svc_cordisInspect
   pkg_cordis_host_runner --> svc_dynamicCordisRunner
   pkg_credentials --> svc_credentials
@@ -239,7 +228,6 @@ flowchart LR
   pkg_directory_picker_native --> svc_directoryPicker
   pkg_e2b --> svc_e2b
   pkg_elasticsearch --> svc_elasticsearch
-  pkg_file_storage --> svc_fileStorage
   pkg_fs --> svc_fs
   pkg_fs_e2b --> svc_fs
   pkg_fs_local --> svc_fs
@@ -268,7 +256,6 @@ flowchart LR
   pkg_session --> svc_sessions
   pkg_session_persistence --> svc_sessionPersistence
   pkg_session_persistence_jsonl --> svc_sessionPersistence
-  pkg_session_persistence_mysql --> svc_sessionPersistence
   pkg_session_persistence_sqlite --> svc_sessionPersistence
   pkg_session_projection --> svc_sessionProjections
   pkg_session_projection_cache --> svc_sessionProjectionCache
@@ -309,8 +296,6 @@ flowchart LR
   pkg_token_meter --> svc_tokenMeter
   pkg_tools --> svc_tools
   pkg_typert_registry --> svc_typert
-  pkg_user --> svc_users
-  pkg_user_mysql --> svc_users
   pkg_user_questions --> svc_userQuestions
   pkg_web --> svc_web
   pkg_web_fetch_http --> svc_web
@@ -335,7 +320,6 @@ flowchart LR
   svc_clientModules --> pkg_hmr
   svc_codeRuntime --> pkg_tools
   svc_compaction --> pkg_compaction_basic
-  svc_conversationPersistence --> pkg_session_persistence_mysql
   svc_cordisInspect --> pkg_tool_cordis
   svc_credentials --> pkg_apiproxy
   svc_credentials --> pkg_llm_deepseek
@@ -344,7 +328,6 @@ flowchart LR
   svc_dynamicCordisRunner --> pkg_tool_cordis
   svc_e2b --> pkg_fs_e2b
   svc_e2b --> pkg_subprocess_e2b
-  svc_fileStorage --> pkg_conversation_persistence_mysql
   svc_fs --> pkg_tool_fs
   svc_invariants --> pkg_agent
   svc_invariants --> pkg_agent_loop
@@ -357,8 +340,6 @@ flowchart LR
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
-  svc_runtimeConfigs --> pkg_conversation_persistence_mysql
-  svc_runtimeConfigs --> pkg_session_title
   svc_sandbox --> pkg_bash_sandbox
   svc_sandbox --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_bash_sandbox
@@ -430,7 +411,6 @@ flowchart LR
   svc_typert --> pkg_api_gateway
   svc_typert --> pkg_typert_loader
   svc_userQuestions --> pkg_tool_ask_user
-  svc_users --> pkg_conversation_persistence_mysql
   svc_web --> pkg_tool_web
   svc_webServer --> pkg_connection
   svc_webServer --> pkg_hmr
@@ -443,10 +423,6 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
-| `ctx.conversationPersistence` | `seam` | [`conversation-persistence-mysql`](../packages/session/conversation-persistence-mysql) | [`conversation-persistence-mysql`](../packages/session/conversation-persistence-mysql) | [`session-persistence-mysql`](../packages/session/session-persistence-mysql) | - | Owns user-scoped conversation metadata, final message rows, file metadata, and semantic outbox records; streaming chunks remain in live Session memory. |
-| `ctx.fileStorage` | `seam` | [`file-storage`](../packages/storage/file-storage) | [`file-storage`](../packages/storage/file-storage) | [`conversation-persistence-mysql`](../packages/session/conversation-persistence-mysql) | - | Publishes and verifies immutable file bytes behind a provider-neutral capability; the conversation provider owns authorization and relational metadata. |
-| `ctx.runtimeConfigs` | `core` | [`conversation-persistence-mysql`](../packages/session/conversation-persistence-mysql) | - | [`conversation-persistence-mysql`](../packages/session/conversation-persistence-mysql), [`session-title`](../packages/session/session-title) | - | Stores and publishes committed dynamic configuration values such as the default conversation title. |
-| `ctx.users` | `seam` | [`user`](../packages/identity/user) | [`user-mysql`](../packages/identity/user-mysql) | [`conversation-persistence-mysql`](../packages/session/conversation-persistence-mysql) | - | Provides the trusted user identity and active-state check used by user-scoped persistence providers. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | `host-runtime`, [`llm-pi-ai`](../packages/llm/llm-pi-ai) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Owns isolated per-session replay folds; pressure consumers share immutable revisioned measurements. |
@@ -456,7 +432,7 @@ flowchart LR
 | `ctx.kafka` | `core` | [`kafka`](../packages/multi/kafka) | - | - | - | Owns one named Admin client, startup metadata verification, bounded health metadata, classified failures, and scoped shutdown; producer and consumer operations are deferred. |
 | `ctx.typert` | `core` | [`typert-registry`](../packages/typert/registry) | - | [`typert-loader`](../packages/typert/loader), [`api-gateway`](../packages/api/gateway) | - | Plugins register live zod contributions directly or through dsh-typert-loader; the API gateway consumes invocation descriptors and providers, while other runtime consumers query schemas and reflection metadata at their own edges. |
 | `ctx.typertGateway` | `core` | [`api-gateway`](../packages/api/gateway) | - | - | - | Associates generated Remote descriptors with live Cordis services, resolves registered identities, and exposes unary calls through the shared Connection RPC carrier. |
-| `ctx.sessionPersistence` | `seam` | [`session-persistence`](../packages/session/session-persistence) | [`session-persistence-jsonl`](../packages/session/session-persistence-jsonl), [`session-persistence-mysql`](../packages/session/session-persistence-mysql), [`session-persistence-sqlite`](../packages/session/session-persistence-sqlite) | [`agent-loop`](../packages/core/agent-loop), [`tool-bash`](../packages/shell/tool-bash), [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`hooks-codex`](../packages/hooks/hooks-codex), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), [`message-feedback`](../packages/feedback/message-feedback) | - | Backends persist the same SessionEvent vocabulary; apps choose a backend at composition time. |
+| `ctx.sessionPersistence` | `seam` | [`session-persistence`](../packages/session/session-persistence) | [`session-persistence-jsonl`](../packages/session/session-persistence-jsonl), [`session-persistence-sqlite`](../packages/session/session-persistence-sqlite) | [`agent-loop`](../packages/core/agent-loop), [`tool-bash`](../packages/shell/tool-bash), [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`hooks-codex`](../packages/hooks/hooks-codex), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), [`message-feedback`](../packages/feedback/message-feedback) | - | Backends persist the same SessionEvent vocabulary; apps choose a backend at composition time. |
 | `ctx.mysql` | `core` | [`mysql`](../packages/multi/mysql) | - | - | - | The package combines the service definition and mysql2 pool provider; domain persistence consumers remain separate packages. |
 | `ctx.settings` | `seam` | [`settings`](../packages/settings/settings) | [`settings-file`](../packages/settings/settings-file) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | Plugins register namespace schemas and resolve layered values; providers store the raw document. The LLM adapters register their entry config as the composition base under the user section; the web gateway serves redacted layered descriptors and writes the user layer. |
 | `ctx.credentials` | `seam` | [`credentials`](../packages/credentials/credentials) | [`credentials-local`](../packages/credentials/credentials-local) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the web gateway exposes value-free views and write-only storage. |

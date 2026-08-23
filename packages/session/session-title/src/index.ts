@@ -88,15 +88,7 @@ export interface Config {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     sessionTitle: SessionTitleService
-    runtimeConfigs: SessionTitleRuntimeConfigProvider
   }
-}
-
-/** Narrow optional bridge implemented by the MySQL runtime-config plugin. */
-export interface SessionTitleRuntimeConfigProvider {
-  get(key: string): Promise<{ value: unknown } | undefined>
-  set(input: unknown): Promise<unknown>
-  subscribe?(listener: (config: { key: string; value: unknown }) => void): () => void
 }
 
 declare module '@deepseek-ai/dsh-session/types' {
@@ -225,9 +217,9 @@ function copySessionTitleSource(source: SessionTitleSource): SessionTitleSource 
 
 /** Service-owned resolved limits. */
 interface ResolvedConfig {
-  fallbackMaxWords: number
-  fallbackMaxBytes: number
-  maxTitleBytes: number
+  readonly fallbackMaxWords: number
+  readonly fallbackMaxBytes: number
+  readonly maxTitleBytes: number
 }
 
 /** One exact provider registration generation. */
@@ -275,7 +267,6 @@ export class SessionTitleService extends Service {
   })
 
   private readonly config: ResolvedConfig
-  private runtimeConfigDisposer: (() => void) | undefined
   private readonly ownerFiber: Fiber
   private registration: ProviderRegistration | undefined
   private readonly work = new Map<Session, SessionTitleWorkState>()
@@ -296,32 +287,12 @@ export class SessionTitleService extends Service {
     if (value.fallbackMaxBytes > value.maxTitleBytes) {
       throw new Error('session-title: fallbackMaxBytes must not exceed maxTitleBytes')
     }
-    this.config = { ...value }
-
-    ctx.inject(['runtimeConfigs'], ({ runtimeConfigs }) => {
-      const apply = (entry: { key: string; value: unknown }): void => this.applyRuntimeConfig(entry.key, entry.value)
-      this.runtimeConfigDisposer = runtimeConfigs.subscribe?.(apply)
-      void Promise.all([
-        runtimeConfigs.get('session-title.fallbackMaxWords'),
-        runtimeConfigs.get('session-title.fallbackMaxBytes'),
-        runtimeConfigs.get('session-title.maxTitleBytes'),
-      ]).then((entries) => {
-        for (const [index, entry] of entries.entries()) {
-          if (entry !== undefined) apply({
-            key: [
-              'session-title.fallbackMaxWords', 'session-title.fallbackMaxBytes', 'session-title.maxTitleBytes',
-            ][index]!, value: entry.value,
-          })
-        }
-      }).catch(error => this.ctx.logger.warn(`session-title: runtime config load failed: ${String(error)}`))
-    })
+    this.config = deepFreeze({ ...value })
 
     ctx.effect(() => async () => {
       this.lifetime.abort(new Error('session-title service disposed'))
       if (this.registration !== undefined) this.registration.closing = true
       this.registration = undefined
-      this.runtimeConfigDisposer?.()
-      this.runtimeConfigDisposer = undefined
       for (const state of this.work.values()) {
         delete state.pending
         state.active?.controller.abort(new Error('session-title service disposed'))
@@ -778,19 +749,6 @@ export class SessionTitleService extends Service {
       messageSeqs: [first.seq],
       source: { kind: 'fallback' },
     })
-  }
-
-  private applyRuntimeConfig(key: string, value: unknown): void {
-    if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) return
-    const candidate = { ...this.config }
-    if (key === 'session-title.fallbackMaxWords') candidate.fallbackMaxWords = value
-    else if (key === 'session-title.fallbackMaxBytes') candidate.fallbackMaxBytes = value
-    else if (key === 'session-title.maxTitleBytes') candidate.maxTitleBytes = value
-    else return
-    if (candidate.fallbackMaxBytes > candidate.maxTitleBytes) return
-    this.config.fallbackMaxWords = candidate.fallbackMaxWords
-    this.config.fallbackMaxBytes = candidate.fallbackMaxBytes
-    this.config.maxTitleBytes = candidate.maxTitleBytes
   }
 
   /** Create the first deterministic fallback if the session still lacks a title. */

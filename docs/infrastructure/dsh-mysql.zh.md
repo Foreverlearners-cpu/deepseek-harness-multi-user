@@ -2,7 +2,7 @@
 
 [English](dsh-mysql.md) | 中文
 
-本文定义规划中的完整 Host 能力 `@deepseek-ai/dsh-mysql`。已经交付的连接与事务基础阶段见 [`dsh-mysql` 包 README](../../packages/multi/mysql/README.md)。该服务是 identity、tenancy、会话持久化、settings、audit 和其他关系数据领域的基础设施依赖；它不是模型工具或会话专用存储。
+本文定义规划中的完整 Host 能力 `@deepseek-ai/dsh-mysql`。已经交付的仅连接阶段见 [`dsh-mysql` 包 README](../../packages/multi/mysql/README.md)。该服务是 identity、tenancy、会话持久化、settings、audit 和其他关系数据领域的基础设施依赖；它不是模型工具或会话专用存储。
 
 ## 范围
 
@@ -89,7 +89,7 @@ Statement 使用 parameter binding 处理值，并通过经过审阅的静态构
 
 ## 租户隔离
 
-MySQL 不提供 PostgreSQL 风格的 row-level security，因此应用所有权检查和关系 constraint 是必需项。未来的租户所有表会携带 `tenant_id`；当前只按用户运行的 SessionPersistence schema 刻意不包含它。平台全局表具有显式分类，租户产品 repository 无法访问它们。
+MySQL 不提供 PostgreSQL 风格的 row-level security，因此应用所有权检查和关系 constraint 是必需项。每张租户所有表都携带 `tenant_id`；primary key、unique constraint、foreign key、list index 和 retention index 都在 resource id 前包含 tenant。平台全局表具有显式分类，租户产品 repository 无法访问它们。
 
 领域方法接收从 `AuthenticatedCall` 派生的可信 `TenantScope`。它们通过 tenant/resource 复合 key 查询，再披露存在性、内容、counts 或时序敏感工作。`dsh-mysql` 不从 ambient process state 推断 tenant，也永远不把请求提交的 tenant 当作授权。
 
@@ -101,7 +101,7 @@ MySQL network、credential 和 client library 留在模型控制的动态 Host �
 
 ### 会话持久化
 
-`dsh-session-persistence-mysql` 实现现有仅追加、连续 sequence、lazy materialization、inspection、recovery 和 revision 要求。当前可运行的第一版按可信 `ownerUserId` 做应用读写范围，把它写入 `(owner_kind, owner_id)`，并使用 `(session_id, seq_from)` 保存不可变 event 或 packed-chunk record。新数据库不再创建 `tenant_id` 列。一次 append batch 在必要时 materialize session，并在一个 transaction 中插入全部 records。
+`dsh-session-persistence-mysql` 实现现有仅追加、连续 sequence、lazy materialization、inspection、recovery 和 revision 要求。它在 session row 中存储不可变 tenant 与 owner metadata，并在 `(tenant_id, session_id, seq)` 下存储 event row。一次 append batch 在必要时 materialize session，并在一个 transaction 中插入全部 events。
 
 Agent loop 继续依赖 `ctx.sessionPersistence`，而不是 `ctx.mysql`。Session query 和 Elasticsearch indexing 使用 persistence/query capability 或持久 outbox，因此更换 SQL driver 不会产生绕过会话授权的新路径。
 

@@ -57,8 +57,6 @@ interface SessionHeader {
   readonly version: number
   /** The session's id (mirrors the {@link Session}'s id). */
   readonly id: SessionId
-  /** Immutable owning user when the session is created in a user-aware runtime. */
-  readonly userId?: UserId
   /** Non-negative safe-integer Unix epoch milliseconds when the session was created. */
   readonly createdAt: number
   /** Absolute working directory the session was created in (if any). */
@@ -113,8 +111,6 @@ interface CreateSessionOptions {
    * because a resumed seed contains the full stored log, not only its inherited prefix.
    */
   readonly meta?: {
-    /** Immutable owning user for user-aware runtimes. */
-    readonly userId?: UserId
     readonly cwd?: string
     readonly parentSession?: SessionId
     readonly createdAt?: number
@@ -234,11 +230,10 @@ interface SessionPersistenceSnapshot {
 
 ## 后端
 
-所有提供方都实现同一个抽象 `SessionPersistence`（在 `SessionEvent` 上执行 locate/create/append/prepare/load/inspect/readFrom/list/listSnapshots，观察方法可选支持取消），并通过共享的 `runPersistenceContract` 套件：
+两者都实现同一个抽象 `SessionPersistence`（在 `SessionEvent` 上执行 locate/create/append/prepare/load/inspect/readFrom/list/listSnapshots，观察方法可选支持取消），并通过共享的 `runPersistenceContract` 套件：
 
 - **[dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl)**——每个会话一份仅追加的逻辑 JSONL 日志，默认存储为带 checksum 的连续 Zstandard frame，也可配置为原始行；支持崩溃安全的原子写入、被中断轮次的恢复以及读取/回放路径。
 - **[dsh-session-persistence-sqlite](../../packages/session/session-persistence-sqlite)**：基于 `node:sqlite`，每个 `SessionEvent` 一行。行字段 `(session_id, seq, type, time, data, source_event_seqs, surface_op)` 与事件 1:1 映射（包含可选的 surface 元数据），因此没有需要保持同步的并行持久化 schema。
-- **[dsh-session-persistence-mysql](../../packages/session/session-persistence-mysql)**：通过 `dsh-mysql` 使用租户/用户范围的 InnoDB 记录。连续 chunk 段会 gzip 打包并计算校验和，读取时重建原始逻辑事件；每个连续批次在一次锁定 session 游标的事务中原子提交。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -247,161 +242,6 @@ interface SessionPersistenceSnapshot {
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
-
-<a id="ctxconversationpersistence--mysqlconversationpersistence"></a>
-
-### `ctx.conversationPersistence` — `MysqlConversationPersistence`
-
-MySQL message-only persistence. Streaming chunks remain in the live Session only.
-
-```ts cordis-catalog
-/**
- * Wait until all event projections already admitted for one session settle.
- * @param sessionId Session whose pending projection writes should settle.
- */
-async flushSession(sessionId: string): Promise<void>
-
-/**
- * List model attempts belonging to one user-owned session.
- * @param sessionId Session to query.
- * @returns Attempts ordered by turn, step, and retry number.
- */
-async listAttempts(sessionId: string): Promise<ModelAttempt[]>
-
-/**
- * Read committed semantic outbox events for this user.
- * @param options Cursor and page-size options.
- * @returns A bounded page of outbox events.
- */
-async readOutbox(options: { afterSequence?: number; afterOccurredAt?: number; afterEventId?: string; limit?: number } = {}): Promise<ConversationOutboxEvent[]>
-
-/**
- * Create one user-owned conversation.
- * @param input Conversation metadata and optional title.
- * @returns The committed conversation row.
- */
-async createConversation(input: CreateConversationInput): Promise<Conversation>
-
-/**
- * Read one user-owned conversation.
- * @param sessionId Conversation identifier.
- * @returns The conversation, or undefined when it is not owned by this user.
- */
-async getConversation(sessionId: string): Promise<Conversation | undefined>
-
-/**
- * List this user's conversations.
- * @param options Deletion filter and pagination options.
- * @returns Conversations ordered by most recent update.
- */
-async listConversations(options: { includeDeleted?: boolean; limit?: number; offset?: number } = {}): Promise<Conversation[]>
-
-/**
- * Read final semantic messages for one conversation.
- * @param sessionId Conversation identifier.
- * @param options Cursor and page-size options.
- * @returns Messages ordered by their conversation ordinal.
- */
-async readMessages(sessionId: string, options: { afterOrdinal?: number; limit?: number } = {}): Promise<ConversationMessage[]>
-
-/**
- * Rebuild a compact, contiguous SessionEvent log from semantic rows. This
- * is intentionally a projection, not a token replay: assistant/chunk rows
- * are absent by construction and only final messages/tool results remain.
- * @param sessionId Conversation identifier.
- * @returns A restored header and message-only event list, or undefined when absent/deleted.
- */
-async hydrate(sessionId: string): Promise<HydratedSession | undefined>
-
-/**
- * Append one final semantic message.
- * @param sessionId Conversation identifier.
- * @param input Message and optional file links.
- * @returns The committed message row.
- */
-async appendMessage(sessionId: string, input: AppendMessageInput): Promise<ConversationMessage>
-
-/**
- * Append a final-message batch atomically.
- * @param sessionId Conversation identifier.
- * @param inputs Messages in their intended turn order.
- * @param expectedRevision Optional optimistic conversation revision.
- * @returns The committed message rows.
- */
-async appendMessages(sessionId: string, inputs: readonly AppendMessageInput[], expectedRevision?: number): Promise<ConversationMessage[]>
-
-/**
- * Update a conversation title and publish its semantic outbox event.
- * @param sessionId Conversation identifier.
- * @param title New title.
- * @param status Title state.
- * @param source Title source label.
- * @param expectedRevision Optional optimistic conversation revision.
- * @param expectedTitleRevision Optional optimistic title revision.
- * @returns The updated conversation row.
- */
-async updateTitle( sessionId: string, title: string, status: ConversationTitleStatus, source: string = status, expectedRevision?: number, expectedTitleRevision?: number, ): Promise<Conversation>
-
-/**
- * Replace the conversation extension object.
- * @param sessionId Conversation identifier.
- * @param extensions JSON extension fields.
- * @param expectedRevision Optional optimistic conversation revision.
- * @returns The updated conversation row.
- */
-async updateExtensions(sessionId: string, extensions: JsonObject, expectedRevision?: number): Promise<Conversation>
-
-/**
- * Publish file bytes through the independent file-storage service and commit metadata.
- * @param sessionId Conversation identifier.
- * @param input File metadata and bytes.
- * @returns The committed conversation-file metadata row.
- */
-async saveFile(sessionId: string, input: RegisterFileInput): Promise<ConversationFile>
-
-/**
- * Read one file metadata row owned by the current user.
- * @param sessionId Conversation identifier.
- * @param fileId File identifier.
- * @returns File metadata, or undefined when it is not owned by this user.
- */
-async getFile(sessionId: string, fileId: string): Promise<ConversationFile | undefined>
-
-/**
- * List ready and quarantined file metadata for a conversation.
- * @param sessionId Conversation identifier.
- * @returns Files ordered by creation time.
- */
-async listFiles(sessionId: string): Promise<ConversationFile[]>
-
-/**
- * List files linked to one message.
- * @param sessionId Conversation identifier.
- * @param messageId Message identifier.
- * @returns Linked files in message ordinal order.
- */
-async listMessageFiles(sessionId: string, messageId: string): Promise<ConversationFile[]>
-
-/**
- * Read file metadata and verified bytes.
- * @param sessionId Conversation identifier.
- * @param fileId File identifier.
- * @param signal Optional cancellation signal.
- * @returns Metadata and bytes from the independent file-storage service.
- */
-async readFile(sessionId: string, fileId: string, signal?: AbortSignal): Promise<{ metadata: ConversationFile; data: Buffer }>
-
-/**
- * Link existing user-owned files to one message.
- * @param sessionId Conversation identifier.
- * @param messageId Message identifier.
- * @param fileIds File identifiers in display order.
- * @param relation Semantic relation label.
- */
-async linkMessageFiles(sessionId: string, messageId: string, fileIds: readonly string[], relation: string = 'content'): Promise<void>
-```
-
-Source: [`packages/session/conversation-persistence-mysql/src/index.ts:348`](../../packages/session/conversation-persistence-mysql/src/index.ts)
 
 <a id="ctxmysql--mysql"></a>
 
@@ -423,50 +263,9 @@ MySQL pool service exposed as `ctx.mysql`. Startup acquires one connection and p
  * @throws when the service is closing, pool acquisition fails, or the callback rejects.
  */
 async connection<T>(callback: (connection: MysqlConnection) => T | Promise<T>): Promise<T>
-
-/**
- * Run one callback in a transaction owned by this service. The callback
- * receives a query-only façade; begin, commit and rollback are performed by
- * the service and the leased connection expires after settlement.
- * @param callback - database work that must commit or roll back as one unit.
- * @returns the callback result after the commit is acknowledged.
- * @throws the callback error, rollback error, or commit error.
- */
-async transaction<T>(callback: (connection: MysqlTransactionConnection) => T | Promise<T>): Promise<T>
 ```
 
-Source: [`packages/multi/mysql/src/index.ts:149`](../../packages/multi/mysql/src/index.ts)
-
-<a id="ctxruntimeconfigs--mysqlruntimeconfigstore"></a>
-
-### `ctx.runtimeConfigs` — `MysqlRuntimeConfigStore`
-
-MySQL-backed runtime configuration store for title and other dynamic knobs.
-
-```ts cordis-catalog
-/**
- * Read one active runtime configuration value.
- * @param key Configuration key.
- * @returns The active value, or undefined when absent.
- */
-async get(key: string): Promise<RuntimeConfig | undefined>
-
-/**
- * Create or update one runtime configuration value.
- * @param input Configuration value and optional optimistic revision.
- * @returns The committed configuration row.
- */
-async set(input: RuntimeConfigInput): Promise<RuntimeConfig>
-
-/**
- * Subscribe to committed config changes; callers own the returned disposer.
- * @param listener Callback invoked after a configuration commit.
- * @returns A disposer that removes the listener.
- */
-subscribe(listener: RuntimeConfigListener): () => void
-```
-
-Source: [`packages/session/conversation-persistence-mysql/src/index.ts:1324`](../../packages/session/conversation-persistence-mysql/src/index.ts)
+Source: [`packages/multi/mysql/src/index.ts:122`](../../packages/multi/mysql/src/index.ts)
 
 <a id="ctxsessionpersistence--sessionpersistence-abstract-seam"></a>
 
@@ -607,47 +406,4 @@ abstract listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot
 Types: [SessionEvent](session.md) · [SessionId](core.md)
 
 Source: [`packages/session/session-persistence/src/index.ts:84`](../../packages/session/session-persistence/src/index.ts)
-
-<a id="ctxusers--userservice-abstract-seam"></a>
-
-### `ctx.users` — `UserService` (abstract seam)
-
-User identity storage seam. Providers own the durable user records.
-
-```ts cordis-catalog
-/**
- * Create an active user; duplicate ids must reject.
- * @param input User identity and optional display name.
- * @returns The committed user record.
- */
-abstract create(input: CreateUserInput): Promise<User>
-
-/**
- * Read one user, returning undefined when it is absent from this tenant.
- * @param id User identifier.
- * @returns The user record, or undefined when absent.
- */
-abstract get(id: UserId): Promise<User | undefined>
-
-/**
- * Read one active user or reject with a not-found/disabled error.
- * @param id User identifier.
- * @returns The active user record.
- */
-abstract requireActive(id: UserId): Promise<User>
-
-/**
- * Disable a user without deleting owned data.
- * @param id User identifier.
- */
-abstract disable(id: UserId): Promise<void>
-
-/**
- * List users visible to this configured tenant runtime.
- * @returns Visible user records.
- */
-abstract list(): Promise<User[]>
-```
-
-Source: [`packages/identity/user/src/index.ts:46`](../../packages/identity/user/src/index.ts)
 <!-- END GENERATED cordis-surface -->

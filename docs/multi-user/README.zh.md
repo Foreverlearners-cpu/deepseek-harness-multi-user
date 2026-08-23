@@ -58,8 +58,6 @@ Session 执行环境为模型控制的代码提供更强的安全边界。本地
 
 ## 文档地图
 
-- [消息与文件存储说明](message-and-file-storage.zh.md)记录当前已实现的 message-only MySQL、独立文件对象服务和检查点刷新边界。
-- [文件存储与检查点策略方案](file-storage-and-checkpoint-policy-plan.zh.md)同时记录方案、已交付实现和暂缓工作，避免把 Redis、管理端或对象存储 provider 误认为已经完成。
 - [身份与访问控制](identity-and-access.md)定义 principal、认证、授权、管理角色、session 所有权和传输要求。
 - [数据与运行时隔离](data-and-runtime-isolation.md)定义租户感知的持久化、事件日志与审计日志、settings、credentials、资源文件、事件流、缓存和执行隔离。
 - [流式分块保留策略](stream-chunk-retention.md)定义流式响应分块的有界存储与清理规则。
