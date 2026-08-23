@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-23-dsh-auth-provider-and-consumer-composition.md
+2026-08-23-dsh-auth-provider-and-consumer-composition.md: 734ae582093d6611c0c699529c6c2f0c7a1f2f1b
+2026-08-23-dsh-auth-provider-and-consumer-composition.zh.md: 560f7c54c2e99aad62ba97407e96246d67c2dca1
