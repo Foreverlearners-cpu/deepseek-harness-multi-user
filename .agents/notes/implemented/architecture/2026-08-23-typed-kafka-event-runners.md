@@ -1,5 +1,7 @@
 # Agent Note: Typed Kafka event runners
 
+English | [中文](2026-08-23-typed-kafka-event-runners.zh.md)
+
 Status: implemented
 
 ## Problem
@@ -21,7 +23,7 @@ dsh-kafka
     ↑
 dsh-kafka-events
     ↑
-domain codec + router + filter + handler
+domain event components
 ```
 
 The dependency direction lets CDC events, configuration events, authentication events, and other protocols reuse the runner without making the runner aware of their schemas.

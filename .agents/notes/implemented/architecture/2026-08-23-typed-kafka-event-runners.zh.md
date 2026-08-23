@@ -1,5 +1,7 @@
 # Agent Note: 强类型 Kafka 事件运行器
 
+[English](2026-08-23-typed-kafka-event-runners.md) | 中文
+
 Status: implemented
 
 ## Problem
@@ -21,7 +23,7 @@ dsh-kafka
     ↑
 dsh-kafka-events
     ↑
-领域 codec + router + filter + handler
+domain event components
 ```
 
 这个依赖方向让 CDC 事件、配置事件、认证事件和其他协议复用运行器，而不让运行器了解它们的 schema。

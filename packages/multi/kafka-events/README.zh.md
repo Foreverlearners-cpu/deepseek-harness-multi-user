@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-面向可信 Host 插件的强类型事件生产与消费组件。本包建立在 [`@deepseek-ai/dsh-kafka`](../kafka/README.zh.md) 之上，不定义领域协议，也不依赖 CDC。
+面向可信 Host 插件的强类型事件生产与消费组件。本包建立在 [`@deepseek-ai/dsh-kafka`](../kafka/README.md) 之上，不定义领域协议，也不依赖 CDC。
 
 ## 组合
 

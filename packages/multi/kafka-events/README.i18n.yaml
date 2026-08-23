@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/multi/kafka-events/README.md
 README.md: 0b7ff60bf3af45354e70a2af4e0bd446e40084a0
-README.zh.md: 441a8460de4bac2c11e9739b06360562120f2dad
+README.zh.md: 31012d6da3f7cb8c37a0318d024770f61d85d205

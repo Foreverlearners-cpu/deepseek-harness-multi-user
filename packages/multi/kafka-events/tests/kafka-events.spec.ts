@@ -27,7 +27,7 @@ const decoder = new TextDecoder()
 
 const codec: EventCodec<TestEvent> = {
   encode: event => encoder.encode(JSON.stringify(event)),
-  decode: value => {
+  decode: (value) => {
     if (value === undefined) throw new Error('missing event value')
     return JSON.parse(decoder.decode(value)) as TestEvent
   },
@@ -54,8 +54,8 @@ class TestKafkaService extends Service {
     fallbackMode: 'earliest' | 'latest' | 'fail'
     handle(message: KafkaConsumedMessage): void | Promise<void>
   } | undefined
-  readonly completion = Promise.withResolvers<void>()
-  readonly closeGate = Promise.withResolvers<void>()
+  readonly completion = Promise.withResolvers<undefined>()
+  readonly closeGate = Promise.withResolvers<undefined>()
   closeStarted = false
   blockClose = false
 
@@ -76,7 +76,7 @@ class TestKafkaService extends Service {
       close: async () => {
         this.closeStarted = true
         if (this.blockClose) await this.closeGate.promise
-        this.completion.resolve()
+        this.completion.resolve(undefined)
       },
     }
   }
@@ -236,7 +236,7 @@ describe('KafkaEventsService', () => {
     await expect(kafka.request!.handle(message({ id: 'm1', action: 'upsert' }))).rejects.toBe(decodeFailure)
     expect(decodeSubscription.health()).toMatchObject({ status: 'failed', failures: 1 })
 
-    kafka.completion.resolve()
+    kafka.completion.resolve(undefined)
     await decodeSubscription.done
     const second = await setup()
     const filterSubscription = await second.events.subscribe({
@@ -270,7 +270,7 @@ describe('KafkaEventsService', () => {
     await vi.waitFor(() => { expect(kafka.closeStarted).toBe(true) })
     expect(subscription.health().status).toBe('stopping')
     expect(closed).toBe(false)
-    kafka.closeGate.resolve()
+    kafka.closeGate.resolve(undefined)
     await Promise.all([first, second])
     expect(subscription.health().status).toBe('stopped')
   })
@@ -278,7 +278,7 @@ describe('KafkaEventsService', () => {
   it('reports and rethrows an underlying close failure', async () => {
     const { kafka, events } = await setup()
     const failure = new Error('close failed')
-    kafka.subscribe = async request => {
+    kafka.subscribe = async (request) => {
       kafka.request = request
       return { id: request.id, done: kafka.completion.promise, close: async () => { throw failure } }
     }
