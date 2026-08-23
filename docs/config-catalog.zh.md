@@ -3245,6 +3245,7 @@ export interface Config {
 - `@deepseek-ai/dsh-spill` — 抽象 `SpillStore`（[`packages/spill/spill/src/index.ts`](../packages/spill/spill/src/index.ts)）
 - `@deepseek-ai/dsh-subprocess` — 抽象 `SubprocessRuntime`（[`packages/subprocess/subprocess/src/index.ts`](../packages/subprocess/subprocess/src/index.ts)）
 - `@deepseek-ai/dsh-user` — 抽象 `UserDirectory`（[`packages/identity/user/src/index.ts`](../packages/identity/user/src/index.ts)）
+- `@deepseek-ai/dsh-user-credential` — 抽象 `UserCredentialService`（[`packages/identity/user-credential/src/index.ts`](../packages/identity/user-credential/src/index.ts)）
 - `@deepseek-ai/dsh-workflow` — 抽象 `WorkflowEngine`（[`packages/workflow/workflow/src/index.ts`](../packages/workflow/workflow/src/index.ts)）
 ## 库包（无插件入口）
 

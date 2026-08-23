@@ -223,6 +223,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Defines stable human user records, lifecycle transitions, optimistic revisions, bounded pages, and sanitized commit events; persistence and credential providers remain separate.',
   },
   {
+    key: 'userCredentials',
+    pkg: 'user-credential',
+    title: 'User login credential seam',
+    mode: 'seam',
+    implementations: [],
+    consumers: [],
+    note: 'Defines login identifier normalization and lookup, password verification, aggregate optimistic revisions, and sanitized commit events; verifier storage remains Provider-private.',
+  },
+  {
     key: 'sessionTelemetry',
     pkg: 'session-telemetry',
     title: 'Session telemetry seam',

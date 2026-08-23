@@ -3243,6 +3243,7 @@ Abstract service classes — a deployment loads a concrete implementation packag
 - `@deepseek-ai/dsh-spill` — abstract `SpillStore` ([`packages/spill/spill/src/index.ts`](../packages/spill/spill/src/index.ts))
 - `@deepseek-ai/dsh-subprocess` — abstract `SubprocessRuntime` ([`packages/subprocess/subprocess/src/index.ts`](../packages/subprocess/subprocess/src/index.ts))
 - `@deepseek-ai/dsh-user` — abstract `UserDirectory` ([`packages/identity/user/src/index.ts`](../packages/identity/user/src/index.ts))
+- `@deepseek-ai/dsh-user-credential` — abstract `UserCredentialService` ([`packages/identity/user-credential/src/index.ts`](../packages/identity/user-credential/src/index.ts))
 - `@deepseek-ai/dsh-workflow` — abstract `WorkflowEngine` ([`packages/workflow/workflow/src/index.ts`](../packages/workflow/workflow/src/index.ts))
 
 ## Library packages (no plugin entry)
