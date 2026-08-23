@@ -12,7 +12,9 @@ Deleting a session cache after a CDC notification is insufficient when an older 
 
 `@deepseek-ai/dsh-session-cache-invalidation-redis` consumes strict `CdcEvent` records through `dsh-kafka-events`. It accepts one exact topic, database, table, schema fingerprint, compound Kafka key, and fixed session-message row schema. Inserts and deletes invalidate. Updates skip only with an explicit changed-column list disjoint from the fixed cached-content columns.
 
-Each tenant/user/session has a cache key and a separate revision watermark key. One Redis Lua operation compares canonical decimal revisions, advances only a newer watermark, and deletes the cache. Cache population uses the exported Lua-backed `refillSessionContextCache()` helper, which writes only when its authoritative revision is not below the watermark. Both operations are atomic relative to each other.
+Each tenant/user/session has a cache key and a separate revision watermark key. One Redis Lua operation compares canonical decimal revisions, advances only a newer watermark, and deletes the cache. Live CDC handling and the exported metadata-independent `applySessionContextCacheSnapshot()` repair API share that operation. Cache population uses the exported Lua-backed `refillSessionContextCache()` helper, which writes only when its authoritative revision is not below the watermark. Invalidation and refill are atomic relative to each other.
+
+The plugin supervises the owned Kafka subscription. An unexpected failure records a fixed diagnostic without the broker cause and disposes the plugin, preventing a loaded but inactive invalidator.
 
 ## Alternatives considered
 
@@ -24,4 +26,4 @@ Each tenant/user/session has a cache key and a separate revision watermark key. 
 
 ## Consequences
 
-Repeated and out-of-order CDC records are idempotent by authoritative revision, tenants cannot share cache keys, and old refill attempts fail without overwriting current cache state. Consumers must use the exported refill helper, revisions must be canonical positive decimal integers, and any row or schema change requires coordinated configuration and code changes.
+Repeated and out-of-order CDC records and reconciliation snapshots are idempotent by authoritative revision, tenants cannot share cache keys, and old refill attempts fail without overwriting current cache state. Consumers must use the exported refill helper, reconcilers must use the snapshot API, revisions must be canonical positive decimal integers, and any row or schema change requires coordinated configuration and code changes. A stopped subscription unloads the invalidator instead of silently leaving stale caches active.

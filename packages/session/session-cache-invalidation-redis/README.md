@@ -18,7 +18,9 @@ Cache and watermark keys include `tenantId`, `userId`, and `sessionId`. Invalida
 
 `refillSessionContextCache()` is the required cache-population helper. Its Lua comparison rejects a candidate below the current watermark and writes an accepted value atomically, preventing an old database read from repopulating a cache after invalidation.
 
-Decode, route, identity, schema, Redis, and script failures reject the event handler, so `dsh-kafka-events` cannot permit offset commit. Disposal closes and drains the owned typed subscription.
+`applySessionContextCacheSnapshot()` exposes the same atomic watermark advance and invalidation without Kafka metadata. A reconciler supplies tenant/user/session identity plus an authoritative revision, so live CDC and repair flows cannot diverge in Redis ordering behavior.
+
+Decode, route, identity, schema, Redis, and script failures reject the event handler, so `dsh-kafka-events` cannot permit offset commit. An unexpected subscription failure emits a fixed diagnostic without broker details and disposes the plugin; ordinary disposal closes and drains the owned typed subscription.
 
 ## Model Experience
 
@@ -27,5 +29,5 @@ None. The Consumer has no model-facing output, token effect, or KV Cache effect.
 ## Known Limitations and Deferred Work
 
 - The package fail-stops on invalid records and Redis failures; retry topics and dead-letter administration remain external.
-- Full cache rebuilding and reconciliation remain with the session read owner.
+- Snapshot enumeration and full cache rebuilding remain with their source owners; reconcilers apply discovered revisions through `applySessionContextCacheSnapshot()`.
 - Schema changes require an explicit configuration update and coordinated deployment.

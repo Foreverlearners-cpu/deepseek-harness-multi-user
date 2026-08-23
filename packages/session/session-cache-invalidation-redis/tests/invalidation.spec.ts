@@ -6,6 +6,7 @@ import { KafkaTopic, type KafkaConsumedMessage } from '@deepseek-ai/dsh-kafka'
 import {
   SESSION_CACHE_WATCHED_COLUMNS,
   apply,
+  applySessionContextCacheSnapshot,
   refillSessionContextCache,
   sessionContextCacheKey,
   sessionContextCacheWatermarkKey,
@@ -73,26 +74,45 @@ async function harness(): Promise<{
   options: KafkaEventConsumerOptions<CdcEvent>
   evalMock: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
+  fail: (cause: unknown) => undefined
+  error: ReturnType<typeof vi.fn>
+  stop: ReturnType<typeof vi.fn>
   dispose: () => Promise<void>
 }> {
   let options: KafkaEventConsumerOptions<CdcEvent> | undefined
   const close = vi.fn(async () => {})
   const evalMock = vi.fn(async () => 1)
+  const failure = Promise.withResolvers<undefined>()
+  const error = vi.fn()
+  const stop = vi.fn(async () => {})
   let dispose: (() => Promise<void>) | undefined
   const ctx = {
     kafkaEvents: {
       subscribe: async (candidate: KafkaEventConsumerOptions<CdcEvent>) => {
         options = candidate
-        return { id: candidate.id, done: new Promise<void>(() => {}), health: vi.fn(), close }
+        return { id: candidate.id, done: failure.promise, health: vi.fn(), close }
       },
     },
     redis: { withClient: async (callback: (client: { eval: typeof evalMock }) => unknown) => callback({ eval: evalMock }) },
+    logger: { error },
+    fiber: { dispose: stop },
     effect: (setup: () => () => Promise<void>) => { dispose = setup() },
   }
   await apply(ctx as unknown as Context, CONFIG)
   if (options === undefined) throw new Error('subscription not created')
   if (dispose === undefined) throw new Error('disposer not registered')
-  return { options, evalMock, close, dispose }
+  return {
+    options,
+    evalMock,
+    close,
+    fail: (cause: unknown) => {
+      failure.reject(cause)
+      return undefined
+    },
+    error,
+    stop,
+    dispose,
+  }
 }
 
 async function consume(options: KafkaEventConsumerOptions<CdcEvent>, source: CdcEvent, record = message(source)): Promise<boolean> {
@@ -205,6 +225,39 @@ describe('session CDC cache invalidation', () => {
     })).resolves.toBe(false)
     expect(sessionContextCacheKey({ tenantId: 'tenant-1', userId: 'u', sessionId: 's' }))
       .not.toBe(sessionContextCacheKey({ tenantId: 'tenant-2', userId: 'u', sessionId: 's' }))
+  })
+
+  it('applies an authoritative snapshot without Kafka metadata', async () => {
+    const client = { eval: vi.fn(async () => 1) }
+    await expect(applySessionContextCacheSnapshot(client, {
+      tenantId: 'tenant-1', userId: 'user-1', sessionId: 'session-1', revision: '12',
+    })).resolves.toBe(true)
+    expect(client.eval.mock.calls[0]?.[1]).toEqual({
+      keys: [
+        sessionContextCacheWatermarkKey({ tenantId: 'tenant-1', userId: 'user-1', sessionId: 'session-1' }),
+        sessionContextCacheKey({ tenantId: 'tenant-1', userId: 'user-1', sessionId: 'session-1' }),
+      ],
+      arguments: ['12'],
+    })
+    client.eval.mockResolvedValueOnce(0)
+    await expect(applySessionContextCacheSnapshot(client, {
+      tenantId: 'tenant-1', userId: 'user-1', sessionId: 'session-1', revision: 11,
+    })).resolves.toBe(false)
+  })
+
+  it('fails closed when the owned Kafka subscription stops', async () => {
+    const setup = await harness()
+    setup.stop.mockRejectedValueOnce(new Error('dispose detail must stay private'))
+    setup.fail(new Error('broker detail must stay private'))
+    await vi.waitFor(() => { expect(setup.error).toHaveBeenCalledTimes(2) })
+    expect(setup.stop).toHaveBeenCalledOnce()
+    expect(setup.error).toHaveBeenCalledWith(
+      'session-cache-invalidation-redis: Kafka subscription stopped unexpectedly',
+    )
+    expect(setup.error).toHaveBeenCalledWith(
+      'session-cache-invalidation-redis: plugin unload failed after Kafka subscription stopped',
+    )
+    expect(setup.error.mock.calls.flat().join(' ')).not.toMatch(/broker detail|dispose detail/u)
   })
 
   it('rejects non-canonical revisions', async () => {

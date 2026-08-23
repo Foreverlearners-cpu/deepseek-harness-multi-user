@@ -84,6 +84,12 @@ export interface SessionContextCacheRefill extends SessionCacheIdentity {
   value: string
 }
 
+/** Authoritative session snapshot used to advance the cache invalidation watermark. */
+export interface SessionContextCacheSnapshot extends SessionCacheIdentity {
+  /** Authoritative revision represented by the source snapshot. */
+  revision: string | number
+}
+
 interface SessionMessageRow extends SessionCacheIdentity {
   messageId: string
   revision: string
@@ -142,6 +148,24 @@ export async function refillSessionContextCache(
   const result = await client.eval(REFILL_SCRIPT, {
     keys: [sessionContextCacheWatermarkKey(refill), sessionContextCacheKey(refill)],
     arguments: [revision, refill.value],
+  })
+  return result === 1
+}
+
+/**
+ * Atomically advance one authoritative snapshot watermark and invalidate an older cache value.
+ * @param client - Redis client scoped to the caller's operation.
+ * @param snapshot - Tenant identity and authoritative source revision.
+ * @returns `true` when the watermark advanced; `false` when Redis already observed this or a newer revision.
+ */
+export async function applySessionContextCacheSnapshot(
+  client: SessionCacheScriptClient,
+  snapshot: SessionContextCacheSnapshot,
+): Promise<boolean> {
+  const revision = canonicalRevision(snapshot.revision)
+  const result = await client.eval(INVALIDATE_SCRIPT, {
+    keys: [sessionContextCacheWatermarkKey(snapshot), sessionContextCacheKey(snapshot)],
+    arguments: [revision],
   })
   return result === 1
 }
@@ -279,13 +303,18 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       async handle({ event, message }) {
         const row = validateIdentity(message, event)
         await ctx.redis.withClient(async (client) => {
-          await client.eval(INVALIDATE_SCRIPT, {
-            keys: [sessionContextCacheWatermarkKey(row), sessionContextCacheKey(row)],
-            arguments: [row.revision],
-          })
+          await applySessionContextCacheSnapshot(client, row)
         })
       },
     },
   })
   ctx.effect(() => async () => { await subscription.close() }, 'session-cache-invalidation-redis')
+  void subscription.done.catch(() => {
+    ctx.logger.error('session-cache-invalidation-redis: Kafka subscription stopped unexpectedly')
+    queueMicrotask(() => {
+      void ctx.fiber.dispose().catch(() => {
+        ctx.logger.error('session-cache-invalidation-redis: plugin unload failed after Kafka subscription stopped')
+      })
+    })
+  })
 }
