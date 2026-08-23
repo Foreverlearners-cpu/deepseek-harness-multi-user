@@ -169,6 +169,7 @@
     { "path": "./packages/multi/redis" },
     { "path": "./packages/multi/kafka" },
     { "path": "./packages/multi/kafka-events" },
+    { "path": "./packages/session/session-projection-reconciler" },
     { "path": "./packages/session/session-telemetry-otel" },
     { "path": "./packages/core/system-prompt" },
     { "path": "./packages/core/agent" },
