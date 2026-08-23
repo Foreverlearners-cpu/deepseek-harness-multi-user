@@ -6999,6 +6999,19 @@ importers:
         specifier: workspace:^
         version: link:../../core/tools
 
+  packages/storage/file-storage:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+
   packages/storage/storage:
     devDependencies:
       '@deepseek-ai/cordis':
