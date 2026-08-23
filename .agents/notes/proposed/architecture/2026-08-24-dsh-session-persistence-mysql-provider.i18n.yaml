@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-24-dsh-session-persistence-mysql-provider.md
+2026-08-24-dsh-session-persistence-mysql-provider.md: a2cca9d617addffc1546f292777b451fb1e1d4fa
+2026-08-24-dsh-session-persistence-mysql-provider.zh.md: a45dccccaf1e4e8371118addab71e5e91a07158d
