@@ -1,11 +1,12 @@
 /** Host authentication types shared by Providers and Consumers. */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { UserId } from '@deepseek-ai/dsh-user/types'
+
+export type { UserId } from '@deepseek-ai/dsh-user/types'
 
 /** Host-generated correlation id for one authentication attempt. */
 export type AuthenticationRequestId = Branded<'AuthenticationRequestId'>
-/** Stable human-account identity. */
-export type UserId = Branded<'UserId'>
 /** Stable non-human automation identity. */
 export type ServiceAccountId = Branded<'ServiceAccountId'>
 /** Stable identity used only by an explicit local Provider. */

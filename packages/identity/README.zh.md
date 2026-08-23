@@ -8,3 +8,4 @@
 |---|---|---|
 | [`anonymous-user-id/`](anonymous-user-id/README.md) | 为遥测、反馈和 DeepSeek 请求持久化一个限定于 Harness home 的匿名关联 id | — |
 | [`auth/`](auth/README.md) | 选择认证 Provider、生成当前请求身份，并路由可选的凭证生命周期操作 | `auth` |
+| [`user/`](user/README.md) | 定义稳定的人类用户、资料记录、生命周期状态和与 Provider 无关的管理操作 | `users` |

@@ -50,7 +50,7 @@ async authenticate(attempt: AuthenticationAttempt): Promise<AuthenticatedCall>
 assertCurrent(value: unknown): AuthenticatedCall
 ```
 
-Source: [`packages/identity/auth/src/index.ts:279`](../../packages/identity/auth/src/index.ts)
+Source: [`packages/identity/auth/src/index.ts:303`](../../packages/identity/auth/src/index.ts)
 
 <a id="auth-events"></a>
 
@@ -71,5 +71,5 @@ Completed authentication result without raw credential material.
 'auth/result'(record: AuthenticationEventRecord): void
 ```
 
-Source: [`packages/identity/auth/src/types.ts:163`](../../packages/identity/auth/src/types.ts)
+Source: [`packages/identity/auth/src/types.ts:164`](../../packages/identity/auth/src/types.ts)
 <!-- END GENERATED cordis-surface -->

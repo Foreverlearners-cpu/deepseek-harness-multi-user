@@ -214,6 +214,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations.',
   },
   {
+    key: 'users',
+    pkg: 'user',
+    title: 'Human user directory seam',
+    mode: 'seam',
+    implementations: [],
+    consumers: [],
+    note: 'Defines stable human user records, lifecycle transitions, optimistic revisions, bounded pages, and sanitized commit events; persistence and credential providers remain separate.',
+  },
+  {
     key: 'sessionTelemetry',
     pkg: 'session-telemetry',
     title: 'Session telemetry seam',

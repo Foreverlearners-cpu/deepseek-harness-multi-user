@@ -2041,6 +2041,61 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'users',
+    summary: 'Abstract user directory.',
+    description: 'Abstract user directory. Providers own durable records and atomic revision checks; this base owns validation, stable failures, detached results, and post-commit events.',
+    methods: [
+      {
+        signature: 'async create(input: UserCreateInput = {}): Promise<UserRecord>',
+        description: 'Create one active user with a Provider-generated stable id.',
+        parameters: [{ name: 'input', description: 'optional profile and trusted operation metadata.' }],
+        returns: 'immutable committed user record.',
+      },
+      {
+        signature: 'async get(id: UserId): Promise<UserRecord | undefined>',
+        description: 'Get one current user record.',
+        parameters: [{ name: 'id', description: 'stable user identity.' }],
+        returns: 'immutable record, or undefined when absent.',
+      },
+      {
+        signature: 'async requireActive(id: UserId): Promise<UserRecord>',
+        description: 'Require that one user exists and is currently active.',
+        parameters: [{ name: 'id', description: 'stable user identity.' }],
+        returns: 'immutable active user record.',
+      },
+      {
+        signature: 'async update(request: UserUpdateRequest): Promise<UserRecord>',
+        description: 'Update mutable profile fields using optimistic concurrency.',
+        parameters: [{ name: 'request', description: 'target id, expected revision, patch, and operation metadata.' }],
+        returns: 'immutable committed user record.',
+      },
+      {
+        signature: 'disable(request: UserStatusRequest): Promise<UserRecord>',
+        description: 'Disable one active user using optimistic concurrency.',
+        parameters: [{ name: 'request', description: 'target id, expected revision, and operation metadata.' }],
+        returns: 'immutable disabled user record.',
+      },
+      {
+        signature: 'enable(request: UserStatusRequest): Promise<UserRecord>',
+        description: 'Enable one disabled user using optimistic concurrency.',
+        parameters: [{ name: 'request', description: 'target id, expected revision, and operation metadata.' }],
+        returns: 'immutable active user record.',
+      },
+      {
+        signature: 'delete(request: UserStatusRequest): Promise<UserRecord>',
+        description: 'Soft-delete one active or disabled user using optimistic concurrency.',
+        parameters: [{ name: 'request', description: 'target id, expected revision, and operation metadata.' }],
+        returns: 'immutable terminal user record.',
+      },
+      {
+        signature: 'async list(query: UserListQuery = {}): Promise<UserPage>',
+        description: 'List one bounded page of current users.',
+        parameters: [{ name: 'query', description: 'optional status, limit, and opaque cursor.' }],
+        returns: 'immutable page and optional continuation cursor.',
+      },
+    ],
+  },
+  {
     key: 'web',
     summary: 'The web access service.',
     description: 'The web access service. Registered as `ctx.web` (one instance per context).\n\nSelection semantics (resolved at execution time, never order-dependent):\n\n- A configured id that is registered and `available()` → that provider.\n- A configured id not registered → `WEB_PROVIDER_CONFIGURED_MISSING`.\n- A configured id registered but unavailable → `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`.\n- No id configured, exactly one registered usable provider → that provider.\n- No id configured, multiple usable providers → `WEB_PROVIDER_AMBIGUOUS`.\n- No id configured, no usable provider → `WEB_PROVIDER_UNAVAILABLE`.',
@@ -2581,6 +2636,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Observe the frozen, lossless-JSON final outcome.',
     description: 'Observe the frozen, lossless-JSON final outcome. Listener failures are contained. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): keyed by `exec.agent`.',
     parameters: [{ name: 'exec', description: 'the execution object that traversed the pipeline.' }, { name: 'result', description: 'a deep-frozen snapshot of the final returned result.' }],
+  },
+  {
+    name: 'user/changed',
+    mode: 'emit',
+    signature: '\'user/changed\'(event: UserChangeEvent): void',
+    summary: 'Committed user-directory change without profile or credential data.',
+    description: 'Committed user-directory change without profile or credential data.',
+    parameters: [{ name: 'event', description: 'sanitized lifecycle fact safe for trusted audit listeners.' }],
   },
   {
     name: 'workflow/agent-end',
@@ -4595,16 +4658,64 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TypertTypeModel {\n    readonly name: string;\n    readonly declaration: string;\n}',
   },
   {
+    name: 'UserChangeEvent',
+    declaration: 'export type UserChangeEvent = UserEventBase & {\n    readonly kind: \'created\';\n} | UserEventBase & {\n    readonly kind: \'profile-updated\';\n} | UserEventBase & {\n    readonly kind: \'status-changed\';\n    readonly previousStatus: Exclude<UserStatus, \'deleted\'>;\n};',
+  },
+  {
+    name: 'UserCreateInput',
+    declaration: 'export interface UserCreateInput {\n    readonly displayName?: string;\n    readonly extensions?: UserExtensions;\n    readonly context?: UserOperationContext;\n}',
+  },
+  {
+    name: 'UserExtensions',
+    declaration: 'export type UserExtensions = Readonly<Record<string, UserExtensionValue>>;',
+  },
+  {
+    name: 'UserExtensionValue',
+    declaration: 'export type UserExtensionValue = null | boolean | number | string | readonly UserExtensionValue[] | {\n    readonly [key: string]: UserExtensionValue;\n};',
+  },
+  {
     name: 'UserId',
     declaration: 'export type UserId = Branded<\'UserId\'>;',
+  },
+  {
+    name: 'UserListQuery',
+    declaration: 'export interface UserListQuery {\n    readonly status?: UserStatus;\n    readonly limit?: number;\n    readonly cursor?: string;\n}',
   },
   {
     name: 'UserMessage',
     declaration: 'export interface UserMessage extends Message {\n    readonly role: \'user\';\n}',
   },
   {
+    name: 'UserOperationContext',
+    declaration: 'export interface UserOperationContext {\n    readonly actorUserId?: UserId;\n    readonly correlationId?: string;\n    readonly reason?: string;\n}',
+  },
+  {
+    name: 'UserPage',
+    declaration: 'export interface UserPage {\n    readonly users: readonly UserRecord[];\n    readonly nextCursor?: string;\n}',
+  },
+  {
+    name: 'UserProfilePatch',
+    declaration: 'export interface UserProfilePatch {\n    readonly displayName?: string | null;\n    readonly extensions?: UserExtensions;\n}',
+  },
+  {
     name: 'UserQuestionProvider',
     declaration: 'export interface UserQuestionProvider {\n    ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer>;\n}',
+  },
+  {
+    name: 'UserRecord',
+    declaration: 'export interface UserRecord {\n    readonly userId: UserId;\n    readonly displayName?: string;\n    readonly status: UserStatus;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n    readonly revision: number;\n    readonly extensions: UserExtensions;\n}',
+  },
+  {
+    name: 'UserStatus',
+    declaration: 'export type UserStatus = \'active\' | \'disabled\' | \'deleted\';',
+  },
+  {
+    name: 'UserStatusRequest',
+    declaration: 'export interface UserStatusRequest {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly context?: UserOperationContext;\n}',
+  },
+  {
+    name: 'UserUpdateRequest',
+    declaration: 'export interface UserUpdateRequest {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly patch: UserProfilePatch;\n    readonly context?: UserOperationContext;\n}',
   },
   {
     name: 'WebBootEntry',
