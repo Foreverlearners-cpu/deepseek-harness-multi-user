@@ -1,4 +1,4 @@
-# DeepSeek Harness
+# DeepSeek Harness Multi-User
 
 English | [中文](README.zh.md)
 
