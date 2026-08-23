@@ -1,5 +1,4 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { UserId } from '@deepseek-ai/dsh-user'
 import type {
   AssistantMessage,
   CallId,
@@ -68,8 +67,6 @@ export interface SessionHeader {
   readonly version: number
   /** The session's id (mirrors the {@link Session}'s id). */
   readonly id: SessionId
-  /** Immutable owning user when the session is created in a user-aware runtime. */
-  readonly userId?: UserId
   /** Non-negative safe-integer Unix epoch milliseconds when the session was created. */
   readonly createdAt: number
   /** Absolute working directory the session was created in (if any). */
@@ -114,8 +111,6 @@ export interface CreateSessionOptions {
    * because a resumed seed contains the full stored log, not only its inherited prefix.
    */
   readonly meta?: {
-    /** Immutable owning user for user-aware runtimes. */
-    readonly userId?: UserId
     readonly cwd?: string
     readonly parentSession?: SessionId
     readonly createdAt?: number

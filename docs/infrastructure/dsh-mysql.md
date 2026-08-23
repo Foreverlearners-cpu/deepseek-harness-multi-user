@@ -2,7 +2,7 @@
 
 English | [中文](dsh-mysql.zh.md)
 
-This reference defines the planned full `@deepseek-ai/dsh-mysql` Host capability. The shipped connection-and-transaction foundation is documented by the [`dsh-mysql` package README](../../packages/multi/mysql/README.md). The service is an infrastructure dependency for identity, tenancy, session persistence, settings, audit, and other relational domains; it is not a model tool or a session-specific store.
+This reference defines the planned full `@deepseek-ai/dsh-mysql` Host capability. The shipped connection-only stage is documented by the [`dsh-mysql` package README](../../packages/multi/mysql/README.md). The service is an infrastructure dependency for identity, tenancy, session persistence, settings, audit, and other relational domains; it is not a model tool or a session-specific store.
 
 ## Scope
 
@@ -89,7 +89,7 @@ The repository's pre-release policy may reject an ownership-free local format in
 
 ## Tenant isolation
 
-MySQL does not provide PostgreSQL-style row-level security, so application ownership checks and relational constraints are mandatory. Future tenant-owned tables will carry `tenant_id`; the current user-only SessionPersistence schema deliberately omits it. Platform-global tables are explicitly classified and are unavailable through tenant product repositories.
+MySQL does not provide PostgreSQL-style row-level security, so application ownership checks and relational constraints are mandatory. Every tenant-owned table carries `tenant_id`; primary keys, unique constraints, foreign keys, list indexes, and retention indexes include the tenant before the resource id. Platform-global tables are explicitly classified and are unavailable through tenant product repositories.
 
 Domain methods receive a trusted `TenantScope` derived from `AuthenticatedCall`. They query by composite tenant/resource keys before disclosing existence, content, counts, or timing-sensitive work. `dsh-mysql` does not infer a tenant from ambient process state and never accepts a request-supplied tenant as authorization.
 
@@ -101,7 +101,7 @@ The MySQL network, credentials, and client library stay outside model-controlled
 
 ### Session persistence
 
-`dsh-session-persistence-mysql` implements the existing append-only, contiguous-sequence, lazy-materialization, inspection, recovery, and revision requirements. The runnable first version scopes application reads and writes by the trusted `ownerUserId`, writes it into `(owner_kind, owner_id)`, and stores immutable event or packed-chunk records under `(session_id, seq_from)`. New databases contain no `tenant_id` column. One append batch materializes the session when necessary and inserts all records in one transaction.
+`dsh-session-persistence-mysql` implements the existing append-only, contiguous-sequence, lazy-materialization, inspection, recovery, and revision requirements. It stores immutable tenant and owner metadata on the session row and event rows under `(tenant_id, session_id, seq)`. One append batch materializes the session when necessary and inserts all events in one transaction.
 
 The agent loop continues to depend on `ctx.sessionPersistence`, not `ctx.mysql`. Session queries and Elasticsearch indexing consume the persistence/query capabilities or durable outbox, so changing a SQL driver does not grant a new path around session authorization.
 

@@ -104,10 +104,6 @@ function validateSessionHeader(id: SessionId, input: unknown): SessionHeader {
   if (record.id !== id) {
     throw new Error(`session header id "${String(record.id)}" does not match session id "${id}"`)
   }
-  if (record.userId !== undefined
-    && (typeof record.userId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(record.userId))) {
-    throw new Error('session header userId must contain 1-128 ASCII identifier characters')
-  }
   if (typeof record.createdAt !== 'number'
     || !Number.isSafeInteger(record.createdAt)
     || record.createdAt < 0) {
@@ -882,7 +878,6 @@ export class SessionStore extends Service {
       version: SESSION_FORMAT_VERSION,
       id: sessionId,
       createdAt: meta?.createdAt ?? Date.now(),
-      ...meta?.userId === undefined ? {} : { userId: meta.userId },
       ...meta?.cwd === undefined ? {} : { cwd: meta.cwd },
       ...meta?.parentSession === undefined ? {} : { parentSession: meta.parentSession },
       ...meta?.seedLength === undefined ? {} : { seedLength: meta.seedLength },

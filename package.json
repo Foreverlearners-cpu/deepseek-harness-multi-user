@@ -39,7 +39,6 @@
     "test:snapshot:record": "DSH_SNAPSHOT=record vitest run --config vitest.snapshot.config.ts --update",
     "test:snapshot:refresh": "DSH_SNAPSHOT=refresh vitest run --config vitest.snapshot.config.ts",
     "migrate:packed-session-fixtures": "tsx scripts/migrate-packed-session-fixtures.ts",
-    "migrate:message-only": "node --import tsx scripts/migrate-message-only-from-events.ts",
     "test:web": "npm run build && npm run test:web:built",
     "test:web:refresh": "npm run build && DSH_SNAPSHOT=refresh vitest run --config vitest.web.config.ts",
     "test:web:built": "vitest run --config vitest.web.config.ts",
@@ -178,7 +177,6 @@
     "tsdown": "^0.22.2",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "unrun": "0.3.0",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.8"
   }

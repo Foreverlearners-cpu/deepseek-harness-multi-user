@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
-import LlmRuntime, { CallId, createUserMessage, type GenerateOptions, LlmAdapter, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { CallId, type GenerateOptions, LlmAdapter, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import SessionPersistence from '@deepseek-ai/dsh-session-persistence'
@@ -39,7 +39,7 @@ class RecordingAdapter extends LlmAdapter {
   }
 }
 
-async function setup(config: checkpointPolicy.Config = {}): Promise<Context> {
+async function setup(): Promise<Context> {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(SessionStore)
@@ -47,18 +47,8 @@ async function setup(config: checkpointPolicy.Config = {}): Promise<Context> {
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(TestPersistence)
-  await ctx.plugin(checkpointPolicy, config)
+  await ctx.plugin(checkpointPolicy)
   return ctx
-}
-
-function wait(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-function deferred<T>(): { promise: Promise<T>; resolve(value: T | PromiseLike<T>): void } {
-  let resolvePromise!: (value: T | PromiseLike<T>) => void
-  const promise = new Promise<T>((resolve) => { resolvePromise = resolve })
-  return { promise, resolve: resolvePromise }
 }
 
 async function drain(stream: AsyncIterable<StreamChunk>): Promise<void> {
@@ -74,7 +64,7 @@ describe('session-checkpoint-policy request boundary', () => {
     const ctx = await setup()
     const session = ctx.sessions.create(SessionId('request-checkpoint'))
     session.append('turn/start', { turn: 1 })
-    const gate = deferred<undefined>()
+    const gate = Promise.withResolvers<undefined>()
     const order: string[] = []
     ctx.on('session/flush', async () => {
       order.push('flush:start')
@@ -131,7 +121,7 @@ describe('session-checkpoint-policy tool and step boundaries', () => {
     const ctx = await setup()
     const session = ctx.sessions.create(SessionId('tool-checkpoint'))
     const agent = { session } as Agent
-    const gate = deferred<undefined>()
+    const gate = Promise.withResolvers<undefined>()
     const order: string[] = []
     ctx.on('session/flush', async () => {
       order.push('flush:start')
@@ -160,7 +150,7 @@ describe('session-checkpoint-policy tool and step boundaries', () => {
     const session = ctx.sessions.create(SessionId('tool-checkpoint-cancel'))
     const agent = { session } as Agent
     const controller = new AbortController()
-    const gate = deferred<undefined>()
+    const gate = Promise.withResolvers<undefined>()
     const order: string[] = []
     ctx.on('session/flush', async () => {
       order.push('flush:start')
@@ -275,50 +265,6 @@ describe('session-checkpoint-policy lifecycle', () => {
     expect(unwrapped).toBe(checkpointPolicy)
     expect(unwrapped.name).toBe('session-checkpoint-policy')
     expect(unwrapped.inject).toEqual(['llm', 'sessionPersistence', 'sessions', 'tools'])
-    expect(unwrapped.Config).toBeDefined()
     expect(typeof unwrapped.apply).toBe('function')
   })
-})
-
-describe('session-checkpoint-policy time strategy', () => {
-  it('flushes canonical message events after the configured interval but ignores chunks', async () => {
-    const ctx = await setup({ intervalMs: 15 })
-    const session = ctx.sessions.create(SessionId('time-checkpoint'))
-    let flushes = 0
-    ctx.on('session/flush', () => { flushes += 1 })
-
-    session.append('turn/start', { turn: 1 })
-    session.append('step/start', { turn: 1, step: 1 })
-    session.append('assistant/chunk', {
-      turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'not durable' },
-    })
-    await wait(30)
-    expect(flushes).toBe(0)
-
-    session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' },
-    }), { surfaceOp: 'append' })
-    await wait(5)
-    expect(flushes).toBe(0)
-    await wait(30)
-    expect(flushes).toBe(1)
-  })
-
-  it('allows a deployment to register a different strategy without changing the scheduler', async () => {
-    const dispose = checkpointPolicy.registerCheckpointPolicy('always', () => ({ shouldCheckpoint: () => true }))
-    try {
-      const ctx = await setup({ strategy: 'always', intervalMs: 60_000 })
-      const session = ctx.sessions.create(SessionId('custom-checkpoint'))
-      let flushes = 0
-      ctx.on('session/flush', () => { flushes += 1 })
-      session.append('user/message', createUserMessage({
-        content: [{ type: 'text', text: 'custom' }], source: { kind: 'user' },
-      }), { surfaceOp: 'append' })
-      await wait(20)
-      expect(flushes).toBe(1)
-    } finally {
-      dispose()
-    }
-  })
-
 })

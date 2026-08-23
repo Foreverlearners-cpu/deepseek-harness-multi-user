@@ -130,11 +130,7 @@ function scriptedApi(overrides: {
     },
     events: { mux: () => empty<MuxFrame>(), host: () => empty<HostFrame>(), ...overrides.events },
     respond: overrides.respond ?? (() => Promise.resolve({ accepted: false as const, reason: 'not-pending' as const })),
-    downloads: {
-      sessionLog: async () => new Response('stub', { status: 404 }),
-      conversationFile: async () => new Response('stub', { status: 404 }),
-      conversationFileUpload: async () => new Response('stub', { status: 501 }),
-    },
+    downloads: { sessionLog: async () => new Response('stub', { status: 404 }) },
   }
 }
 

@@ -28,12 +28,6 @@ const BLOCKED_CONNECTION_MEMBERS: ReadonlySet<PropertyKey> = new Set([
   Symbol.asyncDispose,
 ])
 
-const BLOCKED_TRANSACTION_MEMBERS: ReadonlySet<PropertyKey> = new Set([
-  'beginTransaction',
-  'commit',
-  'rollback',
-])
-
 type BlockedConnectionMember =
   | 'changeUser'
   | 'connect'
@@ -46,39 +40,18 @@ type BlockedConnectionMember =
   | 'resume'
   | typeof Symbol.asyncDispose
 
-type BlockedTransactionMember = 'beginTransaction' | 'commit' | 'rollback'
-
 /**
  * Callback-scoped MySQL driver connection. Pool lifecycle methods and the raw
  * connection are unavailable, and every operation fails after callback settlement.
  */
 export type MysqlConnection = Omit<PoolConnection, BlockedConnectionMember>
 
-/** Callback-scoped connection inside a transaction. Transaction lifecycle is owned by the service. */
-export type MysqlTransactionConnection = Omit<MysqlConnection, BlockedTransactionMember>
-
 interface ConnectionLease {
   connection: MysqlConnection
   expire(): void
 }
 
-interface Deferred<T> {
-  promise: Promise<T>
-  resolve(value: T | PromiseLike<T>): void
-}
-
-function deferred<T>(): Deferred<T> {
-  let resolvePromise: (value: T | PromiseLike<T>) => void = () => {}
-  const promise = new Promise<T>((resolve) => {
-    resolvePromise = resolve
-  })
-  return { promise, resolve: resolvePromise }
-}
-
-function createConnectionLease(
-  connection: PoolConnection,
-  blockedMembers: ReadonlySet<PropertyKey> = BLOCKED_CONNECTION_MEMBERS,
-): ConnectionLease {
+function createConnectionLease(connection: PoolConnection): ConnectionLease {
   let active = true
   const assertActive = (): void => {
     if (!active) throw new Error('mysql connection lease has settled')
@@ -86,7 +59,7 @@ function createConnectionLease(
   const wrap = <T extends object>(value: T): T => new Proxy({}, {
     get(_target, prop): unknown {
       assertActive()
-      if (blockedMembers.has(prop)) {
+      if (BLOCKED_CONNECTION_MEMBERS.has(prop)) {
         throw new Error(`mysql connection lease does not expose "${String(prop)}"`)
       }
       const member = Reflect.get(value, prop, value) as unknown
@@ -208,7 +181,7 @@ export class Mysql extends Service {
       throw new Error('mysql connection service is closing or closed')
     }
 
-    const completion = deferred<void>()
+    const completion = Promise.withResolvers<void>()
     this.leases.add(completion.promise)
     let connection: PoolConnection | undefined
     let connectionLease: ConnectionLease | undefined
@@ -222,42 +195,9 @@ export class Mysql extends Service {
         if (connection) await this.resetOrDestroy(connection)
       } finally {
         this.leases.delete(completion.promise)
-        completion.resolve(undefined)
+        completion.resolve()
       }
     }
-  }
-
-  /**
-   * Run one callback in a transaction owned by this service. The callback
-   * receives a query-only façade; begin, commit and rollback are performed by
-   * the service and the leased connection expires after settlement.
-   * @param callback - database work that must commit or roll back as one unit.
-   * @returns the callback result after the commit is acknowledged.
-   * @throws the callback error, rollback error, or commit error.
-   */
-  async transaction<T>(callback: (connection: MysqlTransactionConnection) => T | Promise<T>): Promise<T> {
-    return this.connection(async (connection) => {
-      await connection.beginTransaction()
-      const transactionLease = createConnectionLease(
-        connection as unknown as PoolConnection,
-        new Set([...BLOCKED_CONNECTION_MEMBERS, ...BLOCKED_TRANSACTION_MEMBERS]),
-      )
-      try {
-        const result = await callback(transactionLease.connection as MysqlTransactionConnection)
-        await connection.commit()
-        return result
-      } catch (error: unknown) {
-        try {
-          await connection.rollback()
-        } catch {
-          // Preserve the callback or commit failure; connection cleanup still
-          // runs in the outer lease and destroys an uncertain connection.
-        }
-        throw error
-      } finally {
-        transactionLease.expire()
-      }
-    })
   }
 
   private async resetOrDestroy(connection: PoolConnection): Promise<void> {

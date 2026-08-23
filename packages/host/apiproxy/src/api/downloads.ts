@@ -22,23 +22,4 @@ export interface DownloadsApi {
     request: { sessionId: SessionId; includeDescendants?: boolean },
     signal: AbortSignal,
   ): Promise<Response>
-
-  /** Download one user-owned Conversation File; the response never exposes its storage key. */
-  conversationFile(
-    request: { sessionId: SessionId; fileId: string },
-    signal: AbortSignal,
-  ): Promise<Response>
-
-  /** Upload one Conversation File through the host-only JSON carrier. */
-  conversationFileUpload(
-    request: {
-      sessionId: SessionId
-      originalName: string
-      mediaType: string
-      purpose?: string
-      data: Uint8Array
-      expectedSha256?: string
-    },
-    signal: AbortSignal,
-  ): Promise<Response>
 }
