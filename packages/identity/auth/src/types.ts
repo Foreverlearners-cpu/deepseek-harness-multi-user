@@ -112,7 +112,7 @@ export interface CredentialInspectRequest extends CredentialOperationRequest {
 }
 
 /** Safe credential metadata returned by lifecycle inspection. */
-export interface CredentialInfo {
+export interface AuthenticationCredentialInfo {
   readonly id: CredentialId
   readonly kind: IssuedCredential['kind']
   readonly active: boolean
@@ -129,7 +129,7 @@ export interface CredentialRevokeRequest extends CredentialOperationRequest {
 export interface CredentialLifecycleProvider {
   issue?(request: CredentialIssueRequest): Promise<IssuedCredentialSet>
   refresh?(request: CredentialRefreshRequest): Promise<IssuedCredentialSet>
-  inspect?(request: CredentialInspectRequest): Promise<readonly CredentialInfo[]>
+  inspect?(request: CredentialInspectRequest): Promise<readonly AuthenticationCredentialInfo[]>
   revoke?(request: CredentialRevokeRequest): Promise<void>
 }
 

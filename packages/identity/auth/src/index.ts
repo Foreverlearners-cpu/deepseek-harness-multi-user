@@ -16,7 +16,7 @@ import type {
   AuthenticationProvider,
   AuthenticationRequestId,
   CredentialId,
-  CredentialInfo,
+  AuthenticationCredentialInfo,
   CredentialInspectRequest,
   CredentialIssueRequest,
   CredentialLifecycleProvider,
@@ -42,37 +42,58 @@ function validatedId(kind: string, value: string): string {
   return value
 }
 
-/** Brand a Host-generated authentication request id after validation. */
+/** Brand a Host-generated authentication request id after validation.
+ * @param value - untrusted request id candidate.
+ * @returns validated authentication request id.
+ */
 export function authenticationRequestId(value: string): AuthenticationRequestId {
   return validatedId('request id', value) as AuthenticationRequestId
 }
 
-/** Brand a human account id after validation. */
+/** Brand a human account id after validation.
+ * @param value - untrusted user id candidate.
+ * @returns validated user id.
+ */
 export function userId(value: string): UserId {
   return validatedId('user id', value) as UserId
 }
 
-/** Brand a service-account id after validation. */
+/** Brand a service-account id after validation.
+ * @param value - untrusted service-account id candidate.
+ * @returns validated service-account id.
+ */
 export function serviceAccountId(value: string): ServiceAccountId {
   return validatedId('service-account id', value) as ServiceAccountId
 }
 
-/** Brand an explicit local principal id after validation. */
+/** Brand an explicit local principal id after validation.
+ * @param value - untrusted local principal id candidate.
+ * @returns validated local principal id.
+ */
 export function localPrincipalId(value: string): LocalPrincipalId {
   return validatedId('local principal id', value) as LocalPrincipalId
 }
 
-/** Brand an authentication method after validation. */
+/** Brand an authentication method after validation.
+ * @param value - untrusted method candidate.
+ * @returns validated authentication method.
+ */
 export function authenticationMethod(value: string): AuthenticationMethod {
   return validatedId('authentication method', value) as AuthenticationMethod
 }
 
-/** Brand a credential id after validation. */
+/** Brand a credential id after validation.
+ * @param value - untrusted credential id candidate.
+ * @returns validated credential id.
+ */
 export function credentialId(value: string): CredentialId {
   return validatedId('credential id', value) as CredentialId
 }
 
-/** Brand a rotating token-family id after validation. */
+/** Brand a rotating token-family id after validation.
+ * @param value - untrusted token-family id candidate.
+ * @returns validated token-family id.
+ */
 export function tokenFamilyId(value: string): TokenFamilyId {
   return validatedId('token family id', value) as TokenFamilyId
 }
@@ -100,24 +121,48 @@ interface CallProvenance {
   readonly registration: ProviderRegistration
 }
 
-function normalizeIssued(result: IssuedCredentialSet): IssuedCredentialSet {
-  if (!Array.isArray(result?.credentials) || result.credentials.length === 0) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return isRecord(value) && typeof value.then === 'function'
+}
+
+function isAborted(signal: AbortSignal): boolean {
+  return signal.aborted
+}
+
+function normalizeIssued(result: unknown): IssuedCredentialSet {
+  if (!isRecord(result) || !Array.isArray(result.credentials) || result.credentials.length === 0) {
     throw new AuthenticationError('authentication-unavailable', 'auth: credential Provider returned no credentials')
   }
   const seen = new Set<CredentialId>()
-  const credentials = result.credentials.map((candidate): IssuedCredential => {
-    if (typeof candidate?.value !== 'string' || candidate.value.length === 0
-      || typeof candidate.id !== 'string' || seen.has(candidate.id)) {
+  const credentials = result.credentials.map((candidate: unknown): IssuedCredential => {
+    if (!isRecord(candidate)
+      || typeof candidate.value !== 'string' || candidate.value.length === 0
+      || typeof candidate.id !== 'string') {
       throw new AuthenticationError('authentication-unavailable', 'auth: credential Provider returned invalid credentials')
     }
-    validatedId('credential id', candidate.id)
-    if (!['access', 'refresh', 'api-key'].includes(candidate.kind)
-      || (candidate.expiresAt !== undefined && !Number.isFinite(candidate.expiresAt))) {
+    const id = credentialId(candidate.id)
+    const kind = candidate.kind
+    const expiresAt = candidate.expiresAt
+    const family = candidate.tokenFamilyId
+    if (seen.has(id)
+      || (kind !== 'access' && kind !== 'refresh' && kind !== 'api-key')
+      || (expiresAt !== undefined && (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)))
+      || (family !== undefined && typeof family !== 'string')) {
       throw new AuthenticationError('authentication-unavailable', 'auth: credential Provider returned invalid credentials')
     }
-    if (candidate.tokenFamilyId !== undefined) validatedId('token family id', candidate.tokenFamilyId)
-    seen.add(candidate.id)
-    return Object.freeze({ ...candidate })
+    const tokenFamily = family === undefined ? undefined : tokenFamilyId(family)
+    seen.add(id)
+    return Object.freeze({
+      kind,
+      id,
+      value: candidate.value,
+      ...(expiresAt === undefined ? {} : { expiresAt }),
+      ...(tokenFamily === undefined ? {} : { tokenFamilyId: tokenFamily }),
+    })
   })
   return Object.freeze({ credentials: Object.freeze(credentials) })
 }
@@ -148,7 +193,7 @@ export class AuthenticationProviderRegistry {
     }
     const registration: ProviderRegistration = {
       evidenceKind,
-      provider: provider as AuthenticationProvider,
+      provider,
       active: true,
     }
     this.byEvidence.set(evidenceKind, registration)
@@ -163,17 +208,26 @@ export class AuthenticationProviderRegistry {
     }
   }
 
-  /** Resolve the Provider that owns one evidence kind. */
+  /** Resolve the Provider that owns one evidence kind.
+   * @param evidenceKind - exact carrier evidence kind.
+   * @returns current registration, when present.
+   */
   resolveEvidence(evidenceKind: AuthenticationEvidenceKind): ProviderRegistration | undefined {
     return this.byEvidence.get(evidenceKind)
   }
 
-  /** Resolve the Provider that owns one authentication method. */
+  /** Resolve the Provider that owns one authentication method.
+   * @param method - authentication method owned by a Provider.
+   * @returns current registration, when present.
+   */
   resolveMethod(method: AuthenticationMethod): ProviderRegistration | undefined {
     return this.byMethod.get(method)
   }
 
-  /** Whether the exact registration remains active and current. */
+  /** Whether the exact registration remains active and current.
+   * @param registration - registration provenance attached to a call.
+   * @returns whether the registration still owns both registry entries.
+   */
   isCurrent(registration: ProviderRegistration): boolean {
     return registration.active
       && this.byEvidence.get(registration.evidenceKind) === registration
@@ -186,23 +240,38 @@ export class CredentialLifecycleRuntime {
   /** @param runtime - authentication service that owns the Provider registry. */
   constructor(private readonly runtime: AuthenticationRuntime) {}
 
-  /** Issue credentials through one method's Provider capability. */
+  /** Issue credentials through one method's Provider capability.
+   * @param method - authentication method whose Provider owns issuance.
+   * @param request - principal and operation lifecycle facts.
+   * @returns validated issued credentials.
+   */
   async issue(method: AuthenticationMethod, request: CredentialIssueRequest): Promise<IssuedCredentialSet> {
     return normalizeIssued(await this.capability(method, 'issue')(request))
   }
 
-  /** Rotate a refresh credential through one method's Provider capability. */
+  /** Rotate a refresh credential through one method's Provider capability.
+   * @param method - authentication method whose Provider owns rotation.
+   * @param request - refresh secret and operation lifecycle facts.
+   * @returns validated replacement credentials.
+   */
   async refresh(method: AuthenticationMethod, request: CredentialRefreshRequest): Promise<IssuedCredentialSet> {
     return normalizeIssued(await this.capability(method, 'refresh')(request))
   }
 
-  /** Inspect safe credential metadata through one method's Provider capability. */
-  async inspect(method: AuthenticationMethod, request: CredentialInspectRequest): Promise<readonly CredentialInfo[]> {
+  /** Inspect safe credential metadata through one method's Provider capability.
+   * @param method - authentication method whose Provider owns inspection.
+   * @param request - credential inspection target and lifecycle facts.
+   * @returns immutable credential metadata without secrets.
+   */
+  async inspect(method: AuthenticationMethod, request: CredentialInspectRequest): Promise<readonly AuthenticationCredentialInfo[]> {
     const values = await this.capability(method, 'inspect')(request)
     return Object.freeze(values.map(value => Object.freeze({ ...value })))
   }
 
-  /** Revoke credentials through one method's Provider capability. */
+  /** Revoke credentials through one method's Provider capability.
+   * @param method - authentication method whose Provider owns revocation.
+   * @param request - revocation target and operation lifecycle facts.
+   */
   async revoke(method: AuthenticationMethod, request: CredentialRevokeRequest): Promise<void> {
     await this.capability(method, 'revoke')(request)
   }
@@ -232,8 +301,10 @@ declare module '@deepseek-ai/cordis' {
 
 /** Authentication service that selects Providers and exclusively mints calls. */
 export class AuthenticationRuntime extends Service {
-  readonly providers = new AuthenticationProviderRegistry()
-  readonly credentials = new CredentialLifecycleRuntime(this)
+  /** Provider routes keyed by evidence kind and authentication method. */
+  readonly providers: AuthenticationProviderRegistry = new AuthenticationProviderRegistry()
+  /** Credential lifecycle dispatcher for registered Provider capabilities. */
+  readonly credentials: CredentialLifecycleRuntime = new CredentialLifecycleRuntime(this)
   private readonly calls = new WeakMap<object, CallProvenance>()
 
   /** @param ctx - owning Host context. */
@@ -249,7 +320,7 @@ export class AuthenticationRuntime extends Service {
   async authenticate(attempt: AuthenticationAttempt): Promise<AuthenticatedCall> {
     const evidenceKind = attempt.evidence.kind
     const registration = this.providers.resolveEvidence(evidenceKind)
-    if (attempt.signal.aborted) {
+    if (isAborted(attempt.signal)) {
       return this.reject(attempt, evidenceKind, 'unauthenticated', 'auth: authentication request was cancelled')
     }
     if (registration === undefined) {
@@ -278,7 +349,7 @@ export class AuthenticationRuntime extends Service {
     if (!this.providers.isCurrent(registration)) {
       return this.reject(attempt, evidenceKind, 'authentication-unavailable', 'auth: authentication Provider changed during verification')
     }
-    if (attempt.signal.aborted) {
+    if (isAborted(attempt.signal)) {
       return this.reject(attempt, evidenceKind, 'unauthenticated', 'auth: authentication request was cancelled')
     }
     try {
@@ -351,17 +422,27 @@ export class AuthenticationRuntime extends Service {
     return call
   }
 
-  private assertVerified(verified: VerifiedAuthentication): void {
-    if (!Number.isFinite(verified.authenticatedAt)
-      || (verified.expiresAt !== undefined && !Number.isFinite(verified.expiresAt))) {
+  private assertVerified(verified: unknown): asserts verified is VerifiedAuthentication {
+    if (!isRecord(verified)
+      || typeof verified.authenticatedAt !== 'number' || !Number.isFinite(verified.authenticatedAt)
+      || (verified.expiresAt !== undefined
+        && (typeof verified.expiresAt !== 'number' || !Number.isFinite(verified.expiresAt)))) {
       throw new AuthenticationError('authentication-unavailable', 'auth: authentication Provider returned invalid timestamps')
     }
     const principal = verified.principal
-    if (principal.kind === 'user') validatedId('user id', principal.id)
-    else if (principal.kind === 'service-account') validatedId('service-account id', principal.id)
-    else if (principal.kind === 'local') validatedId('local principal id', principal.id)
+    if (!isRecord(principal) || typeof principal.id !== 'string') {
+      throw new AuthenticationError('authentication-unavailable', 'auth: authentication Provider returned an invalid principal')
+    }
+    if (principal.kind === 'user') userId(principal.id)
+    else if (principal.kind === 'service-account') serviceAccountId(principal.id)
+    else if (principal.kind === 'local') localPrincipalId(principal.id)
     else throw new AuthenticationError('authentication-unavailable', 'auth: authentication Provider returned an invalid principal')
-    if (verified.credentialId !== undefined) validatedId('credential id', verified.credentialId)
+    if (verified.credentialId !== undefined) {
+      if (typeof verified.credentialId !== 'string') {
+        throw new AuthenticationError('authentication-unavailable', 'auth: authentication Provider returned an invalid credential id')
+      }
+      credentialId(verified.credentialId)
+    }
   }
 
   private reject(
@@ -389,9 +470,9 @@ export class AuthenticationRuntime extends Service {
     let invariantFailure: unknown
     for (const listener of this.ctx.events.dispatch('emit', ['auth/result', Object.freeze(record)])) {
       try {
-        const returned = listener(record)
-        if (returned != null && typeof (returned as PromiseLike<unknown>).then === 'function') {
-          void Promise.resolve(returned as PromiseLike<unknown>).catch(report)
+        const returned: unknown = listener(record)
+        if (isPromiseLike(returned)) {
+          void Promise.resolve(returned).catch(report)
         }
       } catch (error) {
         if ((error as { code?: unknown } | null)?.code === 'INVARIANT') invariantFailure ??= error

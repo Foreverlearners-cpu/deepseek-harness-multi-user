@@ -2,8 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Identity values and authentication contracts shared across product domains. Anonymous identity does not represent an
-authenticated account; the auth runtime mints explicit request identity only after a Provider verifies evidence.
+Identity values and authentication contracts shared across product domains. Anonymous identity does not represent an authenticated account; the auth runtime mints explicit request identity only after a Provider verifies evidence.
 
 | Package | Role | ctx key |
 |---|---|---|

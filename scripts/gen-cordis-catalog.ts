@@ -51,6 +51,7 @@ export { REGION_BEGIN, REGION_END }
  */
 export const SERVICE_PAGE: Record<string, string> = {
   agentLoop: 'core.md',
+  auth: 'authentication.md',
   agentDefaultModel: 'core.md',
   agentPresets: 'core.md',
   agents: 'core.md',
@@ -170,6 +171,7 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'agent': 'core.md',
   'agent-loop': 'core.md',
   'agent-preset': 'core.md',
+  'auth': 'authentication.md',
   'approval': 'approval.md',
   'commands': 'commands.md',
   'cordis': 'extensions.md',
@@ -224,6 +226,21 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ModelSelection: 'core.md',
   AgentOptions: 'core.md',
   AgentStatus: 'core.md',
+  AuthenticatedCall: 'authentication.md',
+  AuthenticationAttempt: 'authentication.md',
+  AuthenticationCredentialInfo: 'authentication.md',
+  AuthenticationEventRecord: 'authentication.md',
+  AuthenticationEvidenceKind: 'authentication.md',
+  AuthenticationMethod: 'authentication.md',
+  AuthenticationProvider: 'authentication.md',
+  AuthenticationProviderRegistry: 'authentication.md',
+  CredentialInspectRequest: 'authentication.md',
+  CredentialIssueRequest: 'authentication.md',
+  CredentialLifecycleRuntime: 'authentication.md',
+  CredentialRefreshRequest: 'authentication.md',
+  CredentialRevokeRequest: 'authentication.md',
+  IssuedCredentialSet: 'authentication.md',
+  ProviderRegistration: 'authentication.md',
   ContentBlock: 'llm-streaming.md',
   CreateAgentOptions: 'core.md',
   GenerateOptions: 'llm-streaming.md',
@@ -602,6 +619,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
 
 /** Host services documented for maintainers but hidden from model-authored dynamic packages. */
 export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
+  'auth',
   'cordisInspect',
   'dynamicCordisRunner',
   'elasticsearch',

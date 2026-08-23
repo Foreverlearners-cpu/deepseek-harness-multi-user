@@ -81,6 +81,7 @@ export interface TypeApiEntry {
 
 /** Service keys omitted from every model-facing runtime inspection. */
 export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
+  'auth',
   'cordisInspect',
   'dynamicCordisRunner',
   'elasticsearch',
@@ -2294,6 +2295,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'req', description: 'the pending decision (agent, tool identity, reason, signal).' }],
   },
   {
+    name: 'auth/result',
+    mode: 'emit',
+    signature: '\'auth/result\'(record: AuthenticationEventRecord): void',
+    summary: 'Completed authentication result without raw credential material.',
+    description: 'Completed authentication result without raw credential material.',
+    parameters: [{ name: 'record', description: 'sanitized result safe for audit listeners.' }],
+  },
+  {
     name: 'commands/change',
     mode: 'emit',
     signature: '\'commands/change\'(): void',
@@ -2730,6 +2739,38 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
   },
   {
+    name: 'AuthenticatedPrincipal',
+    declaration: 'export type AuthenticatedPrincipal = {\n    readonly kind: \'user\';\n    readonly id: UserId;\n} | {\n    readonly kind: \'service-account\';\n    readonly id: ServiceAccountId;\n} | {\n    readonly kind: \'local\';\n    readonly id: LocalPrincipalId;\n};',
+  },
+  {
+    name: 'AuthenticationChannel',
+    declaration: 'export type AuthenticationChannel = \'http\' | \'websocket\' | \'sdk\' | \'acp\' | \'in-process\';',
+  },
+  {
+    name: 'AuthenticationErrorCode',
+    declaration: 'export type AuthenticationErrorCode = \'unauthenticated\' | \'authentication-unavailable\' | \'provider-conflict\' | \'credential-operation-unsupported\';',
+  },
+  {
+    name: 'AuthenticationEventRecord',
+    declaration: 'export interface AuthenticationEventRecord {\n    readonly requestId: AuthenticationRequestId;\n    readonly channel: AuthenticationChannel;\n    readonly evidenceKind: AuthenticationEvidenceKind;\n    readonly method?: AuthenticationMethod;\n    readonly principal?: AuthenticatedPrincipal;\n    readonly credentialId?: CredentialId;\n    readonly outcome: \'succeeded\' | \'failed\';\n    readonly reason?: AuthenticationErrorCode;\n    readonly time: number;\n}',
+  },
+  {
+    name: 'AuthenticationEvidenceKind',
+    declaration: 'export type AuthenticationEvidenceKind = Extract<keyof AuthenticationEvidenceMap, string>;',
+  },
+  {
+    name: 'AuthenticationEvidenceMap',
+    declaration: 'export interface AuthenticationEvidenceMap {\n    \'in-process\': {\n        readonly kind: \'in-process\';\n    };\n}',
+  },
+  {
+    name: 'AuthenticationMethod',
+    declaration: 'export type AuthenticationMethod = Branded<\'AuthenticationMethod\'>;',
+  },
+  {
+    name: 'AuthenticationRequestId',
+    declaration: 'export type AuthenticationRequestId = Branded<\'AuthenticationRequestId\'>;',
+  },
+  {
     name: 'BackendRegistry',
     declaration: 'export class BackendRegistry {\n    register(name: string, backend: StorageBackend): () => void;\n    get(name: string): StorageBackend;\n    names(): string[];\n}',
   },
@@ -2928,6 +2969,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CreateSessionOptions',
     declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly createdAt?: number;\n        readonly seedLength?: number;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n}',
+  },
+  {
+    name: 'CredentialId',
+    declaration: 'export type CredentialId = Branded<\'CredentialId\'>;',
   },
   {
     name: 'CredentialInfo',
@@ -3332,6 +3377,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LlmRuntime',
     declaration: 'export class LlmRuntime extends Service {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+  },
+  {
+    name: 'LocalPrincipalId',
+    declaration: 'export type LocalPrincipalId = Branded<\'LocalPrincipalId\'>;',
   },
   {
     name: 'LspHover',
@@ -3740,6 +3789,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ServerResponse',
     declaration: 'export interface ServerResponse {\n    type: \'server-response\';\n    rpcId: RpcId;\n    result: RpcResult<unknown>;\n}',
+  },
+  {
+    name: 'ServiceAccountId',
+    declaration: 'export type ServiceAccountId = Branded<\'ServiceAccountId\'>;',
   },
   {
     name: 'SessionAvailability',
@@ -4540,6 +4593,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TypertTypeModel',
     declaration: 'export interface TypertTypeModel {\n    readonly name: string;\n    readonly declaration: string;\n}',
+  },
+  {
+    name: 'UserId',
+    declaration: 'export type UserId = Branded<\'UserId\'>;',
   },
   {
     name: 'UserMessage',

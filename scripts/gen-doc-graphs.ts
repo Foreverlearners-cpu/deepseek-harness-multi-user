@@ -205,6 +205,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the web gateway exposes value-free views and write-only storage.',
   },
   {
+    key: 'auth',
+    pkg: 'auth',
+    title: 'Host authentication runtime',
+    mode: 'seam',
+    implementations: [],
+    consumers: [],
+    note: 'Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations.',
+  },
+  {
     key: 'sessionTelemetry',
     pkg: 'session-telemetry',
     title: 'Session telemetry seam',

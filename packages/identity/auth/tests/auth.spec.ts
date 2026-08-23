@@ -16,7 +16,7 @@ import type {
 
 const method = authenticationMethod('local-test')
 
-function attempt(signal = new AbortController().signal): AuthenticationAttempt<'in-process'> {
+function attempt(signal = new AbortController().signal): AuthenticationAttempt {
   return {
     requestId: authenticationRequestId('request-1'),
     channel: 'in-process',
@@ -25,7 +25,7 @@ function attempt(signal = new AbortController().signal): AuthenticationAttempt<'
   }
 }
 
-function provider(overrides: Partial<AuthenticationProvider<'in-process'>> = {}): AuthenticationProvider<'in-process'> {
+function provider(overrides: Partial<AuthenticationProvider> = {}): AuthenticationProvider {
   return {
     method,
     verify: async () => ({
@@ -75,8 +75,8 @@ describe('authentication runtime', () => {
     auth.providers.register('in-process', provider())
     const call = await auth.authenticate(attempt())
 
-    expect(() => auth.assertCurrent({ ...call })).toThrowError(AuthenticationError)
-    expect(() => auth.assertCurrent(JSON.parse(JSON.stringify(call)))).toThrowError(AuthenticationError)
+    expect(() => auth.assertCurrent({ ...call })).toThrow(AuthenticationError)
+    expect(() => auth.assertCurrent(JSON.parse(JSON.stringify(call)))).toThrow(AuthenticationError)
   })
 
   it('rejects duplicate evidence kinds and duplicate authentication methods', async () => {
@@ -91,7 +91,7 @@ describe('authentication runtime', () => {
       readonly extra: { readonly kind: 'extra' }
     }
     const registry = auth.providers as unknown as {
-      register(kind: keyof ExtraEvidenceMap, value: AuthenticationProvider<'in-process'>): () => void
+      register(kind: keyof ExtraEvidenceMap, value: AuthenticationProvider): () => void
     }
     expect(() => registry.register('extra', provider())).toThrow(/method/)
   })

@@ -19,6 +19,7 @@ One page per subsystem of the DeepSeek Harness: what it is, the data structures 
 | [multi-user-infrastructure.md](multi-user-infrastructure.md) | trusted Host connectivity services for multi-user domain plugins, beginning with the callback-scoped Elasticsearch client |
 | [settings.md](settings.md) | the user-settings seam: `SettingsNamespace` registration, layered resolution (defaults → composition `base` → user document), owner scopes, hot commits |
 | [credentials.md](credentials.md) | the credential seam: `CredentialRef` references (never values) in configuration, per-operation resolution, UI-safe `CredentialInfo`, provider source layers |
+| [authentication.md](authentication.md) | the Host authentication seam: evidence-kind Provider selection, verified identity facts, process-local `AuthenticatedCall` provenance, and optional credential lifecycle dispatch |
 | [session-query.md](session-query.md) | logical records, bounded exact-event reads, relationship traces, semantic filters/documents, and full-text result pages |
 | [feedback.md](feedback.md) | lifecycle-bound per-message feedback records, optimistic versions, sidecar persistence, and the Host Remote contract |
 | [session-title.md](session-title.md) | durable title snapshots, cited source-message seqs, and the asynchronous provider contract |

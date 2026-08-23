@@ -19,6 +19,7 @@
 | [multi-user-infrastructure.md](multi-user-infrastructure.md) | 供多用户领域插件使用的可信 Host 连接服务，首个服务是 callback-scoped Elasticsearch client |
 | [settings.md](settings.md) | 用户设置 seam：`SettingsNamespace` 注册、分层解析（默认值 → 组合 `base` → 用户文档）、owner scope、热提交 |
 | [credentials.md](credentials.md) | 凭据 seam：配置中的 `CredentialRef` 引用（绝不含值）、按操作解析、对 UI 安全的 `CredentialInfo`、提供方来源层 |
+| [authentication.md](authentication.md) | Host 认证 seam：按证据类型选择 Provider、已验证身份事实、进程内 `AuthenticatedCall` 来源校验，以及可选的凭证生命周期分派 |
 | [session-query.md](session-query.md) | 逻辑记录、有界精确事件读取、关系追踪、语义筛选器/文档与全文检索结果页 |
 | [feedback.md](feedback.md) | 绑定生命周期的逐消息反馈记录、乐观版本、伴随记录持久化与 Host Remote 契约 |
 | [session-title.md](session-title.md) | 持久标题快照、被引用的来源消息 seq 与异步提供方约定 |
