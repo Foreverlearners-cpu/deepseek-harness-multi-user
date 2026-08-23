@@ -20,11 +20,11 @@ import type {
 /** Converts one event between its typed representation and Kafka bytes. */
 export interface EventCodec<T> {
   /**
-   * Encode one event; `undefined` deliberately publishes a Kafka tombstone.
+   * Encode one event as a non-empty Kafka value owned by the domain protocol.
    * @param event - typed event selected by the producer.
-   * @returns bytes stored in the Kafka value, or `undefined` for a tombstone.
+   * @returns bytes stored in the Kafka value.
    */
-  encode(event: T): Uint8Array | undefined
+  encode(event: T): Uint8Array
 
   /**
    * Decode one Kafka value at the untrusted wire boundary.

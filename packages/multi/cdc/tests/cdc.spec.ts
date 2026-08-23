@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import CdcService, { decodeCdcEvent, type Config } from '@deepseek-ai/dsh-cdc'
-import { KafkaError, type KafkaPublishMessage } from '@deepseek-ai/dsh-kafka'
+import {
+  KafkaError,
+  type KafkaPublishedOffset,
+  type KafkaPublishMessage,
+} from '@deepseek-ai/dsh-kafka'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mock = vi.hoisted(() => ({
@@ -171,11 +175,15 @@ class FakeKafka extends Service {
     super(ctx, 'kafka')
   }
 
-  async publish(messages: KafkaPublishMessage[]): Promise<[]> {
+  async publish(messages: KafkaPublishMessage[]): Promise<KafkaPublishedOffset[]> {
     this.attempts.push(messages)
     await this.onPublish?.(messages)
     this.publications.push(messages)
-    return []
+    return messages.map((message, index) => ({
+      topic: message.topic,
+      partition: 0,
+      offset: BigInt(index),
+    }))
   }
 }
 
@@ -399,6 +407,14 @@ describe('CdcService', () => {
 
     await vi.waitFor(() => { expect(kafka.publications).toHaveLength(1) })
     await vi.waitFor(async () => { expect((await checkpoint(checkpointFile)).position).toBe(140) })
+    expect(kafka.publications[0]?.[0]).toMatchObject({
+      topic: 'app.users',
+      key: Buffer.from('{"id":"42"}'),
+      headers: {
+        'content-type': Buffer.from('application/json'),
+        'cdc-spec-version': Buffer.from('1'),
+      },
+    })
     expect(decodeCdcEvent(kafka.publications[0]?.[0]?.value ?? Buffer.alloc(0))).toMatchObject({
       operation: 'insert',
       key: { id: '42' },
@@ -675,6 +691,7 @@ describe('CdcService', () => {
     emitRows('writerows', [row('42'), row('43')], { size: 5_000 })
     reader().emit('binlog', { getEventName: () => 'xid', nextPosition: 140 })
     await vi.waitFor(() => { expect(kafka.publications).toHaveLength(2) })
+    expect(kafka.attempts).toHaveLength(3)
     await vi.waitFor(async () => { expect((await checkpoint(checkpointFile)).position).toBe(140) })
     await fiber.dispose()
   })

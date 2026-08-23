@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-19-mysql-kafka-cdc-projections.md
-2026-08-19-mysql-kafka-cdc-projections.md: 7cb6e90bb7bb52c11c4e1c273fc4aefbb659fbc1
-2026-08-19-mysql-kafka-cdc-projections.zh.md: 2e2acee18617dee47a1c506aca14174b4c415459
+2026-08-19-mysql-kafka-cdc-projections.md: f4707c3be9a3af4af33dcb5776b06376300a4f0c
+2026-08-19-mysql-kafka-cdc-projections.zh.md: c42190844062ee1de63d1102800fc80179f5f75e

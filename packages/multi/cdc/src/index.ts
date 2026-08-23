@@ -5,6 +5,7 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import {
+  decodeCdcEvent,
   encodeCdcEvent,
   encodeKey,
   findChangedColumns,
@@ -14,6 +15,11 @@ import {
   type CdcValue,
 } from '@deepseek-ai/dsh-cdc-protocol'
 import { KafkaError, KafkaTopic } from '@deepseek-ai/dsh-kafka'
+import {
+  type EventCodec,
+  type EventRouter,
+  KafkaEventProducer,
+} from '@deepseek-ai/dsh-kafka-events'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import z from '@deepseek-ai/schemastery'
 import ZongJi from '@vlasky/zongji'
@@ -169,6 +175,39 @@ interface ResolvedConfig extends Config {
 
 interface ResolvedRoute extends CdcTableRoute {
   excluded: ReadonlySet<string>
+}
+
+/** Strict CDC wire codec used by generic Kafka event producers and consumers. */
+export const cdcEventCodec: EventCodec<CdcEvent> = {
+  encode: event => encodeCdcEvent(event),
+  decode: value => decodeCdcEvent(value ?? new Uint8Array()),
+}
+
+/**
+ * Create CDC topic, compound-key, and protocol-header routing.
+ * @param configuredRoutes - validated deployment table routes.
+ * @returns a router that rejects events outside the configured source tables.
+ */
+export function createCdcEventRouter(
+  configuredRoutes: readonly CdcTableRoute[],
+): EventRouter<CdcEvent> {
+  const routes = resolveRoutes(configuredRoutes)
+  return {
+    route: (event) => {
+      const id = routeId(event.source.database, event.source.table)
+      const route = routes.get(id)
+      if (route === undefined) throw new Error(`cdc: no Kafka route for event source ${id}`)
+      return {
+        topic: KafkaTopic(route.topic),
+        key: encodeKey(event.key),
+        headers: {
+          'content-type': Buffer.from('application/json'),
+          'cdc-spec-version': Buffer.from(String(event.specVersion)),
+          'cdc-event-id': Buffer.from(event.eventId),
+        },
+      }
+    },
+  }
 }
 
 interface Variables {
@@ -627,6 +666,7 @@ export class CdcService extends Service {
 
   private readonly config: ResolvedConfig
   private readonly routes: ReadonlyMap<string, ResolvedRoute>
+  private readonly producer: KafkaEventProducer<CdcEvent>
   private readonly reader: ZongJi
   private readonly observedSchemas = new Map<string, string>()
   private readonly completion = Promise.withResolvers<void>()
@@ -672,6 +712,11 @@ export class CdcService extends Service {
     super(ctx, 'cdc')
     this.config = config as ResolvedConfig
     this.routes = resolveRoutes(config.routes)
+    this.producer = new KafkaEventProducer(
+      this.ctx.kafka,
+      cdcEventCodec,
+      createCdcEventRouter(config.routes),
+    )
     if (this.config.maxQueueBytes < this.config.maxEventBytes) {
       throw new Error('cdc: maxQueueBytes must be at least maxEventBytes')
     }
@@ -1086,16 +1131,7 @@ export class CdcService extends Service {
           throw new Error(`cdc: event exceeds maxEventBytes for ${id}`)
         }
         await this.publishWithRetry(async () => {
-          await this.ctx.kafka.publish([{
-            topic: KafkaTopic(route.topic),
-            key: encodeKey(key),
-            value: payload,
-            headers: {
-              'content-type': Buffer.from('application/json'),
-              'cdc-spec-version': Buffer.from('1'),
-              'cdc-event-id': Buffer.from(cdcEvent.eventId),
-            },
-          }])
+          await this.producer.publish(cdcEvent)
         })
       }
     }, true)

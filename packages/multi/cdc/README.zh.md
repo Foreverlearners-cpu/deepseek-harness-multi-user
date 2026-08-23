@@ -26,6 +26,8 @@ Host 健康检查代码可以读取 `status`（`starting`、`streaming`、`backp
 
 每一行变更生成一条带版本的 JSON Kafka 记录。Kafka key 是配置的复合主键。`before` 和 `after` 区分新增、修改和删除。`changedColumns` 列出归一化值发生变化的所有源字段；新增和删除会列出镜像中的全部字段。没有这个可选字段的旧版 v1 消息仍可读取，消费方会从行镜像推导。大整数和 decimal 保持字符串。MySQL 时间值在 UTC 连接上下文中保持准确字符串，不经过 JavaScript `Date` 强制转换，因此能保留小数秒和零日期；二进制值使用显式 `$binary` 对象。被排除字段的值不会进入行镜像或日志，但字段名可以出现在 `changedColumns` 中。修改主键值会使采集停止，因为事件迁移 Kafka key 分区后会失去顺序保证。
 
+生产者使用 `@deepseek-ai/dsh-kafka-events` 提供强类型 CDC codec，以及逐事件的 Topic、key 和 Header 路由。该运行器只执行一次 Kafka 发布尝试，不增加重试或 offset 策略。CDC 继续负责串行队列、背压、有界指数发布重试、关闭中断和检查点顺序。
+
 发布语义为至少一次。只有更早的 Kafka 发布全部成功后才写入事务检查点。结果不确定的发布会保留旧检查点，因此重启可能产生重复；消费方应使用稳定 `eventId` 或可感知 offset 的主键投影语义。损坏的检查点、已过期的 binlog 位点、schema 变化、主键变化、无效或不完整的行 metadata、不支持的 query 或 row 事件、路由表 `TRUNCATE`、缺失路由、超大事件和有界队列溢出都会明确失败，且不会越过未发布记录推进。
 
 ## Model Experience
