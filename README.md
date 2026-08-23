@@ -6,6 +6,19 @@ DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek 
 
 It uses an architecture where **everything is a plugin**, and is powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://github.com/cordiverse/paper).
 
+## Multi-user edition
+
+This fork is evolving DeepSeek Harness from a single-user agent runtime into a multi-user platform. It preserves the plugin architecture while adding shared infrastructure, user identity, authentication, authorization, and an operational Web UI.
+
+| Layer | Scope | Progress |
+|---|---|---|
+| Infrastructure | Kafka transport and typed events, MySQL persistence, Redis cache invalidation, Elasticsearch search projections, and CDC pipelines | Foundation complete |
+| Identity and authentication | User directory, credential storage, token lifecycle, and authentication runtime | In progress |
+| Authorization | Unified authentication and permission validation across user-facing operations | Planned |
+| Management experience | A graphical interface for users, access control, and system operations | Planned |
+
+The design separates durable domain state from projections and cache state: MySQL owns persistence, Kafka carries change events, CDC coordinates propagation, Redis handles invalidation, and Elasticsearch serves search. This foundation lets authentication and authorization evolve without coupling user-facing workflows to one storage engine.
+
 ## Developer preview
 
 DeepSeek Harness is currently in _developer preview_ and is iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
