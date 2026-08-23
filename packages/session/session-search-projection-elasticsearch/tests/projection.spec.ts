@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { encodeCdcEvent, encodeKey, type CdcEvent } from '@deepseek-ai/dsh-cdc-protocol'
 import { KafkaTopic, type KafkaConsumedMessage } from '@deepseek-ai/dsh-kafka'
@@ -59,6 +59,7 @@ function message(source: CdcEvent): KafkaConsumedMessage {
 class FakeKafkaEvents {
   options?: KafkaEventConsumerOptions<CdcEvent>
   closed = false
+  readonly completion = Promise.withResolvers<undefined>()
   async subscribe<T>(options: KafkaEventConsumerOptions<T>): Promise<{
     id: typeof options.id
     done: Promise<void>
@@ -68,10 +69,13 @@ class FakeKafkaEvents {
     this.options = options as unknown as KafkaEventConsumerOptions<CdcEvent>
     return {
       id: options.id,
-      done: new Promise(() => {}),
+      done: this.completion.promise,
       close: async () => { this.closed = true },
       health: () => { throw new Error('unused') },
     }
+  }
+  fail(cause: unknown): void {
+    this.completion.reject(cause)
   }
   async deliver(source: CdcEvent, override?: Partial<KafkaConsumedMessage>): Promise<void> {
     if (this.options === undefined) throw new Error('not subscribed')
@@ -130,6 +134,41 @@ describe('session search CDC projection', () => {
     })
   })
 
+  it('applies authoritative records without Kafka through the same versioned writer', async () => {
+    const elasticsearch = new FakeElasticsearch()
+    await Plugin.applySessionSearchProjectionRecord(elasticsearch, CONFIG.index, {
+      tenantId: 'tenant-1',
+      userId: 'user-8',
+      sessionId: 'session-100',
+      messageId: 'message-12',
+      revision: 15,
+      status: 'completed',
+      visibility: 'user',
+      role: 'assistant',
+      visibleText: 'reconciled',
+      occurredAt: '2026-08-23T12:00:00.000Z',
+      deleted: false,
+    })
+    expect(elasticsearch.writes[0]).toEqual({
+      index: CONFIG.index,
+      id: sessionSearchProjectionDocumentId('tenant-1', 'user-8', 'message-12'),
+      version: 15,
+      version_type: 'external',
+      document: {
+        tenant: 'tenant-1', user: 'user-8', session: 'session-100', message: 'message-12',
+        status: 'completed', visibility: 'user', role: 'assistant', content: 'reconciled',
+        source_time: '2026-08-23T12:00:00.000Z', revision: 15, deleted: false,
+      },
+    })
+
+    elasticsearch.conflict = true
+    await expect(Plugin.applySessionSearchProjectionRecord(elasticsearch, CONFIG.index, {
+      tenantId: 'tenant-1', userId: 'user-8', sessionId: 'session-100', messageId: 'message-12',
+      revision: 14, status: 'completed', visibility: 'user', role: 'assistant',
+      visibleText: 'older', occurredAt: '2026-08-23T12:00:00.000Z', deleted: true,
+    })).resolves.toBeUndefined()
+  })
+
   it('writes tombstones for deletes and non-visible states', async () => {
     const { kafka, elasticsearch } = await boot()
     const deleted = event({ operation: 'delete', before: row(13), after: null })
@@ -162,5 +201,11 @@ describe('session search CDC projection', () => {
     const { kafka, fiber } = await boot()
     await fiber.dispose()
     expect(kafka.closed).toBe(true)
+  })
+
+  it('fail-stops its plugin scope when the Kafka subscription fails', async () => {
+    const { kafka } = await boot()
+    kafka.fail(new Error('consumer failed'))
+    await vi.waitFor(() => { expect(kafka.closed).toBe(true) })
   })
 })

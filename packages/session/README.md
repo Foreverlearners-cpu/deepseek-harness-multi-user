@@ -28,6 +28,7 @@ Serves current, log-derived per-session state to client carriers.
 | [`session-projection-reconciler/`](session-projection-reconciler/README.md) | Rebuilds external session projections from an authoritative application source | `ctx.sessionProjectionReconciler` |
 | [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | Projects validated CDC session-message rows into tenant-scoped search documents | `ctx.kafkaEvents`, `ctx.elasticsearch` |
 | [`session-stats/`](session-stats/README.md) | Serves whole-log conversation counts and wall times (`sessionStats` unit) | registers on `ctx.sessionProjections` |
+| [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | Projects validated CDC session-message rows into tenant-scoped search documents | `ctx.kafkaEvents`, `ctx.elasticsearch` |
 
 ## Titles
 
