@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-23-decoupled-mysql-plugin-delivery.md
+2026-08-23-decoupled-mysql-plugin-delivery.md: 2bc44b623184a2fdbddc06d9df68d25cd8690b62
+2026-08-23-decoupled-mysql-plugin-delivery.zh.md: 14aeee6fb6d2c38d2fccf9fca0685be4333cef59
