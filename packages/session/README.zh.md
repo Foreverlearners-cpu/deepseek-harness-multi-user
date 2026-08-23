@@ -25,6 +25,7 @@
 |---|---|---|
 | [`session-projection/`](session-projection/README.md) | 定义并驱动会话投影单元 | `ctx.sessionProjections` |
 | [`session-projection-cache/`](session-projection-cache/README.md) | 持久化并恢复投影检查点 | `ctx.sessionProjectionCache` |
+| [`session-projection-reconciler/`](session-projection-reconciler/README.md) | 从应用权威数据源重建外部会话投影 | `ctx.sessionProjectionReconciler` |
 | [`session-stats/`](session-stats/README.md) | 提供全日志会话计数与墙钟时间（`sessionStats` 单元） | 注册到 `ctx.sessionProjections` |
 
 ## 标题
