@@ -163,14 +163,18 @@ function checkedCommit(value: unknown, mutation: UserCredentialMutation): UserCr
   const beforeIdentifiers = previous?.identifiers ?? []
   if (mutation.kind === 'identifier-add') {
     const matches = current.identifiers.filter(item => item.kind === mutation.identifier.kind && item.value === mutation.identifier.value)
+    const retained = current.identifiers.filter(item => item.kind !== mutation.identifier.kind || item.value !== mutation.identifier.value)
     if (matches.length !== 1 || current.identifiers.length !== beforeIdentifiers.length + 1
-      || current.passwordEnabled !== (previous?.passwordEnabled ?? false)) {
+      || !isDeepStrictEqual(retained, beforeIdentifiers)
+      || current.passwordEnabled !== (previous?.passwordEnabled ?? false)
+      || current.passwordChangedAt !== previous?.passwordChangedAt) {
       throw new UserCredentialError('provider-unavailable', 'user-credential: Provider committed an invalid identifier addition')
     }
   } else if (mutation.kind === 'identifier-remove') {
     const expected = beforeIdentifiers.filter(item => item.kind !== mutation.identifier.kind || item.value !== mutation.identifier.value)
     if (expected.length !== beforeIdentifiers.length - 1 || !isDeepStrictEqual(current.identifiers, expected)
-      || current.passwordEnabled !== previous?.passwordEnabled) {
+      || current.passwordEnabled !== previous?.passwordEnabled
+      || current.passwordChangedAt !== previous.passwordChangedAt) {
       throw new UserCredentialError('provider-unavailable', 'user-credential: Provider committed an invalid identifier removal')
     }
   } else if (!isDeepStrictEqual(current.identifiers, beforeIdentifiers)) {

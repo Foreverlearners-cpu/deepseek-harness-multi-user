@@ -130,6 +130,12 @@ describe('user credential validation', () => {
     credentials.mutationResult = { current: record() }
     await expect(credentials.addIdentifier({ userId: id('user-1'), expectedRevision: 0, kind: 'email', value: 'x@y.z' })).rejects.toMatchObject({ code: 'provider-unavailable' })
 
+    credentials.mutationResult = {
+      previous: record({ identifiers: [{ kind: 'username', value: 'before', createdAt: 1 }] }),
+      current: record({ revision: 2, identifiers: [{ kind: 'email', value: 'x@y.z', createdAt: 2 }, { kind: 'username', value: 'replaced', createdAt: 1 }] }),
+    }
+    await expect(credentials.addIdentifier({ userId: id('user-1'), expectedRevision: 1, kind: 'email', value: 'x@y.z' })).rejects.toMatchObject({ code: 'provider-unavailable' })
+
     const previous = record({ identifiers: [{ kind: 'email', value: 'x@y.z', createdAt: 1 }] })
     credentials.mutationResult = { previous, current: record({ revision: 2, identifiers: previous.identifiers }) }
     await expect(credentials.removeIdentifier({ userId: id('user-1'), expectedRevision: 1, kind: 'email', value: 'x@y.z' })).rejects.toMatchObject({ code: 'provider-unavailable' })
