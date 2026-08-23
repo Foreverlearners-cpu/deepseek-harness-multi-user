@@ -2082,7 +2082,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'async verifyPassword(request: VerifyPasswordRequest): Promise<boolean>',
         description: 'Verify a password with an enumeration-resistant boolean result.',
-        parameters: [{ name: 'request', description: 'target user and candidate password.' }],
+        parameters: [{ name: 'request', description: 'resolved target when present and candidate password.' }],
         returns: 'true only for a matching enabled password; otherwise false.',
       },
     ],
@@ -4838,7 +4838,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'VerifyPasswordRequest',
-    declaration: 'export interface VerifyPasswordRequest {\n    readonly userId: UserId;\n    readonly password: string;\n}',
+    declaration: 'export interface VerifyPasswordRequest {\n    readonly userId?: UserId;\n    readonly password: string;\n}',
   },
   {
     name: 'WebBootEntry',

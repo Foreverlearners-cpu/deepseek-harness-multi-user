@@ -36,6 +36,17 @@ const USER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$/
 const MAX_CORRELATION_ID_LENGTH = 128
 const MAX_REASON_LENGTH = 500
 
+const SAFE_ERROR_MESSAGES: Readonly<Record<UserCredentialErrorCode, string>> = Object.freeze({
+  'invalid-input': 'user-credential: Provider rejected the credential input',
+  'credential-not-found': 'user-credential: credential metadata was not found',
+  'identifier-conflict': 'user-credential: login identifier is already assigned',
+  'identifier-not-found': 'user-credential: login identifier was not found',
+  'password-not-set': 'user-credential: password login is not enabled',
+  'invalid-credential': 'user-credential: credential verification failed',
+  'revision-conflict': 'user-credential: credential revision changed',
+  'provider-unavailable': 'user-credential: credential Provider failed',
+})
+
 /** Public credential failure with a stable transport-safe category. */
 export class UserCredentialError extends Error {
   /** Stable failure category. */
@@ -183,7 +194,8 @@ function checkedCommit(value: unknown, mutation: UserCredentialMutation): UserCr
     if (!previous?.passwordEnabled || current.passwordEnabled || current.passwordChangedAt !== undefined) {
       throw new UserCredentialError('provider-unavailable', 'user-credential: Provider committed an invalid password disablement')
     }
-  } else if (!current.passwordEnabled || current.passwordChangedAt !== current.updatedAt) {
+  } else if ((mutation.kind === 'password-change' && !previous?.passwordEnabled)
+    || !current.passwordEnabled || current.passwordChangedAt !== current.updatedAt) {
     throw new UserCredentialError('provider-unavailable', 'user-credential: Provider committed invalid password metadata')
   }
   return Object.freeze({ ...(previous === undefined ? {} : { previous }), current })
@@ -222,7 +234,7 @@ export abstract class UserCredentialService extends Service {
    * Verify a password. Providers perform equivalent verifier work for absent users
    * and absent passwords so `false` does not expose account state.
    */
-  protected abstract verifyPasswordSecret(userId: UserId, password: string): Promise<boolean>
+  protected abstract verifyPasswordSecret(userId: UserId | undefined, password: string): Promise<boolean>
 
   /** Normalize one raw login identifier.
    * @param input - extensible kind and raw value.
@@ -231,7 +243,10 @@ export abstract class UserCredentialService extends Service {
   async normalize(input: LoginIdentifierInput): Promise<LoginIdentifier> {
     const kind = checkedKind(input.kind)
     checkedIdentifierValue(input.value, 'input')
-    const value = checkedIdentifierValue(await this.provider(() => this.normalizeLoginIdentifier({ kind, value: input.value })), 'Provider')
+    const value = checkedIdentifierValue(await this.provider(
+      () => this.normalizeLoginIdentifier({ kind, value: input.value }),
+      ['invalid-input'],
+    ), 'Provider')
     return Object.freeze({ kind, value })
   }
 
@@ -241,7 +256,7 @@ export abstract class UserCredentialService extends Service {
    */
   async get(userId: UserId): Promise<UserCredentialRecord | undefined> {
     const id = checkedUserId(userId)
-    const value = await this.provider(() => this.readCredentialRecord(id))
+    const value = await this.provider(() => this.readCredentialRecord(id), [])
     return value === undefined ? undefined : recordSnapshot(value)
   }
 
@@ -251,12 +266,12 @@ export abstract class UserCredentialService extends Service {
    */
   async resolve(input: LoginIdentifierInput): Promise<UserId | undefined> {
     const identifier = await this.normalize(input)
-    const value = await this.provider(() => this.resolveLoginIdentifier(identifier))
+    const value = await this.provider(() => this.resolveLoginIdentifier(identifier), [])
     if (value === undefined) return undefined
     try {
       return checkedUserId(value)
-    } catch (cause) {
-      throw new UserCredentialError('provider-unavailable', 'user-credential: Provider returned an invalid user id', { cause })
+    } catch {
+      throw new UserCredentialError('provider-unavailable', 'user-credential: Provider returned an invalid user id')
     }
   }
 
@@ -313,11 +328,22 @@ export abstract class UserCredentialService extends Service {
   }
 
   /** Verify a password with an enumeration-resistant boolean result.
-   * @param request - target user and candidate password.
+   * @param request - resolved target when present and candidate password.
    * @returns true only for a matching enabled password; otherwise false.
    */
   async verifyPassword(request: VerifyPasswordRequest): Promise<boolean> {
-    const result = await this.provider(() => this.verifyPasswordSecret(checkedUserId(request.userId), checkedPassword(request.password)))
+    const userId = request.userId === undefined ? undefined : checkedUserId(request.userId)
+    const password = checkedPassword(request.password)
+    let result: boolean
+    try {
+      result = await this.verifyPasswordSecret(userId, password)
+    } catch (cause) {
+      if (cause instanceof UserCredentialError
+        && (cause.code === 'credential-not-found' || cause.code === 'password-not-set' || cause.code === 'invalid-credential')) {
+        return false
+      }
+      throw this.safeProviderError(cause, [])
+    }
     if (typeof result !== 'boolean') throw new UserCredentialError('provider-unavailable', 'user-credential: Provider returned an invalid verification result')
     return result
   }
@@ -335,7 +361,19 @@ export abstract class UserCredentialService extends Service {
     kind: UserCredentialChangeEvent['kind'],
     context: Readonly<UserOperationContext>,
   ): Promise<UserCredentialRecord> {
-    const commit = checkedCommit(await this.provider(() => this.mutateCredentialRecord(Object.freeze(mutation))), mutation)
+    const allowed = mutation.kind === 'identifier-add'
+      ? ['credential-not-found', 'identifier-conflict', 'revision-conflict'] as const
+      : mutation.kind === 'identifier-remove'
+        ? ['credential-not-found', 'identifier-not-found', 'revision-conflict'] as const
+        : mutation.kind === 'password-change'
+          ? ['credential-not-found', 'password-not-set', 'invalid-credential', 'revision-conflict'] as const
+          : mutation.kind === 'password-disable'
+            ? ['credential-not-found', 'password-not-set', 'revision-conflict'] as const
+            : ['credential-not-found', 'revision-conflict'] as const
+    const commit = checkedCommit(await this.provider(
+      () => this.mutateCredentialRecord(Object.freeze(mutation)),
+      allowed,
+    ), mutation)
     this.emitChange(Object.freeze({
       kind,
       userId: commit.current.userId,
@@ -346,13 +384,19 @@ export abstract class UserCredentialService extends Service {
     return commit.current
   }
 
-  private async provider<T>(operation: () => Promise<T>): Promise<T> {
+  private async provider<T>(operation: () => Promise<T>, allowed: readonly UserCredentialErrorCode[]): Promise<T> {
     try {
       return await operation()
     } catch (cause) {
-      if (cause instanceof UserCredentialError) throw cause
-      throw new UserCredentialError('provider-unavailable', 'user-credential: credential Provider failed', { cause })
+      throw this.safeProviderError(cause, allowed)
     }
+  }
+
+  private safeProviderError(cause: unknown, allowed: readonly UserCredentialErrorCode[]): UserCredentialError {
+    const code = cause instanceof UserCredentialError && allowed.includes(cause.code)
+      ? cause.code
+      : 'provider-unavailable'
+    return new UserCredentialError(code, SAFE_ERROR_MESSAGES[code])
   }
 
   private emitChange(event: UserCredentialChangeEvent): void {

@@ -10,7 +10,7 @@
 
 ## 密码语义
 
-密码 Secret 只进入 Provider 方法，绝不出现在元数据或事件中。Provider 拥有 verifier 派生与存储，并为不存在的账号和已禁用密码执行可比的 dummy verifier 工作。公开验证把不存在、已禁用和错误 Credential 全部折叠为 `false`。
+密码 Secret 只进入 Provider 方法，绝不出现在元数据或事件中。Provider 拥有 verifier 派生与存储，并为标识未解析、不存在的账号和已禁用密码执行可比的 dummy verifier 工作。公开验证允许省略 `userId`，把不存在、已禁用和错误 Credential 全部折叠为 `false`；Provider 错误会在不保留 Provider message 或 cause 的情况下重建。
 
 ## 并发与事件
 
@@ -18,7 +18,7 @@
 
 ## 组合
 
-认证 Consumer 解析标识并验证 Credential，然后通过 `ctx.users` 要求结果用户处于 active 状态，最后才签发 authenticated call。管理员 Consumer 在修改前认证并授权操作者；operation context 提供审计元数据，但不证明权限。
+认证 Consumer 解析标识后始终调用密码验证；解析失败时不传 `userId`，以触发 dummy 工作。验证成功后再通过 `ctx.users` 要求用户处于 active 状态，最后才签发 authenticated call。管理员 Consumer 在修改前认证并授权操作者；operation context 提供审计元数据，但不证明权限。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -90,7 +90,7 @@ async changePassword(request: ChangePasswordRequest): Promise<UserCredentialReco
 async disablePassword(request: DisablePasswordRequest): Promise<UserCredentialRecord>
 
 /** Verify a password with an enumeration-resistant boolean result.
- * @param request - target user and candidate password.
+ * @param request - resolved target when present and candidate password.
  * @returns true only for a matching enabled password; otherwise false.
  */
 async verifyPassword(request: VerifyPasswordRequest): Promise<boolean>
@@ -98,7 +98,7 @@ async verifyPassword(request: VerifyPasswordRequest): Promise<boolean>
 
 Types: [UserId](user-directory.md)
 
-Source: [`packages/identity/user-credential/src/index.ts:203`](../../packages/identity/user-credential/src/index.ts)
+Source: [`packages/identity/user-credential/src/index.ts:219`](../../packages/identity/user-credential/src/index.ts)
 
 <a id="user-credential-events"></a>
 

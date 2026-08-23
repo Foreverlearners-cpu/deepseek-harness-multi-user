@@ -11,7 +11,7 @@ import UserCredentialService, {
   type UserCredentialRecord,
   type UserId,
 } from '../src/index.ts'
-import { runUserCredentialContract } from './contract.ts'
+import { runUserCredentialContract } from '../src/testing.ts'
 import { MemoryUserCredentialService } from './memory.ts'
 
 const id = (value: string): UserId => value as UserId
@@ -33,7 +33,27 @@ async function setup<T extends UserCredentialService>(Provider: new (ctx: Contex
   return { ctx, credentials: ctx.userCredentials as T }
 }
 
-runUserCredentialContract('memory', () => setup(MemoryUserCredentialService))
+async function credentialFailure(operation: Promise<unknown>): Promise<UserCredentialError> {
+  try {
+    await operation
+  } catch (error) {
+    expect(error).toBeInstanceOf(UserCredentialError)
+    return error as UserCredentialError
+  }
+  throw new Error('expected credential operation to reject')
+}
+
+runUserCredentialContract(
+  { suite: describe, test: it },
+  'memory',
+  async () => {
+    const harness = await setup(MemoryUserCredentialService)
+    return {
+      ...harness,
+      readPasswordVerificationCount: () => harness.credentials.readPasswordVerificationCount(),
+    }
+  },
+)
 
 class BrokenCredentialService extends UserCredentialService {
   normalizeResult: unknown = 'normalized'
@@ -42,21 +62,29 @@ class BrokenCredentialService extends UserCredentialService {
   mutationResult: unknown
   verifyResult: unknown = false
   failure: Error | undefined
+  readFailure: Error | undefined
+  resolveFailure: Error | undefined
+  mutationFailure: Error | undefined
+  verificationFailure: Error | undefined
 
   protected normalizeLoginIdentifier(_input: LoginIdentifierInput): Promise<string> {
     if (this.failure !== undefined) return Promise.reject(this.failure)
     return Promise.resolve(this.normalizeResult as string)
   }
   protected readCredentialRecord(_userId: UserId): Promise<UserCredentialRecord | undefined> {
+    if (this.readFailure !== undefined) return Promise.reject(this.readFailure)
     return Promise.resolve(this.readResult as UserCredentialRecord | undefined)
   }
   protected resolveLoginIdentifier(_identifier: LoginIdentifier): Promise<UserId | undefined> {
+    if (this.resolveFailure !== undefined) return Promise.reject(this.resolveFailure)
     return Promise.resolve(this.resolveResult as UserId | undefined)
   }
   protected mutateCredentialRecord(_mutation: UserCredentialMutation): Promise<UserCredentialMutationCommit> {
+    if (this.mutationFailure !== undefined) return Promise.reject(this.mutationFailure)
     return Promise.resolve(this.mutationResult as UserCredentialMutationCommit)
   }
-  protected verifyPasswordSecret(_userId: UserId, _password: string): Promise<boolean> {
+  protected verifyPasswordSecret(_userId: UserId | undefined, _password: string): Promise<boolean> {
+    if (this.verificationFailure !== undefined) return Promise.reject(this.verificationFailure)
     return Promise.resolve(this.verifyResult as boolean)
   }
 }
@@ -81,7 +109,7 @@ describe('user credential validation', () => {
     credentials.failure = new Error('database password')
     await expect(credentials.normalize({ kind: 'email', value: 'x@y.z' })).rejects.toMatchObject({ code: 'provider-unavailable' })
     credentials.failure = new UserCredentialError('identifier-conflict', 'known')
-    await expect(credentials.normalize({ kind: 'email', value: 'x@y.z' })).rejects.toBe(credentials.failure)
+    await expect(credentials.normalize({ kind: 'email', value: 'x@y.z' })).rejects.toMatchObject({ code: 'provider-unavailable' })
     credentials.failure = undefined
     credentials.normalizeResult = ''
     await expect(credentials.normalize({ kind: 'email', value: 'x@y.z' })).rejects.toMatchObject({ code: 'provider-unavailable' })
@@ -90,6 +118,61 @@ describe('user credential validation', () => {
     await expect(credentials.resolve({ kind: 'email', value: 'x@y.z' })).rejects.toMatchObject({ code: 'provider-unavailable' })
     credentials.verifyResult = 'yes'
     await expect(credentials.verifyPassword({ userId: id('user-1'), password: 'x' })).rejects.toMatchObject({ code: 'provider-unavailable' })
+  })
+
+  it('rebuilds Provider failures without messages, causes, or secrets', async () => {
+    const { credentials } = await setup(BrokenCredentialService)
+    const secret = 'database-password=super-secret'
+    credentials.failure = new UserCredentialError('invalid-input', secret, { cause: new Error(secret) })
+    const normalized = await credentialFailure(credentials.normalize({ kind: 'email', value: 'x@y.z' }))
+    expect(normalized).toMatchObject({ code: 'invalid-input' })
+    expect(normalized.message).toBe('user-credential: Provider rejected the credential input')
+    expect(normalized.message).not.toContain(secret)
+    expect(normalized.cause).toBeUndefined()
+    expect(normalized).not.toBe(credentials.failure)
+
+    credentials.failure = undefined
+    credentials.readFailure = new UserCredentialError('credential-not-found', secret, { cause: new Error(secret) })
+    const read = await credentialFailure(credentials.get(id('user-1')))
+    expect(read).toMatchObject({ code: 'provider-unavailable' })
+    expect(read.message).not.toContain(secret)
+    expect(read.cause).toBeUndefined()
+
+    credentials.readFailure = undefined
+    credentials.resolveFailure = new Error(secret)
+    const resolved = await credentialFailure(credentials.resolve({ kind: 'email', value: 'x@y.z' }))
+    expect(resolved).toMatchObject({ code: 'provider-unavailable' })
+    expect(resolved.message).not.toContain(secret)
+    expect(resolved.cause).toBeUndefined()
+
+    credentials.resolveFailure = undefined
+    credentials.mutationFailure = new UserCredentialError('identifier-conflict', secret, { cause: new Error(secret) })
+    const allowed = await credentialFailure(credentials.addIdentifier({
+      userId: id('user-1'), expectedRevision: 0, kind: 'email', value: 'x@y.z',
+    }))
+    expect(allowed).toMatchObject({ code: 'identifier-conflict' })
+    expect(allowed.message).toBe('user-credential: login identifier is already assigned')
+    expect(allowed.cause).toBeUndefined()
+
+    credentials.mutationFailure = new UserCredentialError('invalid-credential', secret)
+    const disallowed = await credentialFailure(credentials.addIdentifier({
+      userId: id('user-1'), expectedRevision: 0, kind: 'email', value: 'x@y.z',
+    }))
+    expect(disallowed).toMatchObject({ code: 'provider-unavailable' })
+    expect(disallowed.message).not.toContain(secret)
+  })
+
+  it('collapses expected verification failures to false and sanitizes unexpected failures', async () => {
+    const { credentials } = await setup(BrokenCredentialService)
+    for (const code of ['credential-not-found', 'password-not-set', 'invalid-credential'] as const) {
+      credentials.verificationFailure = new UserCredentialError(code, `secret-${code}`, { cause: new Error('secret') })
+      await expect(credentials.verifyPassword({ password: 'candidate' })).resolves.toBe(false)
+    }
+    credentials.verificationFailure = new UserCredentialError('revision-conflict', 'secret-revision')
+    const failure = await credentialFailure(credentials.verifyPassword({ password: 'candidate' }))
+    expect(failure).toMatchObject({ code: 'provider-unavailable' })
+    expect(failure.message).toBe('user-credential: credential Provider failed')
+    expect(failure.cause).toBeUndefined()
   })
 
   it('rejects malformed Provider records and commits', async () => {
@@ -154,6 +237,14 @@ describe('user credential validation', () => {
       current: record({ revision: 2, updatedAt: 2, passwordEnabled: true, passwordChangedAt: 1 }),
     }
     await expect(credentials.setPassword({ userId: id('user-1'), expectedRevision: 1, password: 'x' })).rejects.toMatchObject({ code: 'provider-unavailable' })
+
+    credentials.mutationResult = {
+      previous: record({ passwordEnabled: false }),
+      current: record({ revision: 2, updatedAt: 2, passwordEnabled: true, passwordChangedAt: 2 }),
+    }
+    await expect(credentials.changePassword({
+      userId: id('user-1'), expectedRevision: 1, currentPassword: 'old', newPassword: 'new',
+    })).rejects.toMatchObject({ code: 'provider-unavailable' })
   })
 
   it('contains synchronous and asynchronous listener failures after commit', async () => {
