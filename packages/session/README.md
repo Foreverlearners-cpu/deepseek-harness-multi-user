@@ -37,6 +37,7 @@ Derives durable session titles from the session log, with an optional model-back
 | [`session-title-llm/`](session-title-llm/README.md) | Provides shared model-backed title generation | — |
 | [`session-title-first-prompt-llm/`](session-title-first-prompt-llm/README.md) | Titles a session from its first eligible human message | registers on `ctx.sessionTitle` |
 | [`session-title-all-prompts-llm/`](session-title-all-prompts-llm/README.md) | Titles a session from all eligible human messages | registers on `ctx.sessionTitle` |
+| [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | Projects validated CDC session-message rows into tenant-scoped search documents | `ctx.kafkaEvents`, `ctx.elasticsearch` |
 
 Deployments may register one model-backed provider; the service retains a deterministic fallback when none is present.
 

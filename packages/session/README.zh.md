@@ -37,6 +37,7 @@
 | [`session-title-llm/`](session-title-llm/README.md) | 提供共享的模型标题生成能力 | — |
 | [`session-title-first-prompt-llm/`](session-title-first-prompt-llm/README.md) | 根据第一条合格的人类消息生成会话标题 | 注册到 `ctx.sessionTitle` |
 | [`session-title-all-prompts-llm/`](session-title-all-prompts-llm/README.md) | 根据所有合格的人类消息生成会话标题 | 注册到 `ctx.sessionTitle` |
+| [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | 将通过校验的 CDC 会话消息行投影为租户隔离的搜索文档 | `ctx.kafkaEvents`、`ctx.elasticsearch` |
 
 部署可以注册一个模型驱动提供方；未注册时，服务仍保留确定性回退机制。
 
