@@ -214,6 +214,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations.',
   },
   {
+    key: 'authTokens',
+    pkg: 'auth-token',
+    title: 'Opaque refresh-token family seam',
+    mode: 'seam',
+    implementations: [],
+    consumers: [],
+    note: 'Generates opaque refresh secrets, gives Providers only digests, and defines atomic rotation, reuse-triggered family revocation, safe inspection, and targeted revocation.',
+  },
+  {
     key: 'users',
     pkg: 'user',
     title: 'Human user directory seam',

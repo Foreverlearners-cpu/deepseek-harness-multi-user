@@ -82,6 +82,7 @@ export interface TypeApiEntry {
 /** Service keys omitted from every model-facing runtime inspection. */
 export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
   'auth',
+  'authTokens',
   'cordisInspect',
   'dynamicCordisRunner',
   'elasticsearch',
@@ -2350,6 +2351,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'req', description: 'the pending decision (agent, tool identity, reason, signal).' }],
   },
   {
+    name: 'auth-token/changed',
+    mode: 'emit',
+    signature: '\'auth-token/changed\'(event: AuthTokenChangeEvent): void',
+    summary: 'Committed token-family change without refresh secrets or digests.',
+    description: 'Committed token-family change without refresh secrets or digests.',
+    parameters: [{ name: 'event', description: 'sanitized lifecycle fact safe for trusted audit listeners.' }],
+  },
+  {
     name: 'auth/result',
     mode: 'emit',
     signature: '\'auth/result\'(record: AuthenticationEventRecord): void',
@@ -2832,6 +2841,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AuthenticationRequestId',
     declaration: 'export type AuthenticationRequestId = Branded<\'AuthenticationRequestId\'>;',
+  },
+  {
+    name: 'AuthTokenChangeEvent',
+    declaration: 'export interface AuthTokenChangeEvent {\n    readonly kind: \'issued\' | \'rotated\' | \'revoked\' | \'reuse-detected\';\n    readonly requestId: AuthenticationRequestId;\n    readonly tokenFamilyId: TokenFamilyId;\n    readonly principal: AuthenticatedPrincipal;\n    readonly status: TokenFamilyStatus;\n    readonly revision: number;\n    readonly time: number;\n    readonly credentialId?: CredentialId;\n    readonly reason?: TokenRevocationReason;\n}',
   },
   {
     name: 'BackendRegistry',
@@ -4462,12 +4475,24 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TodoItem {\n    content: string;\n    status: \'pending\' | \'in_progress\' | \'completed\';\n}',
   },
   {
+    name: 'TokenFamilyId',
+    declaration: 'export type TokenFamilyId = Branded<\'TokenFamilyId\'>;',
+  },
+  {
+    name: 'TokenFamilyStatus',
+    declaration: 'export type TokenFamilyStatus = \'active\' | \'revoked\';',
+  },
+  {
     name: 'TokenMeasurement',
     declaration: 'export interface TokenMeasurement {\n    readonly logRevision: number;\n    readonly baseline: TokenMeasurementBaseline;\n    readonly surfaceDeltaTokens: number;\n    readonly totalTokens: number;\n    readonly surfaceTokens: number;\n    readonly nodes: readonly TokenSurfaceNode[];\n}',
   },
   {
     name: 'TokenMeasurementBaseline',
     declaration: 'export type TokenMeasurementBaseline = {\n    readonly kind: \'none\';\n    readonly tokens: 0;\n} | {\n    readonly kind: \'estimated\';\n    readonly tokens: number;\n} | {\n    readonly kind: \'usage\';\n    readonly tokens: number;\n    readonly usage: Readonly<TokenUsage>;\n};',
+  },
+  {
+    name: 'TokenRevocationReason',
+    declaration: 'export type TokenRevocationReason = \'requested\' | \'refresh-token-reuse\';',
   },
   {
     name: 'TokenSurfaceNode',

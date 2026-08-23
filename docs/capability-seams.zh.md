@@ -59,6 +59,8 @@ flowchart LR
   pkg_credentials_local["credentials-local"]
   pkg_auth["auth"]
   svc_auth["ctx.auth<br/>Host authentication runtime"]
+  pkg_auth_token["auth-token"]
+  svc_authTokens["ctx.authTokens<br/>Opaque refresh-token family seam"]
   pkg_user["user"]
   svc_users["ctx.users<br/>Human user directory seam"]
   pkg_session_telemetry["session-telemetry"]
@@ -218,6 +220,7 @@ flowchart LR
   pkg_attachment --> svc_attachments
   pkg_attachment_local --> svc_attachments
   pkg_auth --> svc_auth
+  pkg_auth_token --> svc_authTokens
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
   pkg_code_runtime --> svc_codeRuntime
@@ -445,6 +448,7 @@ flowchart LR
 | `ctx.settings` | `seam` | [`settings`](../packages/settings/settings) | [`settings-file`](../packages/settings/settings-file) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | 插件注册命名空间 schema 并解析分层值；提供方存储原始文档。LLM（大语言模型）适配器在用户分区下将其入口配置注册为组合基础；Web 网关提供经过脱敏的分层描述符，并写入用户层。 |
 | `ctx.credentials` | `seam` | [`credentials`](../packages/credentials/credentials) | [`credentials-local`](../packages/credentials/credentials-local) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | 配置携带对机密信息的引用；提供方拥有实际值。消费方按操作解析，因此轮换后的凭据会在紧接着的下一次请求中生效；Web 网关提供不含实际值的视图和只写存储。 |
 | `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | - | - | - | 按证据类型选择唯一提供方，签发仅限进程内使用的已认证调用，并分派可选的凭证生命周期操作。 |
+| `ctx.authTokens` | `seam` | [`auth-token`](../packages/identity/auth-token) | - | - | - | 生成不透明 refresh secret，只向 Provider 提供 digest，并定义原子轮换、复用触发的 family 撤销、安全检查与定向撤销。 |
 | `ctx.users` | `seam` | [`user`](../packages/identity/user) | - | - | - | 定义稳定的人类用户记录、生命周期转换、乐观 revision、有界分页和脱敏提交事件；持久化与 Credential Provider 保持独立。 |
 | `ctx.sessionTelemetry` | `seam` | [`session-telemetry`](../packages/session/session-telemetry) | [`session-telemetry-otel`](../packages/session/session-telemetry-otel) | - | - | 该 seam 捕获会话记录、进行脱敏并交给一个后端；没有其他组件消费该服务，其输出会离开当前进程。 |
 | `ctx.storage` | `seam` | [`storage`](../packages/storage/storage) | [`storage-json`](../packages/storage/storage-json), [`storage-sqlite`](../packages/storage/storage-sqlite) | [`storage-domain`](../packages/storage/storage-domain) | - | 各后端以不同名称并列注册；数据形态（领域优先）挂载到枢纽上，并将类型化操作转换为不透明的 KV 单元原语。 |

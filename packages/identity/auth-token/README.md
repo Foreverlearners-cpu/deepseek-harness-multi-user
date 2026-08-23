@@ -1,0 +1,81 @@
+# @deepseek-ai/dsh-auth-token
+
+English | [中文](README.zh.md)
+
+Provider-independent Host service for opaque refresh-token families. It creates high-entropy refresh secrets, passes only SHA-256 digests into Provider persistence operations, and defines atomic rotation, reuse detection, inspection, and revocation through `ctx.authTokens`.
+
+This package does not encode or verify JWTs, issue access tokens, authenticate passwords, open a database, or choose transport cookies. A JWT or other token Provider combines its access-token implementation with this service's refresh-family state.
+
+## Public API
+
+| API | Purpose |
+|---|---|
+| `ctx.authTokens.issueFamily(request)` | Create one active family and return its first refresh secret exactly once |
+| `ctx.authTokens.rotate(request)` | Consume one refresh secret atomically and return its replacement |
+| `ctx.authTokens.inspect(request)` | Return safe family and credential metadata without secrets or digests |
+| `ctx.authTokens.revoke(request)` | Revoke by refresh credential, token family, or principal |
+
+Every operation carries a Host-generated `AuthenticationRequestId` and `AbortSignal`. `issueFamily` receives an already authenticated `AuthenticatedPrincipal`; possession of a refresh token does not establish the original login proof again.
+
+## State and Expiry
+
+A family starts at revision 1. Every committed rotation or first revocation increments revision by exactly one. Idempotent revocation of an already revoked family does not change its revision. The revision orders committed family changes; it is not a caller-selected optimistic lock.
+
+`TokenFamilyRecord.expiresAt` is an absolute family lifetime established at issue. Each replacement refresh credential must expire in the future and no later than the family. Rotation never extends family lifetime. A Provider compares expiry and consumes the current digest in the same transaction.
+
+Refresh credentials are `active`, `rotated`, or `revoked`. A successful rotation changes the consumed credential to `rotated`, creates one `active` replacement, and increments the family revision atomically. Two concurrent rotations of one secret cannot both succeed.
+
+## Reuse Detection
+
+Submitting a digest belonging to a `rotated` credential is reuse. The Provider atomically revokes the entire active family with reason `refresh-token-reuse`; the service emits the committed `reuse-detected` event and rejects with `refresh-token-reused`. Later use of any credential in that family fails with `token-family-revoked`.
+
+Unknown tokens fail with `refresh-token-invalid`. Expired tokens fail with `refresh-token-expired` without rotating or revoking an otherwise active family. Transport adapters may collapse these categories when revealing them would aid credential probing.
+
+## Implementing a Provider
+
+A Provider subclasses `AuthTokenService` and implements `createFamilyRecord`, `rotateFamilyRecord`, `inspectRecords`, and `revokeRecords`. The create and rotation inputs contain a `RefreshTokenDigest`, never a refresh secret. Durable rows must store that digest and must not log, retain, or return the secret.
+
+`rotateFamilyRecord` locks or conditionally updates the matched credential and family in one transaction. It returns either a validated `rotated` commit containing the consumed and replacement records, or a `reused` commit containing the family revocation. `revokeRecords` changes every selected active family and its active credentials in one transaction and is idempotent for already revoked families.
+
+The shared suite in `tests/contract.ts` is the normative Provider test. Each Provider binds `runAuthTokenContract()` to an empty storage instance and adds backend-specific transaction, durability, unique-digest, and migration coverage.
+
+## Events
+
+`auth-token/changed` is emitted only after an issue, rotation, revocation, or reuse-revocation commit. It contains request, family, principal, revision, status, time, and optional credential/reason metadata. It never contains a refresh secret, digest, access token, JWT claim, or Provider diagnostic.
+
+Listener failures are contained so they cannot roll back a committed security change or starve later listeners. The event is process-local; durable audit delivery requires the persistence Provider to write a transactional outbox beside the state change.
+
+## Failure Semantics
+
+| Code | Meaning |
+|---|---|
+| `invalid-input` | A principal, request id, expiry, signal, or Provider policy input is invalid |
+| `operation-cancelled` | The operation was already cancelled before Provider work began |
+| `refresh-token-invalid` | No credential matches the submitted refresh secret |
+| `refresh-token-expired` | The credential or its absolute family lifetime has expired |
+| `refresh-token-reused` | A rotated credential was reused and its family was revoked |
+| `token-family-revoked` | The selected family is already revoked |
+| `provider-unavailable` | The Provider failed unexpectedly or returned an inconsistent commit |
+
+## Model Experience
+
+### Refresh-token state
+
+#### What the model sees
+
+Nothing. `ctx.authTokens`, refresh secrets, digests, family records, and `auth-token/changed` remain Host-only; the package registers no prompt, tool, or Session event.
+
+#### Token effect
+
+Zero. Token-family operations do not alter model input.
+
+#### KV Cache effect
+
+Independent. Token-family state does not change a model-visible request prefix.
+
+## Known Limitations and Deferred Work
+
+- **No production persistence Provider** - a MySQL implementation must own schema, transactions, locks, unique digest indexes, migrations, and durable audit outbox behavior.
+- **No access-token format** - JWT signing, claims, key rotation, audience validation, and access-token revocation policy belong to `dsh-auth-jwt` or another authentication Provider.
+- **No transport integration** - cookie attributes, bearer parsing, CSRF protection, and public error collapsing belong to the HTTP or gateway Consumer.
+- **No automatic user-disable cascade** - a Consumer must react to authoritative user lifecycle changes and revoke that principal's families.
