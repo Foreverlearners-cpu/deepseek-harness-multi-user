@@ -35,7 +35,7 @@ flowchart LR
     Reconcile --> Redis
 ```
 
-该能力不替代[用户设置](../../../../docs/subsystems/settings.zh.md)、Cordis 组合、Loader HMR 或[凭据引用](../../../../docs/subsystems/credentials.zh.md)。用户设置继续保存用户拥有的偏好。Cordis 配置继续选择包、提供方、仅启动时使用的值和部署组合。凭据与签名材料继续留在凭据或 secret 提供方中。`dsh-config` 拥有已授权 operator 可以在进程运行期间修改的平台和租户运维值。
+该能力不替代[用户设置](../../../../docs/subsystems/settings.md)、Cordis 组合、Loader HMR 或[凭据引用](../../../../docs/subsystems/credentials.md)。用户设置继续保存用户拥有的偏好。Cordis 配置继续选择包、提供方、仅启动时使用的值和部署组合。凭据与签名材料继续留在凭据或 secret 提供方中。`dsh-config` 拥有已授权 operator 可以在进程运行期间修改的平台和租户运维值。
 
 所属插件显式注册每个动态 namespace、schema、schema 版本、允许 scope、默认值，以及一种生效模式：`live`、`reload` 或 `restart`。注册不会把 namespace 暴露到远端；管理组合决定其已认证平台 API 对外提供哪些已注册 namespace。插件如果组合 operator 策略与用户偏好，就由该插件自行解析两者关系，例如用 operator 上限约束用户选择的限制。`dsh-config` 与 `dsh-settings` 之间不存在隐藏的全局优先级。
 
@@ -96,7 +96,7 @@ CDC 从记录的 MySQL binlog 坐标开始，并不隐含历史快照。Bootstra
 
 ### 管理与授权
 
-管理操作接收 [`dsh-auth`](2026-08-23-dsh-auth-provider-and-consumer-composition.zh.md)与[多用户控制平面](2026-08-18-multi-user-control-and-data-planes.zh.md)提议的不可变已认证平台调用。Action 按 namespace 限定，例如 `config:read`、`config:write`、`config:rollback` 和 `config:secret-ref-use`。租户管理员不能编辑 platform scope，平台 operator 也不会仅仅因为能管理运维配置就收到租户 secret 值或无关业务记录。
+管理操作接收 [`dsh-auth`](2026-08-23-dsh-auth-provider-and-consumer-composition.md)与[多用户控制平面](2026-08-18-multi-user-control-and-data-planes.md)提议的不可变已认证平台调用。Action 按 namespace 限定，例如 `config:read`、`config:write`、`config:rollback` 和 `config:secret-ref-use`。租户管理员不能编辑 platform scope，平台 operator 也不会仅仅因为能管理运维配置就收到租户 secret 值或无关业务记录。
 
 管理 API 分开返回已提交 MySQL revision 与传播状态。写入成功表示权威已提交；它不会虚假承诺每个运行时都已应用该 revision。Operator 可以检查 MySQL revision、Redis revision 和每个运行时的活跃 revision，并且可以在 rollout 需要时等待部署定义的收敛目标。
 

@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-23-dsh-config-control-plane.md
 2026-08-23-dsh-config-control-plane.md: b2c31295fad2a9fcd46af7579db23bfa2c3b657b
-2026-08-23-dsh-config-control-plane.zh.md: 22ba840522307cbddc5e659ea4b3da70c3b59703
+2026-08-23-dsh-config-control-plane.zh.md: a7db6a2eb9d65b7dc38ea0feb4f1450e18626225
