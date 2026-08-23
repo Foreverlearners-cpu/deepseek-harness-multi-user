@@ -8,3 +8,4 @@ Identity values and authentication contracts shared across product domains. Anon
 |---|---|---|
 | [`anonymous-user-id/`](anonymous-user-id/README.md) | Persists one anonymous Harness-home correlation id for telemetry, feedback, and DeepSeek requests | — |
 | [`auth/`](auth/README.md) | Selects authentication Providers, mints current request identity, and routes optional credential lifecycle operations | `auth` |
+| [`user/`](user/README.md) | Defines the stable user identity Service Definition and user record vocabulary for tenant-scoped runtimes | `users` |
