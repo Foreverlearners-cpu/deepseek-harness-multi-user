@@ -15,6 +15,7 @@ Durable session persistence, semantic checkpoint policy, and the shipped storage
 | [`session-persistence-jsonl/`](session-persistence-jsonl/README.md) | Persists sessions in JSONL files | registers on `ctx.sessionPersistence` |
 | [`session-persistence-sqlite/`](session-persistence-sqlite/README.md) | Persists sessions in SQLite | registers on `ctx.sessionPersistence` |
 | [`session-persistence-mysql/`](session-persistence-mysql/README.md) | Persists user-scoped sessions in MySQL | registers on `ctx.sessionPersistence` |
+| [`conversation-persistence-mysql/`](conversation-persistence-mysql/README.md) | Projects user-scoped conversations, messages, and file metadata into MySQL | `ctx.conversationPersistence` |
 
 The [session-persistence decision](../../.agents/notes/implemented/architecture/2026-06-14-session-persistence.md) records the persistence design.
 

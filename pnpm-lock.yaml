@@ -6100,6 +6100,37 @@ importers:
         specifier: workspace:^
         version: link:../../core/tools
 
+  packages/session/conversation-persistence-mysql:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-file-storage':
+        specifier: workspace:^
+        version: link:../../storage/file-storage
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
+      '@deepseek-ai/dsh-session-persistence':
+        specifier: workspace:^
+        version: link:../session-persistence
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../../identity/user
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@22.20.0)
+
   packages/session/session-checkpoint-policy:
     devDependencies:
       '@deepseek-ai/cordis':

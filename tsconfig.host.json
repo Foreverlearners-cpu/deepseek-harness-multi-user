@@ -139,6 +139,7 @@
     { "path": "./packages/session/session-persistence-jsonl" },
     { "path": "./packages/session/session-persistence-sqlite" },
     { "path": "./packages/session/session-persistence-mysql" },
+    { "path": "./packages/session/conversation-persistence-mysql" },
     { "path": "./packages/session/session-projection" },
     { "path": "./packages/session/session-projection-cache" },
     { "path": "./packages/session/session-stats" },

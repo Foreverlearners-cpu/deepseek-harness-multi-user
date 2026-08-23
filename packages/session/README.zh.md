@@ -15,6 +15,7 @@
 | [`session-persistence-jsonl/`](session-persistence-jsonl/README.md) | 将会话持久化到 JSONL 文件 | 注册到 `ctx.sessionPersistence` |
 | [`session-persistence-sqlite/`](session-persistence-sqlite/README.md) | 将会话持久化到 SQLite | 注册到 `ctx.sessionPersistence` |
 | [`session-persistence-mysql/`](session-persistence-mysql/README.md) | 将用户范围的会话持久化到 MySQL | 注册到 `ctx.sessionPersistence` |
+| [`conversation-persistence-mysql/`](conversation-persistence-mysql/README.md) | 将用户范围的会话、消息与文件元数据投影到 MySQL | `ctx.conversationPersistence` |
 
 [会话持久化决策](../../.agents/notes/implemented/architecture/2026-06-14-session-persistence.md)记录了持久化设计。
 
