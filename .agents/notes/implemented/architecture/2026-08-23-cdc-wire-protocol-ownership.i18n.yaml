@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-23-cdc-wire-protocol-ownership.md
+2026-08-23-cdc-wire-protocol-ownership.md: 4f2d0ebdf4ac1666bba144529cda91b5b8db1791b
+2026-08-23-cdc-wire-protocol-ownership.zh.md: e8d88b0f05959ab3777b6bc89a5791a2f226458

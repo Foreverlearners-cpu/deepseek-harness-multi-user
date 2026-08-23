@@ -41,6 +41,8 @@
       "@deepseek-ai/dsh-invariants": ["./packages/runtime-diagnostics/invariants/src/index.ts"],
       "@deepseek-ai/dsh-cdc": ["./packages/multi/cdc/src/index.ts"],
       "@deepseek-ai/dsh-cdc/invariant": ["./packages/multi/cdc/src/invariant.ts"],
+      "@deepseek-ai/dsh-cdc-protocol": ["./packages/multi/cdc-protocol/src/index.ts"],
+      "@deepseek-ai/dsh-cdc-protocol/invariant": ["./packages/multi/cdc-protocol/src/invariant.ts"],
       "@deepseek-ai/dsh-cdc-redis": ["./packages/multi/cdc-redis/src/index.ts"],
       "@deepseek-ai/dsh-cdc-elasticsearch": ["./packages/multi/cdc-elasticsearch/src/index.ts"],
       "@deepseek-ai/dsh-tool-call-timeout-policy": ["./packages/guard/timeout-policy/src"],

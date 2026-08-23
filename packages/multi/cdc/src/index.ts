@@ -4,6 +4,15 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
+import {
+  encodeCdcEvent,
+  encodeKey,
+  findChangedColumns,
+  type CdcCheckpoint,
+  type CdcEvent,
+  type CdcOperation,
+  type CdcValue,
+} from '@deepseek-ai/dsh-cdc-protocol'
 import { KafkaError, KafkaTopic } from '@deepseek-ai/dsh-kafka'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import z from '@deepseek-ai/schemastery'
@@ -18,9 +27,8 @@ import type {
   WriteRowsEvent,
 } from '@vlasky/zongji'
 import { createConnection } from 'mysql2/promise'
-import { encodeCdcEvent, encodeKey, digest, findChangedColumns, normalizeRow } from './codec.ts'
+import { digest, normalizeRow } from './codec.ts'
 import { readCheckpoint, writeCheckpoint } from './checkpoint.ts'
-import type { CdcCheckpoint, CdcEvent, CdcOperation, CdcValue } from './types.ts'
 
 export {
   decodeCdcEvent,

@@ -10,6 +10,7 @@ Host-only infrastructure shared by multi-user domain plugins. Infrastructure pac
 | [`@deepseek-ai/dsh-mysql`](mysql/README.md) | `ctx.mysql` | MySQL pool lifecycle and callback-scoped connection leases |
 | [`@deepseek-ai/dsh-redis`](redis/README.md) | `ctx.redis` | Redis client lifecycle and callback-scoped shared-client operations |
 | [`@deepseek-ai/dsh-kafka`](kafka/README.md) | `ctx.kafka` | Kafka broker lifecycle, metadata health, publishing, and subscriptions |
+| [`@deepseek-ai/dsh-cdc-protocol`](cdc-protocol/README.md) | - | Transport-independent CDC types and strict wire codec |
 | [`@deepseek-ai/dsh-cdc`](cdc/README.md) | `ctx.cdc` | MySQL row-change capture and at-least-once Kafka publication |
 | [`@deepseek-ai/dsh-cdc-redis`](cdc-redis/README.md) | - | Kafka CDC projection into Redis |
 | [`@deepseek-ai/dsh-cdc-elasticsearch`](cdc-elasticsearch/README.md) | - | Kafka CDC projection into Elasticsearch |
