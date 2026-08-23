@@ -164,6 +164,7 @@
     { "path": "./packages/session/session-title-first-prompt-llm" },
     { "path": "./packages/session/session-title-all-prompts-llm" },
     { "path": "./packages/session/session-telemetry" },
+    { "path": "./packages/session/session-search-projection-elasticsearch" },
     { "path": "./packages/identity/anonymous-user-id" },
     { "path": "./packages/multi/elasticsearch" },
     { "path": "./packages/multi/redis" },
