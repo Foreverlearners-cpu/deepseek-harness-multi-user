@@ -163,6 +163,7 @@
     { "path": "./packages/identity/anonymous-user-id" },
     { "path": "./packages/identity/auth" },
     { "path": "./packages/identity/user" },
+    { "path": "./packages/identity/user-mysql" },
     { "path": "./packages/multi/elasticsearch" },
     { "path": "./packages/multi/redis" },
     { "path": "./packages/multi/kafka" },

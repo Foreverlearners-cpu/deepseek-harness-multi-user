@@ -4,6 +4,8 @@
 
 用户目录子系统是 [`@deepseek-ai/dsh-user`](../../packages/identity/user/README.md)，它是用于稳定人类用户记录和权威账号生命周期状态的 Host-only Service Definition。具体 Provider 提供 `ctx.users`；认证、授权、租户、Credential 和存储保持独立所有权。
 
+[`@deepseek-ai/dsh-user-mysql`](../../packages/identity/user-mysql/README.md) 是持久 MySQL Provider。它拥有目录表、schema version、行事务和 keyset cursor 编码，并使用独立的 `ctx.mysql` 连接服务。
+
 ## 记录与生命周期
 
 `UserRecord` 使用 Provider 生成的 `UserId` 标识一个人类账号。它包含可选显示名、`active`/`disabled`/`deleted` 状态、Provider 时间戳、单调 revision 和有界的非权威 extensions。删除是终态，id 永远不会重新分配。
