@@ -4,6 +4,8 @@ English | [中文](user-directory.zh.md)
 
 The user-directory subsystem is [`@deepseek-ai/dsh-user`](../../packages/identity/user/README.md), a Host-only Service Definition for stable human user records and authoritative account lifecycle state. A concrete Provider supplies `ctx.users`; authentication, authorization, tenancy, credentials, and storage remain independent owners.
 
+[`@deepseek-ai/dsh-user-mysql`](../../packages/identity/user-mysql/README.md) is the durable MySQL Provider. It owns the directory tables, schema version, row transactions, and keyset cursor encoding while using the separate `ctx.mysql` connection service.
+
 ## Record and lifecycle
 
 `UserRecord` identifies one human account with a Provider-generated `UserId`. It carries an optional display name, `active`/`disabled`/`deleted` status, Provider timestamps, a monotonic revision, and bounded non-authoritative extensions. Deletion is terminal, and an id is never reassigned.
