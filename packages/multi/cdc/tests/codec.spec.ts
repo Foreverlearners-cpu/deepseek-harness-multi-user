@@ -1,5 +1,8 @@
+import { KafkaTopic } from '@deepseek-ai/dsh-kafka'
 import { describe, expect, it } from 'vitest'
 import {
+  cdcEventCodec,
+  createCdcEventRouter,
   decodeCdcEvent,
   encodeCdcEvent,
   encodeKey,
@@ -28,6 +31,49 @@ describe('CDC codec', () => {
     expect(encodeKey(event.key).toString()).toBe('{"id":"9007199254740993"}')
     expect(getChangedColumns(event)).toEqual(['name'])
     expect(findChangedColumns(event.before, event.after)).toEqual(['name'])
+  })
+
+  it('exposes the CDC protocol through the generic event codec', () => {
+    expect(cdcEventCodec.decode(cdcEventCodec.encode(event), {
+      topic: KafkaTopic('events'),
+      partition: 0,
+      offset: 1n,
+      timestamp: 1n,
+      key: null,
+      value: null,
+      headers: [],
+    })).toEqual(event)
+    expect(() => cdcEventCodec.decode(undefined, {
+      topic: KafkaTopic('events'),
+      partition: 0,
+      offset: 1n,
+      timestamp: 1n,
+      key: null,
+      value: null,
+      headers: [],
+    })).toThrow(/must not be empty/u)
+  })
+
+  it('routes CDC events by configured source table and rejects unknown sources', () => {
+    const router = createCdcEventRouter([{
+      database: 'app',
+      table: 'users',
+      topic: 'app.users',
+      primaryKey: ['id'],
+    }])
+    expect(router.route(event)).toMatchObject({
+      topic: 'app.users',
+      key: Buffer.from('{"id":"9007199254740993"}'),
+      headers: {
+        'content-type': Buffer.from('application/json'),
+        'cdc-spec-version': Buffer.from('1'),
+        'cdc-event-id': Buffer.from('event-1'),
+      },
+    })
+    expect(() => router.route({
+      ...event,
+      source: { ...event.source, table: 'missing' },
+    })).toThrow(/no Kafka route/u)
   })
 
   it('normalizes exact, binary, temporal, JSON, and excluded values', () => {

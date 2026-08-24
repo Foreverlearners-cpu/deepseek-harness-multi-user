@@ -5552,6 +5552,9 @@ importers:
       '@deepseek-ai/dsh-kafka':
         specifier: workspace:^
         version: link:../kafka
+      '@deepseek-ai/dsh-kafka-events':
+        specifier: workspace:^
+        version: link:../kafka-events
       '@deepseek-ai/dsh-timeout':
         specifier: workspace:^
         version: link:../../util/timeout

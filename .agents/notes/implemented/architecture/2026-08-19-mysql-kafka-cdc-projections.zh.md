@@ -14,6 +14,8 @@ Status: implemented
 
 `@deepseek-ai/dsh-cdc` 拥有一条专用 `@vlasky/zongji` replication 连接、表路由、带版本的 JSON 事件格式、按字节限制的串行发布队列和原子本地检查点。仅当检查点不存在时才从当前 binlog 尾部开始，并在 ready 前持久记录该初始尾部位点。Kafka 确认先于检查点发布，因此提供至少一次交付和稳定的重复事件 ID。
 
+CDC 把 `KafkaEventProducer<CdcEvent>` 与严格协议 codec 及 router 组合；router 派生配置的 Topic、复合主键字节和协议 Header。通用运行器只进行一次传输调用，不负责重试或 offset 决策。CDC 在自身生命周期中继续负责发布重试、reader 暂停与恢复、队列接纳、关闭中断和检查点推进。
+
 MySQL 启动时要求 row-based full image 和 full metadata，并在启动 replication 前通过 `INFORMATION_SCHEMA` 校验每个路由表、有序主键和配置字段。运行期 RowsEvent 必须保留完整字段数和 columns-present bitmap。遇到 schema 指纹变化、损坏或不可用的位点、statement-based DML、XA、不支持的压缩或 partial-JSON 事件、任何可识别的 schema-changing DDL、路由表 `TRUNCATE`、缺失路由、解码后超大事件或队列溢出时，producer 会停止而不会推进。配置的敏感字段在序列化前移除，payload 不会写入日志。启动或运行期的可恢复 MySQL 故障和可恢复 Kafka 发布故障使用延迟有上限的指数退避；运行期 MySQL 恢复会从最后一个发布安全检查点继续，而语义和配置故障仍会终止采集。
 
 `@deepseek-ai/dsh-cdc-redis` 和 `@deepseek-ai/dsh-cdc-elasticsearch` 是同一 wire event 的独立消费方。Producer 发布可选的 `changedColumns` metadata，但不筛掉持久流中的事件。每个 projection 可配置 `watchedColumns` 跳过无关 UPDATE，INSERT 和 DELETE 始终处理；旧版 v1 消息从完整行镜像推导变化字段。两者都要求 Kafka key、事件 key 和可用行镜像中的 key 一致。Redis 原子应用数据值以及包含 topic、partition 和 offset 的持久伴随版本；Lua 操作会忽略重复或更旧的 offset，并拒绝 topic 或 partition 迁移。Elasticsearch 使用 MySQL binlog 文件数字后缀乘以 2^32 再加事件 position 得到 `external_gte` 版本。写入或删除目标文档前，它先把顺序 metadata 写入 `stateIndex`，其默认值为 `dsh-cdc-state-v1`。状态 ID 由目标 index、源 database 和 table 及主键组成，并刻意排除 Kafka consumer group；状态文档记录 event 和 source metadata，以及 Kafka topic、partition 和 offset。首次写状态发生冲突表示事件已经过期，可以确认该事件。目标写入冲突后，消费者会再次写入状态：此时冲突证明已有更高源坐标取代该事件，可以确认；若状态写入成功，则传播原始目标冲突并重试。相同版本仍可写入，因此同一事件可以在状态已推进后补写目标。每个外部 effect 都在 Kafka handler 结束前完成；不同 consumer group 使两个 projection 都能收到全部事件。

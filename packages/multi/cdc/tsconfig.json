@@ -6,6 +6,7 @@
     { "path": "../../runtime-diagnostics/invariants" },
     { "path": "../../util/timeout" },
     { "path": "../cdc-protocol" },
-    { "path": "../kafka" }
+    { "path": "../kafka" },
+    { "path": "../kafka-events" }
   ]
 }
