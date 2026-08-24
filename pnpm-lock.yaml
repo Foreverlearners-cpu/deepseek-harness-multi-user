@@ -6363,6 +6363,31 @@ importers:
         specifier: workspace:^
         version: link:../../storage/storage-domain
 
+  packages/session/session-search-projection-elasticsearch:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-cdc-protocol':
+        specifier: workspace:^
+        version: link:../../multi/cdc-protocol
+      '@deepseek-ai/dsh-elasticsearch':
+        specifier: workspace:^
+        version: link:../../multi/elasticsearch
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-kafka':
+        specifier: workspace:^
+        version: link:../../multi/kafka
+      '@deepseek-ai/dsh-kafka-events':
+        specifier: workspace:^
+        version: link:../../multi/kafka-events
+
   packages/session/session-stats:
     dependencies:
       zod:
