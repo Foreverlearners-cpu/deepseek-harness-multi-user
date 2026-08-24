@@ -59,6 +59,8 @@ flowchart LR
   svc_auth["ctx.auth<br/>Host authentication runtime"]
   pkg_auth_password["auth-password"]
   pkg_auth_jwt["auth-jwt"]
+  pkg_account["account"]
+  svc_accounts["ctx.accounts<br/>Host account orchestration"]
   pkg_auth_token["auth-token"]
   svc_authTokens["ctx.authTokens<br/>Opaque refresh-token family seam"]
   pkg_user["user"]
@@ -211,6 +213,7 @@ flowchart LR
   pkg_cordis_host_runner["cordis-host-runner"]
   svc_dynamicCordisRunner["ctx.dynamicCordisRunner<br/>Dynamic Cordis package host runner"]
   svc_cordisInspect["ctx.cordisInspect<br/>Dynamic Cordis inspect registry"]
+  pkg_account --> svc_accounts
   pkg_acp --> svc_approval
   pkg_agent --> svc_agents
   pkg_agent_default_model --> svc_agentDefaultModel
@@ -333,6 +336,7 @@ flowchart LR
   svc_approval --> pkg_tools
   svc_attachments --> pkg_host_runtime
   svc_attachments --> pkg_llm_pi_ai
+  svc_auth --> pkg_account
   svc_authTokens --> pkg_auth_jwt
   svc_clientModules --> pkg_hmr
   svc_codeRuntime --> pkg_tools
@@ -427,7 +431,11 @@ flowchart LR
   svc_tools --> pkg_tool_web
   svc_typert --> pkg_api_gateway
   svc_typert --> pkg_typert_loader
+  svc_userCredentials --> pkg_account
+  svc_userCredentials --> pkg_auth_password
   svc_userQuestions --> pkg_tool_ask_user
+  svc_users --> pkg_account
+  svc_users --> pkg_auth_jwt
   svc_web --> pkg_tool_web
   svc_webServer --> pkg_connection
   svc_webServer --> pkg_hmr
@@ -453,10 +461,11 @@ flowchart LR
 | `ctx.mysql` | `core` | [`mysql`](../packages/multi/mysql) | - | - | - | The package combines the service definition and mysql2 pool provider; domain persistence consumers remain separate packages. |
 | `ctx.settings` | `seam` | [`settings`](../packages/settings/settings) | [`settings-file`](../packages/settings/settings-file) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | Plugins register namespace schemas and resolve layered values; providers store the raw document. The LLM adapters register their entry config as the composition base under the user section; the web gateway serves redacted layered descriptors and writes the user layer. |
 | `ctx.credentials` | `seam` | [`credentials`](../packages/credentials/credentials) | [`credentials-local`](../packages/credentials/credentials-local) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the web gateway exposes value-free views and write-only storage. |
-| `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | [`auth-password`](../packages/identity/auth-password), [`auth-jwt`](../packages/identity/auth-jwt) | - | - | Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations. |
+| `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | [`auth-password`](../packages/identity/auth-password), [`auth-jwt`](../packages/identity/auth-jwt) | [`account`](../packages/identity/account) | - | Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations. |
+| `ctx.accounts` | `core` | [`account`](../packages/identity/account) | - | - | - | Coordinates user, password-credential, and JWT lifecycle services while preserving revision checks, current-call validation, compensation state, and secret redaction. |
 | `ctx.authTokens` | `seam` | [`auth-token`](../packages/identity/auth-token) | - | [`auth-jwt`](../packages/identity/auth-jwt) | - | Generates opaque refresh secrets, gives Providers only digests, and defines atomic rotation, reuse-triggered family revocation, safe inspection, and targeted revocation. |
-| `ctx.users` | `seam` | [`user`](../packages/identity/user) | - | - | - | Defines stable human user records, lifecycle transitions, optimistic revisions, bounded pages, and sanitized commit events; persistence and credential providers remain separate. |
-| `ctx.userCredentials` | `seam` | [`user-credential`](../packages/identity/user-credential) | - | - | - | Defines login identifier normalization and lookup, password verification, aggregate optimistic revisions, and sanitized commit events; verifier storage remains Provider-private. |
+| `ctx.users` | `seam` | [`user`](../packages/identity/user) | - | [`account`](../packages/identity/account), [`auth-jwt`](../packages/identity/auth-jwt) | - | Defines stable human user records, lifecycle transitions, optimistic revisions, bounded pages, and sanitized commit events; persistence and credential providers remain separate. |
+| `ctx.userCredentials` | `seam` | [`user-credential`](../packages/identity/user-credential) | - | [`account`](../packages/identity/account), [`auth-password`](../packages/identity/auth-password) | - | Defines login identifier normalization and lookup, password verification, aggregate optimistic revisions, and sanitized commit events; verifier storage remains Provider-private. |
 | `ctx.sessionTelemetry` | `seam` | [`session-telemetry`](../packages/session/session-telemetry) | [`session-telemetry-otel`](../packages/session/session-telemetry-otel) | - | - | The seam captures, redacts, and hands session records to one backend; nothing else consumes the service — its output leaves the process. |
 | `ctx.storage` | `seam` | [`storage`](../packages/storage/storage) | [`storage-json`](../packages/storage/storage-json), [`storage-sqlite`](../packages/storage/storage-sqlite) | [`storage-domain`](../packages/storage/storage-domain) | - | Backends register side by side under names; data forms (domain first) mount on the hub and translate typed operations into opaque KV-unit primitives. |
 | `ctx.storageDomain` | `core` | [`storage-domain`](../packages/storage/storage-domain) | - | [`workspace`](../packages/workspace/workspace), [`message-feedback`](../packages/feedback/message-feedback) | - | Waits for every configured backend, then publishes the domain form as one lifecycle-bound service for typed durable state. |

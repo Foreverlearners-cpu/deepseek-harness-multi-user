@@ -94,6 +94,83 @@ export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
 /** Every harness `ctx.<key>` service, sorted by key. */
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
+    key: 'accounts',
+    summary: 'Coordinates users, credentials, authentication, and JWT lifecycle operations.',
+    description: 'Coordinates users, credentials, authentication, and JWT lifecycle operations.',
+    methods: [
+      {
+        signature: 'async register(request: AccountRegistrationInput): Promise<AccountSessionResult>',
+        description: 'Register an active account and issue its first JWT pair.',
+        parameters: [{ name: 'request', description: 'profile, identifier, secret, and operation lifecycle.' }],
+        returns: 'committed user plus newly issued credentials.',
+      },
+      {
+        signature: 'async login(request: AccountLoginRequest): Promise<AccountSessionResult>',
+        description: 'Authenticate a password, require an active user, and issue a JWT pair.',
+        parameters: [{ name: 'request', description: 'trusted transport login request.' }],
+        returns: 'active user plus newly issued credentials.',
+      },
+      {
+        signature: 'async refresh(request: AccountRefreshRequest): Promise<IssuedCredentialSet>',
+        description: 'Rotate a JWT refresh credential.',
+        parameters: [{ name: 'request', description: 'refresh secret and operation lifecycle.' }],
+        returns: 'replacement access and refresh credentials.',
+      },
+      {
+        signature: 'async logout(call: AuthenticatedCall): Promise<void>',
+        description: 'Revoke every JWT session owned by the current user.',
+        parameters: [{ name: 'call', description: 'exact current authenticated call.' }],
+      },
+      {
+        signature: 'async updateProfile(request: AccountProfileUpdateRequest): Promise<UserRecord>',
+        description: 'Update the current user\'s profile with optimistic concurrency.',
+        parameters: [{ name: 'request', description: 'current call, expected revision, and profile patch.' }],
+        returns: 'committed user record.',
+      },
+      {
+        signature: 'async changePassword(request: AccountPasswordChangeRequest): Promise<UserCredentialRecord>',
+        description: 'Change the current user\'s password and revoke all existing JWT sessions.',
+        parameters: [{ name: 'request', description: 'current call, revision, old/new secrets, and lifecycle.' }],
+        returns: 'committed non-secret credential metadata.',
+      },
+      {
+        signature: 'async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord>',
+        description: 'Create an account after the trusted caller authorizes the administrator.',
+        parameters: [{ name: 'request', description: 'authorized actor and new account values.' }],
+        returns: 'committed account record without issued credentials.',
+      },
+      {
+        signature: 'async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord>',
+        description: 'Update a profile after the trusted caller authorizes the administrator.',
+        parameters: [{ name: 'request', description: 'authorized actor, target, revision, and patch.' }],
+        returns: 'committed target record.',
+      },
+      {
+        signature: 'async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord>',
+        description: 'Disable a target and revoke all sessions after caller authorization.',
+        parameters: [{ name: 'request', description: 'authorized actor, target revision, reason, and lifecycle.' }],
+        returns: 'committed disabled record.',
+      },
+      {
+        signature: 'async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord>',
+        description: 'Enable a target after caller authorization.',
+        parameters: [{ name: 'request', description: 'authorized actor, target revision, and reason.' }],
+        returns: 'committed active record.',
+      },
+      {
+        signature: 'async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord>',
+        description: 'Reset a target password and revoke all sessions after caller authorization.',
+        parameters: [{ name: 'request', description: 'authorized actor, target credential revision, and new secret.' }],
+        returns: 'committed non-secret credential metadata.',
+      },
+      {
+        signature: 'async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void>',
+        description: 'Revoke a target user\'s JWT sessions after caller authorization.',
+        parameters: [{ name: 'request', description: 'authorized actor, target, reason, and lifecycle.' }],
+      },
+    ],
+  },
+  {
     key: 'agentDefaultModel',
     summary: 'Owns the default model selection independently of any Host or transport.',
     description: 'Owns the default model selection independently of any Host or transport. The composition entry remains usable without a settings provider; when one is mounted, its user layer is read live.',
@@ -2298,6 +2375,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
 /** Every harness event, sorted by name. */
 export const EVENT_API: readonly EventApiEntry[] = [
   {
+    name: 'account/changed',
+    mode: 'emit',
+    signature: '\'account/changed\'(event: AccountChangeEvent): void',
+    summary: 'Completed account orchestration fact without credential material.',
+    description: 'Completed account orchestration fact without credential material.',
+    parameters: [{ name: 'event', description: 'sanitized account operation safe for audit listeners.' }],
+  },
+  {
     name: 'agent-loop/config-start-failed',
     mode: 'emit',
     signature: '\'agent-loop/config-start-failed\'(payload: { sessionId: SessionId; error: unknown }): void',
@@ -2782,12 +2867,64 @@ export const EVENT_API: readonly EventApiEntry[] = [
 /** Shapes of every exported type the Service and Event signatures reference (transitively), sorted by name. */
 export const TYPE_API: readonly TypeApiEntry[] = [
   {
+    name: 'AccountChangeEvent',
+    declaration: 'export interface AccountChangeEvent {\n    readonly kind: \'registered\' | \'logged-in\' | \'logged-out\' | \'profile-updated\' | \'password-changed\' | \'admin-created\' | \'admin-updated\' | \'admin-disabled\' | \'admin-enabled\' | \'admin-password-reset\' | \'admin-sessions-revoked\';\n    readonly requestId: AuthenticationRequestId;\n    readonly userId: UserId;\n    readonly actorUserId?: UserId;\n    readonly time: number;\n}',
+  },
+  {
+    name: 'AccountLoginRequest',
+    declaration: 'export interface AccountLoginRequest extends AccountOperationRequest {\n    readonly channel: AuthenticationChannel;\n    readonly identifier: LoginIdentifierInput;\n    readonly password: string;\n}',
+  },
+  {
+    name: 'AccountOperationRequest',
+    declaration: 'export interface AccountOperationRequest {\n    readonly requestId: AuthenticationRequestId;\n    readonly signal: AbortSignal;\n}',
+  },
+  {
+    name: 'AccountPasswordChangeRequest',
+    declaration: 'export interface AccountPasswordChangeRequest extends AccountOperationRequest {\n    readonly call: AuthenticatedCall;\n    readonly expectedCredentialRevision: number;\n    readonly currentPassword: string;\n    readonly newPassword: string;\n}',
+  },
+  {
+    name: 'AccountProfileUpdateRequest',
+    declaration: 'export interface AccountProfileUpdateRequest {\n    readonly call: AuthenticatedCall;\n    readonly expectedRevision: number;\n    readonly patch: UserProfilePatch;\n}',
+  },
+  {
+    name: 'AccountRefreshRequest',
+    declaration: 'export interface AccountRefreshRequest extends AccountOperationRequest {\n    readonly refreshToken: string;\n}',
+  },
+  {
+    name: 'AccountRegistrationInput',
+    declaration: 'export interface AccountRegistrationInput extends AccountOperationRequest {\n    readonly identifier: LoginIdentifierInput;\n    readonly password: string;\n    readonly displayName?: string;\n    readonly extensions?: UserExtensions;\n}',
+  },
+  {
+    name: 'AccountSessionResult',
+    declaration: 'export interface AccountSessionResult {\n    readonly user: UserRecord;\n    readonly credentials: IssuedCredentialSet;\n}',
+  },
+  {
     name: 'AdapterRegistrationHandle',
     declaration: 'export interface AdapterRegistrationHandle {\n    (): void;\n    replace(providers: string[]): void;\n}',
   },
   {
     name: 'AddLoginIdentifierRequest',
     declaration: 'export interface AddLoginIdentifierRequest extends LoginIdentifierInput {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly context?: UserOperationContext;\n}',
+  },
+  {
+    name: 'AdminAccountCreateRequest',
+    declaration: 'export interface AdminAccountCreateRequest extends AccountRegistrationInput {\n    readonly actor: AuthenticatedCall;\n}',
+  },
+  {
+    name: 'AdminAccountStatusRequest',
+    declaration: 'export interface AdminAccountStatusRequest {\n    readonly actor: AuthenticatedCall;\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly requestId: AuthenticationRequestId;\n    readonly signal: AbortSignal;\n    readonly reason?: string;\n}',
+  },
+  {
+    name: 'AdminAccountUpdateRequest',
+    declaration: 'export interface AdminAccountUpdateRequest {\n    readonly actor: AuthenticatedCall;\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly patch: UserProfilePatch;\n    readonly reason?: string;\n}',
+  },
+  {
+    name: 'AdminPasswordResetRequest',
+    declaration: 'export interface AdminPasswordResetRequest extends AccountOperationRequest {\n    readonly actor: AuthenticatedCall;\n    readonly userId: UserId;\n    readonly expectedCredentialRevision: number;\n    readonly newPassword: string;\n    readonly reason?: string;\n}',
+  },
+  {
+    name: 'AdminSessionRevokeRequest',
+    declaration: 'export interface AdminSessionRevokeRequest extends AccountOperationRequest {\n    readonly actor: AuthenticatedCall;\n    readonly userId: UserId;\n    readonly reason?: string;\n}',
   },
   {
     name: 'Agent',
@@ -2888,6 +3025,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AttachmentId',
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
+  },
+  {
+    name: 'AuthenticatedCall',
+    declaration: 'export interface AuthenticatedCall extends VerifiedAuthentication {\n    readonly [AUTHENTICATED_CALL]: true;\n    readonly requestId: AuthenticationRequestId;\n    readonly channel: AuthenticationChannel;\n    readonly method: AuthenticationMethod;\n    readonly signal: AbortSignal;\n}',
   },
   {
     name: 'AuthenticatedPrincipal',
@@ -3404,6 +3545,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'InvokeRemoteRequest',
     declaration: 'export interface InvokeRemoteRequest {\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'IssuedCredential',
+    declaration: 'export interface IssuedCredential {\n    readonly kind: \'access\' | \'refresh\' | \'api-key\';\n    readonly id: CredentialId;\n    readonly value: string;\n    readonly expiresAt?: number;\n    readonly tokenFamilyId?: TokenFamilyId;\n}',
+  },
+  {
+    name: 'IssuedCredentialSet',
+    declaration: 'export interface IssuedCredentialSet {\n    readonly credentials: readonly IssuedCredential[];\n}',
   },
   {
     name: 'JobDoneListener',
@@ -4860,6 +5009,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'UserUpdateRequest',
     declaration: 'export interface UserUpdateRequest {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly patch: UserProfilePatch;\n    readonly context?: UserOperationContext;\n}',
+  },
+  {
+    name: 'VerifiedAuthentication',
+    declaration: 'export interface VerifiedAuthentication {\n    readonly principal: AuthenticatedPrincipal;\n    readonly credentialId?: CredentialId;\n    readonly authenticatedAt: number;\n    readonly expiresAt?: number;\n}',
   },
   {
     name: 'VerifyPasswordRequest',

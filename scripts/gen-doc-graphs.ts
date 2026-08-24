@@ -210,8 +210,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Host authentication runtime',
     mode: 'seam',
     implementations: ['auth-password', 'auth-jwt'],
-    consumers: [],
+    consumers: ['account'],
     note: 'Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations.',
+  },
+  {
+    key: 'accounts',
+    pkg: 'account',
+    title: 'Host account orchestration',
+    mode: 'core',
+    note: 'Coordinates user, password-credential, and JWT lifecycle services while preserving revision checks, current-call validation, compensation state, and secret redaction.',
   },
   {
     key: 'authTokens',
@@ -228,7 +235,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Human user directory seam',
     mode: 'seam',
     implementations: [],
-    consumers: [],
+    consumers: ['account', 'auth-jwt'],
     note: 'Defines stable human user records, lifecycle transitions, optimistic revisions, bounded pages, and sanitized commit events; persistence and credential providers remain separate.',
   },
   {
@@ -237,7 +244,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'User login credential seam',
     mode: 'seam',
     implementations: [],
-    consumers: [],
+    consumers: ['account', 'auth-password'],
     note: 'Defines login identifier normalization and lookup, password verification, aggregate optimistic revisions, and sanitized commit events; verifier storage remains Provider-private.',
   },
   {

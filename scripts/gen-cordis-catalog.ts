@@ -50,6 +50,7 @@ export { REGION_BEGIN, REGION_END }
  * errors, so the partition can never silently drift from the service API.
  */
 export const SERVICE_PAGE: Record<string, string> = {
+  accounts: 'authentication.md',
   agentLoop: 'core.md',
   auth: 'authentication.md',
   authTokens: 'auth-token.md',
@@ -171,6 +172,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
  * {@link EVENT_WALK_EXEMPTIONS} names each one with its documentation owner.
  */
 export const EVENT_SCOPE_PAGE: Record<string, string> = {
+  'account': 'authentication.md',
   'agent': 'core.md',
   'agent-loop': 'core.md',
   'agent-preset': 'core.md',
@@ -225,6 +227,19 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  * appear on more than one page.
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
+  AccountChangeEvent: 'authentication.md',
+  AccountLoginRequest: 'authentication.md',
+  AccountPasswordChangeRequest: 'authentication.md',
+  AccountProfileUpdateRequest: 'authentication.md',
+  AccountRefreshRequest: 'authentication.md',
+  AccountRegistrationInput: 'authentication.md',
+  AccountService: 'authentication.md',
+  AccountSessionResult: 'authentication.md',
+  AdminAccountCreateRequest: 'authentication.md',
+  AdminAccountStatusRequest: 'authentication.md',
+  AdminAccountUpdateRequest: 'authentication.md',
+  AdminPasswordResetRequest: 'authentication.md',
+  AdminSessionRevokeRequest: 'authentication.md',
   Agent: 'core.md',
   AgentCancelCause: 'core.md',
   AgentFactory: 'core.md',

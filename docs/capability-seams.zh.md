@@ -61,6 +61,8 @@ flowchart LR
   svc_auth["ctx.auth<br/>Host authentication runtime"]
   pkg_auth_password["auth-password"]
   pkg_auth_jwt["auth-jwt"]
+  pkg_account["account"]
+  svc_accounts["ctx.accounts<br/>Host account orchestration"]
   pkg_auth_token["auth-token"]
   svc_authTokens["ctx.authTokens<br/>Opaque refresh-token family seam"]
   pkg_user["user"]
@@ -213,6 +215,7 @@ flowchart LR
   pkg_cordis_host_runner["cordis-host-runner"]
   svc_dynamicCordisRunner["ctx.dynamicCordisRunner<br/>Dynamic Cordis package host runner"]
   svc_cordisInspect["ctx.cordisInspect<br/>Dynamic Cordis inspect registry"]
+  pkg_account --> svc_accounts
   pkg_acp --> svc_approval
   pkg_agent --> svc_agents
   pkg_agent_default_model --> svc_agentDefaultModel
@@ -335,6 +338,7 @@ flowchart LR
   svc_approval --> pkg_tools
   svc_attachments --> pkg_host_runtime
   svc_attachments --> pkg_llm_pi_ai
+  svc_auth --> pkg_account
   svc_authTokens --> pkg_auth_jwt
   svc_clientModules --> pkg_hmr
   svc_codeRuntime --> pkg_tools
@@ -429,7 +433,11 @@ flowchart LR
   svc_tools --> pkg_tool_web
   svc_typert --> pkg_api_gateway
   svc_typert --> pkg_typert_loader
+  svc_userCredentials --> pkg_account
+  svc_userCredentials --> pkg_auth_password
   svc_userQuestions --> pkg_tool_ask_user
+  svc_users --> pkg_account
+  svc_users --> pkg_auth_jwt
   svc_web --> pkg_tool_web
   svc_webServer --> pkg_connection
   svc_webServer --> pkg_hmr
@@ -455,10 +463,11 @@ flowchart LR
 | `ctx.mysql` | `core` | [`mysql`](../packages/multi/mysql) | - | - | - | 该包同时包含服务定义和 mysql2 连接池提供方；领域持久化消费方保留为独立包。 |
 | `ctx.settings` | `seam` | [`settings`](../packages/settings/settings) | [`settings-file`](../packages/settings/settings-file) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | 插件注册命名空间 schema 并解析分层值；提供方存储原始文档。LLM（大语言模型）适配器在用户分区下将其入口配置注册为组合基础；Web 网关提供经过脱敏的分层描述符，并写入用户层。 |
 | `ctx.credentials` | `seam` | [`credentials`](../packages/credentials/credentials) | [`credentials-local`](../packages/credentials/credentials-local) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | 配置携带对机密信息的引用；提供方拥有实际值。消费方按操作解析，因此轮换后的凭据会在紧接着的下一次请求中生效；Web 网关提供不含实际值的视图和只写存储。 |
-| `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | [`auth-password`](../packages/identity/auth-password), [`auth-jwt`](../packages/identity/auth-jwt) | - | - | 按证据类型选择唯一提供方，签发仅限进程内使用的已认证调用，并分派可选的凭证生命周期操作。 |
+| `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | [`auth-password`](../packages/identity/auth-password), [`auth-jwt`](../packages/identity/auth-jwt) | [`account`](../packages/identity/account) | - | 按证据类型选择唯一提供方，签发仅限进程内使用的已认证调用，并分派可选的凭证生命周期操作。 |
+| `ctx.accounts` | `core` | [`account`](../packages/identity/account) | - | - | - | 协调用户、密码凭据与 JWT 生命周期服务，同时保留 revision 检查、当前 Call 验证、补偿状态和秘密脱敏。 |
 | `ctx.authTokens` | `seam` | [`auth-token`](../packages/identity/auth-token) | - | [`auth-jwt`](../packages/identity/auth-jwt) | - | 生成不透明 refresh secret，只向 Provider 提供 digest，并定义原子轮换、复用触发的 family 撤销、安全检查与定向撤销。 |
-| `ctx.users` | `seam` | [`user`](../packages/identity/user) | - | - | - | 定义稳定的人类用户记录、生命周期转换、乐观 revision、有界分页和脱敏提交事件；持久化与 Credential Provider 保持独立。 |
-| `ctx.userCredentials` | `seam` | [`user-credential`](../packages/identity/user-credential) | - | - | - | 定义登录标识归一化与查询、密码验证、聚合乐观 revision 和脱敏提交事件；verifier 存储保持为 Provider 私有状态。 |
+| `ctx.users` | `seam` | [`user`](../packages/identity/user) | - | [`account`](../packages/identity/account), [`auth-jwt`](../packages/identity/auth-jwt) | - | 定义稳定的人类用户记录、生命周期转换、乐观 revision、有界分页和脱敏提交事件；持久化与 Credential Provider 保持独立。 |
+| `ctx.userCredentials` | `seam` | [`user-credential`](../packages/identity/user-credential) | - | [`account`](../packages/identity/account), [`auth-password`](../packages/identity/auth-password) | - | 定义登录标识归一化与查询、密码验证、聚合乐观 revision 和脱敏提交事件；verifier 存储保持为 Provider 私有状态。 |
 | `ctx.sessionTelemetry` | `seam` | [`session-telemetry`](../packages/session/session-telemetry) | [`session-telemetry-otel`](../packages/session/session-telemetry-otel) | - | - | 该 seam 捕获会话记录、进行脱敏并交给一个后端；没有其他组件消费该服务，其输出会离开当前进程。 |
 | `ctx.storage` | `seam` | [`storage`](../packages/storage/storage) | [`storage-json`](../packages/storage/storage-json), [`storage-sqlite`](../packages/storage/storage-sqlite) | [`storage-domain`](../packages/storage/storage-domain) | - | 各后端以不同名称并列注册；数据形态（领域优先）挂载到枢纽上，并将类型化操作转换为不透明的 KV 单元原语。 |
 | `ctx.storageDomain` | `core` | [`storage-domain`](../packages/storage/storage-domain) | - | [`workspace`](../packages/workspace/workspace), [`message-feedback`](../packages/feedback/message-feedback) | - | 等待所有已配置后端就绪，然后将领域形态发布为一个受生命周期约束的服务，用于类型化持久状态。 |

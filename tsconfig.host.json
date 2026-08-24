@@ -161,6 +161,7 @@
     { "path": "./packages/session/session-title-all-prompts-llm" },
     { "path": "./packages/session/session-telemetry" },
     { "path": "./packages/identity/anonymous-user-id" },
+    { "path": "./packages/identity/account" },
     { "path": "./packages/identity/auth" },
     { "path": "./packages/identity/auth-jwt" },
     { "path": "./packages/identity/auth-token" },
