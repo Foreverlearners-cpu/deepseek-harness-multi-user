@@ -64,13 +64,22 @@ class BrokenAuthTokens extends AuthTokenService {
     return this.fixedTime ?? super.now()
   }
 
-  protected createFamilyRecord(input: TokenFamilyCreateInput): Promise<TokenFamilyCreateInput> {
+  protected async createFamilyRecord(
+    input: TokenFamilyCreateInput,
+    prepare: () => Promise<void>,
+  ): Promise<TokenFamilyCreateInput> {
     if (this.failure !== undefined) return Promise.reject(this.failure)
-    return Promise.resolve(this.createTransform(input) as TokenFamilyCreateInput)
+    await prepare()
+    return this.createTransform(input) as TokenFamilyCreateInput
   }
 
-  protected rotateFamilyRecord(_input: RefreshTokenRotationInput): Promise<RefreshTokenRotationCommit> {
-    return Promise.resolve(this.rotationResult as RefreshTokenRotationCommit)
+  protected async rotateFamilyRecord(
+    _input: RefreshTokenRotationInput,
+    prepare: (candidate: RefreshTokenRotationCommit) => Promise<void>,
+  ): Promise<RefreshTokenRotationCommit> {
+    const result = this.rotationResult as RefreshTokenRotationCommit
+    if (result.kind === 'rotated') await prepare(result)
+    return result
   }
 
   protected inspectRecords(_target: AuthTokenInspectRequest['target']): Promise<Readonly<{
@@ -97,8 +106,11 @@ class CorruptMemoryAuthTokens extends MemoryAuthTokens {
   corruptRevocation = false
   duplicateRevocation = false
 
-  protected override async rotateFamilyRecord(input: RefreshTokenRotationInput): Promise<RefreshTokenRotationCommit> {
-    const commit = await super.rotateFamilyRecord(input)
+  protected override async rotateFamilyRecord(
+    input: RefreshTokenRotationInput,
+    prepare: (candidate: RefreshTokenRotationCommit) => Promise<void>,
+  ): Promise<RefreshTokenRotationCommit> {
+    const commit = await super.rotateFamilyRecord(input, prepare)
     if (commit.kind === 'rotated' && this.expireRotationFamily) {
       return {
         ...commit,
@@ -152,6 +164,48 @@ class CorruptMemoryAuthTokens extends MemoryAuthTokens {
   }
 }
 
+class PreparationViolationAuthTokens extends MemoryAuthTokens {
+  issueMode: 'normal' | 'skip' | 'double' = 'normal'
+  rotateMode: 'normal' | 'skip' | 'double' | 'non-rotation' | 'mismatch' = 'normal'
+
+  protected override createFamilyRecord(
+    input: TokenFamilyCreateInput,
+    prepare: () => Promise<void>,
+  ): Promise<TokenFamilyCreateInput> {
+    if (this.issueMode === 'skip') return super.createFamilyRecord(input, async () => undefined)
+    if (this.issueMode === 'double') {
+      return super.createFamilyRecord(input, async () => {
+        await Promise.all([prepare(), prepare()])
+      })
+    }
+    return super.createFamilyRecord(input, prepare)
+  }
+
+  protected override async rotateFamilyRecord(
+    input: RefreshTokenRotationInput,
+    prepare: (candidate: RefreshTokenRotationCommit) => Promise<void>,
+  ): Promise<RefreshTokenRotationCommit> {
+    if (this.rotateMode === 'non-rotation') {
+      await prepare({ kind: 'reused' } as RefreshTokenRotationCommit)
+    }
+    const callback = this.rotateMode === 'skip'
+      ? async (): Promise<void> => undefined
+      : this.rotateMode === 'double'
+        ? async (candidate: RefreshTokenRotationCommit): Promise<void> => {
+          await Promise.all([prepare(candidate), prepare(candidate)])
+        }
+        : prepare
+    const commit = await super.rotateFamilyRecord(input, callback)
+    if (this.rotateMode !== 'mismatch' || commit.kind !== 'rotated') return commit
+    const otherPrincipal = { kind: 'user' as const, id: userId('user-other') }
+    return {
+      ...commit,
+      previousFamily: { ...commit.previousFamily, principal: otherPrincipal },
+      currentFamily: { ...commit.currentFamily, principal: otherPrincipal },
+    }
+  }
+}
+
 async function broken(): Promise<BrokenAuthTokens> {
   const ctx = new Context()
   await ctx.plugin(BrokenAuthTokens)
@@ -202,6 +256,25 @@ describe('auth-token Provider validation', () => {
       message: 'auth-token: lifecycle Provider failed',
     })
   })
+
+  it.each(['skip', 'double'] as const)('rejects issue Provider preparation violation %s', async (mode) => {
+    const service = await memory(PreparationViolationAuthTokens)
+    service.issueMode = mode
+    await expect(service.issueFamily({ requestId, signal, principal, expiresAt: 2_000 }))
+      .rejects.toMatchObject({ code: 'provider-unavailable' })
+  })
+
+  it.each(['skip', 'double', 'non-rotation', 'mismatch'] as const)(
+    'rejects rotation Provider preparation violation %s',
+    async (mode) => {
+      const service = await memory(PreparationViolationAuthTokens)
+      const issued = await service.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
+      service.setTime(1_100)
+      service.rotateMode = mode
+      await expect(service.rotate({ requestId, signal, refreshToken: issued.refreshToken.value }))
+        .rejects.toMatchObject({ code: 'provider-unavailable' })
+    },
+  )
 
   it('accepts every principal kind and rejects malformed principal input', async () => {
     const service = await memory(MemoryAuthTokens)

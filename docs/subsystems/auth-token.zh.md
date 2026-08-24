@@ -45,12 +45,30 @@ Abstract opaque refresh-token lifecycle. Providers own durable state and atomic 
 async issueFamily(request: TokenFamilyIssueRequest): Promise<TokenFamilyIssueResult>
 
 /**
+ * Prepare a Host artifact inside the Provider transaction before creating a family.
+ * The callback receives the only refresh secret and must not retain or log it.
+ * @param request - authenticated principal, absolute expiry, and operation lifecycle.
+ * @param prepare - callback that must finish before the Provider persists either record.
+ * @returns committed family, refresh secret, and the pre-commit artifact.
+ */
+async issueFamilyWithPreparation<T>( request: TokenFamilyIssueRequest, prepare: TokenFamilyPreparation<T>, ): Promise<PreparedTokenFamilyIssueResult<T>>
+
+/**
  * Atomically consume one refresh token and replace it exactly once.
  * Reuse revokes the entire family before the method rejects.
  * @param request - current refresh secret and operation lifecycle.
  * @returns committed family metadata and a replacement refresh secret.
  */
 async rotate(request: RefreshTokenRotateRequest): Promise<TokenFamilyIssueResult>
+
+/**
+ * Prepare a Host artifact after the Provider locks the current Credential and
+ * before it atomically consumes that Credential and inserts its replacement.
+ * @param request - current refresh secret and operation lifecycle.
+ * @param prepare - callback receiving the replacement secret before mutation.
+ * @returns committed family, replacement refresh secret, and pre-commit artifact.
+ */
+async rotateWithPreparation<T>( request: RefreshTokenRotateRequest, prepare: TokenFamilyPreparation<T>, ): Promise<PreparedTokenFamilyIssueResult<T>>
 
 /**
  * Inspect safe family and refresh-credential metadata.
@@ -67,7 +85,7 @@ async inspect(request: AuthTokenInspectRequest): Promise<AuthTokenInspection>
 async revoke(request: AuthTokenRevokeRequest): Promise<void>
 ```
 
-Source: [`packages/identity/auth-token/src/index.ts:267`](../../packages/identity/auth-token/src/index.ts)
+Source: [`packages/identity/auth-token/src/index.ts:269`](../../packages/identity/auth-token/src/index.ts)
 
 <a id="auth-token-events"></a>
 
@@ -88,5 +106,5 @@ Committed token-family change without refresh secrets or digests.
 'auth-token/changed'(event: AuthTokenChangeEvent): void
 ```
 
-Source: [`packages/identity/auth-token/src/types.ts:214`](../../packages/identity/auth-token/src/types.ts)
+Source: [`packages/identity/auth-token/src/types.ts:222`](../../packages/identity/auth-token/src/types.ts)
 <!-- END GENERATED cordis-surface -->

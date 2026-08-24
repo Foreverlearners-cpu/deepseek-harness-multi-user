@@ -55,6 +55,32 @@ export function runAuthTokenContract(
       expect(JSON.stringify(events)).not.toContain(issued.refreshToken.value)
     })
 
+    it('does not create family state when pre-commit preparation fails', async () => {
+      const { authTokens } = await create()
+      await expect(authTokens.issueFamilyWithPreparation(
+        { requestId, signal, principal, expiresAt: 2_000 },
+        async () => { throw new Error('prepare failed') },
+      )).rejects.toMatchObject({ code: 'provider-unavailable' })
+      const inspected = await authTokens.inspect({
+        requestId,
+        signal,
+        target: { kind: 'principal', principal },
+      })
+      expect(inspected).toEqual({ families: [], credentials: [] })
+    })
+
+    it('returns the artifact prepared from the exact secret-bearing candidate', async () => {
+      const { authTokens } = await create()
+      const issued = await authTokens.issueFamilyWithPreparation(
+        { requestId, signal, principal, expiresAt: 2_000 },
+        async candidate => ({ familyId: candidate.family.tokenFamilyId, secret: candidate.refreshToken.value }),
+      )
+      expect(issued.prepared).toEqual({
+        familyId: issued.family.tokenFamilyId,
+        secret: issued.refreshToken.value,
+      })
+    })
+
     it('rotates exactly once and atomically revokes the family on reuse', async () => {
       const harness = await create()
       const { ctx, authTokens } = harness
@@ -96,6 +122,26 @@ export function runAuthTokenContract(
         refreshToken: second.refreshToken.value,
       })).rejects.toMatchObject({ code: 'token-family-revoked' })
       expect(events.map(value => value.kind)).toEqual(['issued', 'rotated', 'reuse-detected'])
+    })
+
+    it('keeps the old Credential active when rotation preparation fails', async () => {
+      const harness = await create()
+      const { authTokens } = harness
+      const first = await authTokens.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
+      harness.setTime(1_100)
+      await expect(authTokens.rotateWithPreparation(
+        { requestId, signal, refreshToken: first.refreshToken.value },
+        async () => { throw new Error('prepare failed') },
+      )).rejects.toMatchObject({ code: 'provider-unavailable' })
+      const unchanged = await authTokens.inspect({
+        requestId,
+        signal,
+        target: { kind: 'token-family', tokenFamilyId: first.family.tokenFamilyId },
+      })
+      expect(unchanged.families[0]).toMatchObject({ status: 'active', revision: 1 })
+      expect(unchanged.credentials).toEqual([expect.objectContaining({ status: 'active' })])
+      await expect(authTokens.rotate({ requestId, signal, refreshToken: first.refreshToken.value }))
+        .resolves.toMatchObject({ family: { status: 'active', revision: 2 } })
     })
 
     it('allows only one of two concurrent rotations to succeed', async () => {
