@@ -36,6 +36,12 @@ const row = {
   occurred_at: '2026-08-23T00:00:00.000Z',
 }
 
+type RedisEvalOptions = { keys: string[]; arguments: string[] }
+
+function redisEvalMock(): ReturnType<typeof vi.fn<(script: string, options: RedisEvalOptions) => Promise<number>>> {
+  return vi.fn(async (_script: string, _options: RedisEvalOptions) => 1)
+}
+
 function event(overrides: Partial<CdcEvent> = {}): CdcEvent {
   return {
     specVersion: 1,
@@ -72,7 +78,7 @@ function message(source: CdcEvent, overrides: Partial<KafkaConsumedMessage> = {}
 
 async function harness(): Promise<{
   options: KafkaEventConsumerOptions<CdcEvent>
-  evalMock: ReturnType<typeof vi.fn>
+  evalMock: ReturnType<typeof redisEvalMock>
   close: ReturnType<typeof vi.fn>
   fail: (cause: unknown) => undefined
   error: ReturnType<typeof vi.fn>
@@ -81,7 +87,7 @@ async function harness(): Promise<{
 }> {
   let options: KafkaEventConsumerOptions<CdcEvent> | undefined
   const close = vi.fn(async () => {})
-  const evalMock = vi.fn(async () => 1)
+  const evalMock = redisEvalMock()
   const failure = Promise.withResolvers<undefined>()
   const error = vi.fn()
   const stop = vi.fn(async () => {})
@@ -147,7 +153,8 @@ describe('session CDC cache invalidation', () => {
     expect(await consume(setup.options, unrelated)).toBe(false)
     expect(setup.evalMock).not.toHaveBeenCalled()
 
-    const missing = event({ changedColumns: undefined })
+    const missing = event()
+    delete missing.changedColumns
     expect(await consume(setup.options, missing)).toBe(true)
     expect(setup.evalMock).toHaveBeenCalledOnce()
     expect(SESSION_CACHE_WATCHED_COLUMNS.has('visible_text')).toBe(true)
@@ -207,7 +214,7 @@ describe('session CDC cache invalidation', () => {
   })
 
   it('uses a tenant-isolated key and guards cache refill with the watermark', async () => {
-    const client = { eval: vi.fn(async () => 1) }
+    const client = { eval: redisEvalMock() }
     const accepted = await refillSessionContextCache(client, {
       tenantId: 'tenant-1', userId: 'user-1', sessionId: 'session-1', revision: '12', value: 'cached',
     })
@@ -228,7 +235,7 @@ describe('session CDC cache invalidation', () => {
   })
 
   it('applies an authoritative snapshot without Kafka metadata', async () => {
-    const client = { eval: vi.fn(async () => 1) }
+    const client = { eval: redisEvalMock() }
     await expect(applySessionContextCacheSnapshot(client, {
       tenantId: 'tenant-1', userId: 'user-1', sessionId: 'session-1', revision: '12',
     })).resolves.toBe(true)
