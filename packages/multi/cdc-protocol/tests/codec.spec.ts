@@ -55,6 +55,8 @@ describe('CDC protocol codec', () => {
   })
 
   it('derives deep changes and honors a producer-supplied list', () => {
+    const eventWithoutChangedColumns: CdcEvent = { ...event }
+    delete eventWithoutChangedColumns.changedColumns
     expect(findChangedColumns(
       { same: { nested: [1, true] }, removed: 'old', changed: ['a'] },
       { same: { nested: [1, true] }, added: 'new', changed: ['b'] },
@@ -63,7 +65,7 @@ describe('CDC protocol codec', () => {
     expect(findChangedColumns({ value: [1] }, { value: { 0: 1 } })).toEqual(['value'])
     expect(findChangedColumns({ value: '1' }, { value: 1 })).toEqual(['value'])
     expect(getChangedColumns(event)).toEqual(['profile'])
-    expect(getChangedColumns({ ...event, changedColumns: undefined })).toEqual(['profile'])
+    expect(getChangedColumns(eventWithoutChangedColumns)).toEqual(['profile'])
   })
 
   it.each([
@@ -72,7 +74,7 @@ describe('CDC protocol codec', () => {
     [1.5, 'invalid-limit'],
     [MAX_CDC_WIRE_BYTES + 1, 'invalid-limit'],
   ] as const)('rejects invalid byte limit %s', (maxBytes, code) => {
-    const options = maxBytes === undefined ? { maxBytes: undefined } : { maxBytes }
+    const options = maxBytes === undefined ? {} : { maxBytes }
     if (maxBytes === undefined) {
       expect(decodeCdcEvent(encodeCdcEvent(event), options)).toEqual(event)
       return
@@ -129,7 +131,7 @@ describe('CDC protocol codec', () => {
 
   it('validates outbound events before publication', () => {
     expectWireError(
-      () => encodeCdcEvent({ ...event, eventId: '' } as CdcEvent),
+      () => encodeCdcEvent({ ...event, eventId: '' }),
       'invalid-fields',
     )
   })
