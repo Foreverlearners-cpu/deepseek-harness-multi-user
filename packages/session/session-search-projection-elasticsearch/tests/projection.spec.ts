@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { encodeCdcEvent, encodeKey, type CdcEvent } from '@deepseek-ai/dsh-cdc-protocol'
+import type { ElasticsearchClient } from '@deepseek-ai/dsh-elasticsearch'
 import { KafkaTopic, type KafkaConsumedMessage } from '@deepseek-ai/dsh-kafka'
 import type { KafkaEventConsumerOptions } from '@deepseek-ai/dsh-kafka-events'
 import * as Plugin from '../src/index.ts'
@@ -16,7 +17,7 @@ const CONFIG = {
   table: 'session_messages',
   schemaFingerprints: ['schema-a'],
   index: 'session-search-v1',
-} as const
+} satisfies Plugin.Config
 
 const MAPPING = {
   tenant: { type: 'keyword' }, user: { type: 'keyword' }, session: { type: 'keyword' },
@@ -89,7 +90,7 @@ class FakeElasticsearch {
   readonly writes: Array<Record<string, unknown>> = []
   conflict = false
   mapping = MAPPING
-  async operation<T>(callback: (client: unknown) => T | Promise<T>): Promise<T> {
+  async operation<T>(callback: (client: ElasticsearchClient) => T | Promise<T>): Promise<T> {
     return callback({
       indices: { getMapping: async () => ({ [CONFIG.index]: { mappings: { properties: this.mapping } } }) },
       index: async (request: Record<string, unknown>) => {
@@ -99,7 +100,7 @@ class FakeElasticsearch {
         }
         this.writes.push(request)
       },
-    })
+    } as unknown as ElasticsearchClient)
   }
 }
 
@@ -191,7 +192,9 @@ describe('session search CDC projection', () => {
     const { kafka, elasticsearch } = await boot()
     await kafka.deliver(event({ operation: 'update', before: row(), after: { ...row(), usage: 1 }, changedColumns: ['usage'] }))
     expect(elasticsearch.writes).toEqual([])
-    await kafka.deliver(event({ operation: 'update', before: row(), after: row(), changedColumns: undefined }))
+    const missingHint = event({ operation: 'update', before: row(), after: row() })
+    delete missingHint.changedColumns
+    await kafka.deliver(missingHint)
     expect(elasticsearch.writes).toHaveLength(1)
     elasticsearch.conflict = true
     await expect(kafka.deliver(event())).resolves.toBeUndefined()
