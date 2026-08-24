@@ -3196,6 +3196,7 @@ export interface Config {
 这些插件通过 `cordis.yml` 中不含 `config:` 块的条目加载；它们未声明任何配置接口。
 
 - `@deepseek-ai/dsh-account`（[`packages/identity/account/src/index.ts`](../packages/identity/account/src/index.ts)）
+- `@deepseek-ai/dsh-account-mysql` — 需要 `accounts` · `mysql`（[`packages/identity/account-mysql/src/index.ts`](../packages/identity/account-mysql/src/index.ts)）
 - `@deepseek-ai/dsh-agent`（[`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts)）
 - `@deepseek-ai/dsh-api-gateway` — 需要 `typert`（[`packages/api/gateway/src/index.ts`](../packages/api/gateway/src/index.ts)）
 - `@deepseek-ai/dsh-api-remotes`（[`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts)）
