@@ -210,10 +210,11 @@ describe('session CDC starter', () => {
 
   it('fail-stops and reports no payload when a poison event stops one subscription', async () => {
     const setup = await boot()
+    const starter = setup.ctx.sessionCdcStarter
     const poison = event({ schemaFingerprint: 'wrong-secret-value' })
     await expect(setup.kafka.deliver(CONFIG.redis.subscriptionId, poison)).rejects.toThrow()
     await vi.waitFor(() => { expect(setup.kafka.closed).toContain(CONFIG.elasticsearch.subscriptionId) })
-    expect(JSON.stringify(setup.ctx.sessionCdcStarter.health())).not.toContain('wrong-secret-value')
+    expect(JSON.stringify(starter.health())).not.toContain('wrong-secret-value')
   })
 
   it('registers Redis and Elasticsearch reconciler sinks while the application owns the source', async () => {

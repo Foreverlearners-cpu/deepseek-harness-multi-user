@@ -45,7 +45,7 @@ export interface Config {
   route: SessionCdcRouteConfig
   redis: SessionCdcRedisConfig
   elasticsearch: SessionCdcElasticsearchConfig
-  reconciler?: SessionCdcReconcilerConfig
+  reconciler?: SessionCdcReconcilerConfig | undefined
   monitorIntervalMs: number
 }
 
@@ -72,9 +72,12 @@ export const Config: z<Config> = z.object({
     schemaFingerprints: z.array(z.string().min(1)).required(),
     index: z.string().min(1).required(),
   }).required(),
-  reconciler: z.object({
-    maxBatchSize: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).required(),
-  }),
+  reconciler: z.union([
+    z.object({
+      maxBatchSize: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).required(),
+    }).required(),
+    z.const(undefined),
+  ]),
   monitorIntervalMs: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).required(),
 })
 
@@ -160,7 +163,11 @@ export class SessionCdcStarterService extends Service {
   async [Service.init](): Promise<void> {
     assertConfig(this.config)
     await this.ctx.plugin(KafkaEventsService)
-    this.kafkaEvents = this.ctx.kafkaEvents
+    const kafkaEvents = this.ctx.get('kafkaEvents')
+    if (kafkaEvents === undefined) {
+      throw new Error('session-cdc-starter: Kafka events service did not become active')
+    }
+    this.kafkaEvents = kafkaEvents
     await this.ctx.plugin(SearchConsumer, {
       ...this.config.route,
       ...this.config.elasticsearch,
@@ -171,7 +178,11 @@ export class SessionCdcStarterService extends Service {
     })
     if (this.config.reconciler !== undefined) {
       await this.ctx.plugin(SessionProjectionReconcilerService, this.config.reconciler)
-      this.reconciler = this.ctx.sessionProjectionReconciler
+      const reconciler = this.ctx.get('sessionProjectionReconciler')
+      if (reconciler === undefined) {
+        throw new Error('session-cdc-starter: projection reconciler service did not become active')
+      }
+      this.reconciler = reconciler
       this.registerReconcilerSinks(this.reconciler)
     }
     this.status = 'running'
