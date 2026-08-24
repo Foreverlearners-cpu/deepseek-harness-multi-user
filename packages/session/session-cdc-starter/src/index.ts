@@ -12,40 +12,59 @@ import z from '@deepseek-ai/schemastery'
 
 /** Shared authoritative CDC route. */
 export interface SessionCdcRouteConfig {
+  /** Kafka topic carrying authoritative session CDC events. */
   topic: string
+  /** Source database name accepted by the route. */
   database: string
+  /** Source table name accepted by the route. */
   table: string
+  /** Maximum encoded Kafka record size. */
   maxBytes: number
 }
 
 /** Redis consumer identity, offset fallback, and exact schema. */
 export interface SessionCdcRedisConfig {
+  /** Kafka consumer group used by the Redis projection. */
   groupId: string
+  /** Stable subscription identity used by the Redis projection. */
   subscriptionId: string
+  /** Offset fallback applied when no committed position exists. */
   fallbackMode: 'earliest' | 'latest' | 'fail'
+  /** Exact event schema accepted by the Redis projection. */
   schemaFingerprint: string
 }
 
 /** Elasticsearch consumer identity, offset fallback, accepted schemas, and index. */
 export interface SessionCdcElasticsearchConfig {
+  /** Kafka consumer group used by the search projection. */
   groupId: string
+  /** Stable subscription identity used by the search projection. */
   subscriptionId: string
+  /** Offset fallback applied when no committed position exists. */
   fallbackMode: 'earliest' | 'latest' | 'fail'
+  /** Event schema fingerprints accepted by the search projection. */
   schemaFingerprints: string[]
+  /** Elasticsearch index receiving projected session messages. */
   index: string
 }
 
 /** Optional operator-triggered reconciliation service configuration. */
 export interface SessionCdcReconcilerConfig {
+  /** Maximum records processed by one reconciliation request. */
   maxBatchSize: number
 }
 
 /** Complete starter configuration with explicit deployment-owned values. */
 export interface Config {
+  /** Shared authoritative CDC route. */
   route: SessionCdcRouteConfig
+  /** Redis projection consumer configuration. */
   redis: SessionCdcRedisConfig
+  /** Elasticsearch projection consumer configuration. */
   elasticsearch: SessionCdcElasticsearchConfig
+  /** Optional operator-triggered reconciliation configuration. */
   reconciler?: SessionCdcReconcilerConfig | undefined
+  /** Interval between aggregate consumer health checks. */
   monitorIntervalMs: number
 }
 

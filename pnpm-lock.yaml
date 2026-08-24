@@ -4945,6 +4945,54 @@ importers:
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
 
+  packages/identity/account:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-auth-password':
+        specifier: workspace:^
+        version: link:../auth-password
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+      '@deepseek-ai/dsh-user-credential':
+        specifier: workspace:^
+        version: link:../user-credential
+
+  packages/identity/account-mysql:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-account':
+        specifier: workspace:^
+        version: link:../account
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@22.20.0)
+
   packages/identity/anonymous-user-id:
     devDependencies:
       '@deepseek-ai/cordis':
@@ -4971,6 +5019,225 @@ importers:
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+
+  packages/identity/auth-gateway:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-account':
+        specifier: workspace:^
+        version: link:../account
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-auth-jwt':
+        specifier: workspace:^
+        version: link:../auth-jwt
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+
+  packages/identity/auth-jwt:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      jose:
+        specifier: ^6.2.3
+        version: 6.2.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-auth-token':
+        specifier: workspace:^
+        version: link:../auth-token
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+
+  packages/identity/auth-password:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-user-credential':
+        specifier: workspace:^
+        version: link:../user-credential
+
+  packages/identity/auth-starter:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-account':
+        specifier: workspace:^
+        version: link:../account
+      '@deepseek-ai/dsh-account-mysql':
+        specifier: workspace:^
+        version: link:../account-mysql
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-auth-gateway':
+        specifier: workspace:^
+        version: link:../auth-gateway
+      '@deepseek-ai/dsh-auth-jwt':
+        specifier: workspace:^
+        version: link:../auth-jwt
+      '@deepseek-ai/dsh-auth-password':
+        specifier: workspace:^
+        version: link:../auth-password
+      '@deepseek-ai/dsh-auth-token':
+        specifier: workspace:^
+        version: link:../auth-token
+      '@deepseek-ai/dsh-auth-token-mysql':
+        specifier: workspace:^
+        version: link:../auth-token-mysql
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+      '@deepseek-ai/dsh-user-credential':
+        specifier: workspace:^
+        version: link:../user-credential
+      '@deepseek-ai/dsh-user-credential-mysql':
+        specifier: workspace:^
+        version: link:../user-credential-mysql
+      '@deepseek-ai/dsh-user-mysql':
+        specifier: workspace:^
+        version: link:../user-mysql
+
+  packages/identity/auth-token:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+
+  packages/identity/auth-token-mysql:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-auth-token':
+        specifier: workspace:^
+        version: link:../auth-token
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@22.20.0)
+
+  packages/identity/user:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+
+  packages/identity/user-credential:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+
+  packages/identity/user-credential-mysql:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      '@deepseek-ai/dsh-user-credential':
+        specifier: workspace:^
+        version: link:../user-credential
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@22.20.0)
+
+  packages/identity/user-mysql:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@22.20.0)
 
   packages/interaction/commands:
     dependencies:

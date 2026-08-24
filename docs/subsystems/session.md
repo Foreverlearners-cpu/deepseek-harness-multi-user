@@ -626,7 +626,7 @@ Supervised owner of the complete live CDC projection composition.
 health(): SessionCdcStarterHealth
 ```
 
-Source: [`packages/session/session-cdc-starter/src/index.ts:150`](../../packages/session/session-cdc-starter/src/index.ts)
+Source: [`packages/session/session-cdc-starter/src/index.ts:169`](../../packages/session/session-cdc-starter/src/index.ts)
 
 <a id="ctxsessions--sessionstore"></a>
 

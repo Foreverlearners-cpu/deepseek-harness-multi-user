@@ -38,6 +38,11 @@ flowchart LR
   pkg_cdc["cdc"]
   pkg_cdc_redis["cdc-redis"]
   pkg_cdc_elasticsearch["cdc-elasticsearch"]
+  pkg_kafka_events["kafka-events"]
+  svc_kafkaEvents["ctx.kafkaEvents<br/>Typed Kafka event runners"]
+  pkg_session_cache_invalidation_redis["session-cache-invalidation-redis"]
+  pkg_session_search_projection_elasticsearch["session-search-projection-elasticsearch"]
+  pkg_session_cdc_starter["session-cdc-starter"]
   svc_cdc["ctx.cdc<br/>MySQL row-change capture"]
   pkg_typert_registry["typert-registry"]
   svc_typert["ctx.typert<br/>Runtime type registry"]
@@ -50,6 +55,9 @@ flowchart LR
   pkg_tool_bash["tool-bash"]
   pkg_hooks_claude_code["hooks-claude-code"]
   pkg_hooks_codex["hooks-codex"]
+  svc_sessionCdcStarter["ctx.sessionCdcStarter<br/>Supervised session CDC composition"]
+  pkg_session_projection_reconciler["session-projection-reconciler"]
+  svc_sessionProjectionReconciler["ctx.sessionProjectionReconciler<br/>Authoritative session projection rebuilding"]
   pkg_mysql["mysql"]
   svc_mysql["ctx.mysql<br/>MySQL connection infrastructure"]
   pkg_settings["settings"]
@@ -61,6 +69,19 @@ flowchart LR
   pkg_credentials_local["credentials-local"]
   pkg_auth["auth"]
   svc_auth["ctx.auth<br/>Host authentication runtime"]
+  pkg_auth_password["auth-password"]
+  pkg_auth_jwt["auth-jwt"]
+  pkg_account["account"]
+  pkg_auth_gateway["auth-gateway"]
+  svc_authGateway["ctx.authGateway<br/>Transport-neutral authentication gateway"]
+  svc_accounts["ctx.accounts<br/>Host account orchestration"]
+  svc_accountAdministration["ctx.accountAdministration<br/>Authorized account administration"]
+  pkg_auth_token["auth-token"]
+  svc_authTokens["ctx.authTokens<br/>Opaque refresh-token family seam"]
+  pkg_user["user"]
+  svc_users["ctx.users<br/>Human user directory seam"]
+  pkg_user_credential["user-credential"]
+  svc_userCredentials["ctx.userCredentials<br/>User login credential seam"]
   pkg_session_telemetry["session-telemetry"]
   svc_sessionTelemetry["ctx.sessionTelemetry<br/>Session telemetry seam"]
   pkg_session_telemetry_otel["session-telemetry-otel"]
@@ -207,6 +228,8 @@ flowchart LR
   pkg_cordis_host_runner["cordis-host-runner"]
   svc_dynamicCordisRunner["ctx.dynamicCordisRunner<br/>Dynamic Cordis package host runner"]
   svc_cordisInspect["ctx.cordisInspect<br/>Dynamic Cordis inspect registry"]
+  pkg_account --> svc_accountAdministration
+  pkg_account --> svc_accounts
   pkg_acp --> svc_approval
   pkg_agent --> svc_agents
   pkg_agent_default_model --> svc_agentDefaultModel
@@ -218,6 +241,10 @@ flowchart LR
   pkg_attachment --> svc_attachments
   pkg_attachment_local --> svc_attachments
   pkg_auth --> svc_auth
+  pkg_auth_gateway --> svc_authGateway
+  pkg_auth_jwt --> svc_auth
+  pkg_auth_password --> svc_auth
+  pkg_auth_token --> svc_authTokens
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
   pkg_cdc --> svc_cdc
@@ -245,6 +272,7 @@ flowchart LR
   pkg_jobs --> svc_jobs
   pkg_jobs_local --> svc_jobs
   pkg_kafka --> svc_kafka
+  pkg_kafka_events --> svc_kafkaEvents
   pkg_llm --> svc_llm
   pkg_llm_deepseek --> svc_llm
   pkg_llm_pi_ai --> svc_llm
@@ -262,11 +290,13 @@ flowchart LR
   pkg_sandbox_local --> svc_sandbox
   pkg_sandbox_policy --> svc_sandboxPolicy
   pkg_session --> svc_sessions
+  pkg_session_cdc_starter --> svc_sessionCdcStarter
   pkg_session_persistence --> svc_sessionPersistence
   pkg_session_persistence_jsonl --> svc_sessionPersistence
   pkg_session_persistence_sqlite --> svc_sessionPersistence
   pkg_session_projection --> svc_sessionProjections
   pkg_session_projection_cache --> svc_sessionProjectionCache
+  pkg_session_projection_reconciler --> svc_sessionProjectionReconciler
   pkg_session_query --> svc_sessionQuery
   pkg_session_query_sqlite --> svc_sessionQuery
   pkg_session_reference --> svc_sessionReferenceResolver
@@ -304,6 +334,8 @@ flowchart LR
   pkg_token_meter --> svc_tokenMeter
   pkg_tools --> svc_tools
   pkg_typert_registry --> svc_typert
+  pkg_user --> svc_users
+  pkg_user_credential --> svc_userCredentials
   pkg_user_questions --> svc_userQuestions
   pkg_web --> svc_web
   pkg_web_fetch_http --> svc_web
@@ -325,6 +357,8 @@ flowchart LR
   svc_approval --> pkg_tools
   svc_attachments --> pkg_host_runtime
   svc_attachments --> pkg_llm_pi_ai
+  svc_auth --> pkg_account
+  svc_authTokens --> pkg_auth_jwt
   svc_clientModules --> pkg_hmr
   svc_codeRuntime --> pkg_tools
   svc_compaction --> pkg_compaction_basic
@@ -349,6 +383,10 @@ flowchart LR
   svc_kafka --> pkg_cdc
   svc_kafka --> pkg_cdc_elasticsearch
   svc_kafka --> pkg_cdc_redis
+  svc_kafka --> pkg_kafka_events
+  svc_kafkaEvents --> pkg_session_cache_invalidation_redis
+  svc_kafkaEvents --> pkg_session_cdc_starter
+  svc_kafkaEvents --> pkg_session_search_projection_elasticsearch
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
@@ -366,6 +404,7 @@ flowchart LR
   svc_sessionPersistence --> pkg_session_query_sqlite
   svc_sessionPersistence --> pkg_tool_bash
   svc_sessionProjectionCache --> pkg_host_apiproxy
+  svc_sessionProjectionReconciler --> pkg_session_cdc_starter
   svc_sessionProjections --> pkg_host_apiproxy
   svc_sessionProjections --> pkg_session_title
   svc_sessionProjections --> pkg_tool_todo
@@ -423,7 +462,11 @@ flowchart LR
   svc_tools --> pkg_tool_web
   svc_typert --> pkg_api_gateway
   svc_typert --> pkg_typert_loader
+  svc_userCredentials --> pkg_account
+  svc_userCredentials --> pkg_auth_password
   svc_userQuestions --> pkg_tool_ask_user
+  svc_users --> pkg_account
+  svc_users --> pkg_auth_jwt
   svc_web --> pkg_tool_web
   svc_webServer --> pkg_connection
   svc_webServer --> pkg_hmr
@@ -442,15 +485,24 @@ flowchart LR
 | `ctx.toolResultPruner` | `core` | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Rewrites oversized current tool results through replayable single-node surface replacements before summary compaction. |
 | `ctx.sessions` | `core` | [`session`](../packages/core/session) | - | [`agent-loop`](../packages/core/agent-loop), [`agent`](../packages/core/agent), [`session-persistence`](../packages/session/session-persistence), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), `subagent-inprocess`, [`invariants`](../packages/runtime-diagnostics/invariants), [`message-feedback`](../packages/feedback/message-feedback) | - | Owns append-only Session instances and emits the durable session event feed. |
 | `ctx.invariants` | `core` | [`invariants`](../packages/runtime-diagnostics/invariants) | - | [`session`](../packages/core/session), [`agent`](../packages/core/agent), [`scope`](../packages/core/scope), [`agent-loop`](../packages/core/agent-loop) | - | Companion subpaths register owner-local checks; the service owns selection, uniqueness, child fibers, and package-attributed failures. |
-| `ctx.kafka` | `core` | [`kafka`](../packages/multi/kafka) | - | [`cdc`](../packages/multi/cdc), [`cdc-redis`](../packages/multi/cdc-redis), [`cdc-elasticsearch`](../packages/multi/cdc-elasticsearch) | - | Owns one named Admin client, startup metadata verification, bounded health metadata, classified failures, and scoped shutdown; producer and consumer operations are deferred. |
+| `ctx.kafka` | `core` | [`kafka`](../packages/multi/kafka) | - | [`cdc`](../packages/multi/cdc), [`cdc-redis`](../packages/multi/cdc-redis), [`cdc-elasticsearch`](../packages/multi/cdc-elasticsearch), [`kafka-events`](../packages/multi/kafka-events) | - | Owns one named Admin client, startup metadata verification, bounded health metadata, classified failures, and scoped shutdown; producer and consumer operations are deferred. |
+| `ctx.kafkaEvents` | `core` | [`kafka-events`](../packages/multi/kafka-events) | - | [`session-cache-invalidation-redis`](../packages/session/session-cache-invalidation-redis), [`session-search-projection-elasticsearch`](../packages/session/session-search-projection-elasticsearch), [`session-cdc-starter`](../packages/session/session-cdc-starter) | - | Creates typed producers and scope-owned sequential consumers over ctx.kafka; domain codecs, routing, filtering, retries, and idempotence remain consumer-owned. |
 | `ctx.cdc` | `core` | [`cdc`](../packages/multi/cdc) | - | - | - | Captures configured MySQL row changes and publishes versioned events to Kafka; downstream projections consume the Kafka stream independently. |
 | `ctx.typert` | `core` | [`typert-registry`](../packages/typert/registry) | - | [`typert-loader`](../packages/typert/loader), [`api-gateway`](../packages/api/gateway) | - | Plugins register live zod contributions directly or through dsh-typert-loader; the API gateway consumes invocation descriptors and providers, while other runtime consumers query schemas and reflection metadata at their own edges. |
 | `ctx.typertGateway` | `core` | [`api-gateway`](../packages/api/gateway) | - | - | - | Associates generated Remote descriptors with live Cordis services, resolves registered identities, and exposes unary calls through the shared Connection RPC carrier. |
 | `ctx.sessionPersistence` | `seam` | [`session-persistence`](../packages/session/session-persistence) | [`session-persistence-jsonl`](../packages/session/session-persistence-jsonl), [`session-persistence-sqlite`](../packages/session/session-persistence-sqlite) | [`agent-loop`](../packages/core/agent-loop), [`tool-bash`](../packages/shell/tool-bash), [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`hooks-codex`](../packages/hooks/hooks-codex), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), [`message-feedback`](../packages/feedback/message-feedback) | - | Backends persist the same SessionEvent vocabulary; apps choose a backend at composition time. |
+| `ctx.sessionCdcStarter` | `bundle` | [`session-cdc-starter`](../packages/session/session-cdc-starter) | - | - | - | Mounts and supervises the typed Kafka event service plus Redis and Elasticsearch session consumers, and optionally mounts projection reconciliation with both sinks. |
+| `ctx.sessionProjectionReconciler` | `core` | [`session-projection-reconciler`](../packages/session/session-projection-reconciler) | - | [`session-cdc-starter`](../packages/session/session-cdc-starter) | - | Runs one operator-triggered, resumable rebuild from an application-registered authoritative source through named idempotent sinks without consuming Kafka or adding a cross-sink transaction. |
 | `ctx.mysql` | `core` | [`mysql`](../packages/multi/mysql) | - | - | - | The package combines the service definition and mysql2 pool provider; domain persistence consumers remain separate packages. |
 | `ctx.settings` | `seam` | [`settings`](../packages/settings/settings) | [`settings-file`](../packages/settings/settings-file) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | Plugins register namespace schemas and resolve layered values; providers store the raw document. The LLM adapters register their entry config as the composition base under the user section; the web gateway serves redacted layered descriptors and writes the user layer. |
 | `ctx.credentials` | `seam` | [`credentials`](../packages/credentials/credentials) | [`credentials-local`](../packages/credentials/credentials-local) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the web gateway exposes value-free views and write-only storage. |
-| `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | - | - | - | Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations. |
+| `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | [`auth-password`](../packages/identity/auth-password), [`auth-jwt`](../packages/identity/auth-jwt) | [`account`](../packages/identity/account) | - | Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations. |
+| `ctx.authGateway` | `core` | [`auth-gateway`](../packages/identity/auth-gateway) | - | - | - | Enforces bounded HTTP and WebSocket credential carriers, browser refresh CSRF, transport-safe errors, and current-call validation before public account operations. |
+| `ctx.accounts` | `core` | [`account`](../packages/identity/account) | - | - | - | Coordinates durable registration, login, and self-service across user, password-credential, and JWT lifecycle services while preserving revision and credential-state fences. |
+| `ctx.accountAdministration` | `core` | [`account`](../packages/identity/account) | - | - | - | Exposes administrator account mutations only after one explicit AccountAdminAuthorizer approves the exact actor, action, and target; missing or rejecting policy fails closed. |
+| `ctx.authTokens` | `seam` | [`auth-token`](../packages/identity/auth-token) | - | [`auth-jwt`](../packages/identity/auth-jwt) | - | Generates opaque refresh secrets, gives Providers only digests, and defines atomic rotation, reuse-triggered family revocation, safe inspection, and targeted revocation. |
+| `ctx.users` | `seam` | [`user`](../packages/identity/user) | - | [`account`](../packages/identity/account), [`auth-jwt`](../packages/identity/auth-jwt) | - | Defines stable human user records, lifecycle transitions, optimistic revisions, bounded pages, and sanitized commit events; persistence and credential providers remain separate. |
+| `ctx.userCredentials` | `seam` | [`user-credential`](../packages/identity/user-credential) | - | [`account`](../packages/identity/account), [`auth-password`](../packages/identity/auth-password) | - | Defines login identifier normalization and lookup, password verification, aggregate optimistic revisions, and sanitized commit events; verifier storage remains Provider-private. |
 | `ctx.sessionTelemetry` | `seam` | [`session-telemetry`](../packages/session/session-telemetry) | [`session-telemetry-otel`](../packages/session/session-telemetry-otel) | - | - | The seam captures, redacts, and hands session records to one backend; nothing else consumes the service — its output leaves the process. |
 | `ctx.storage` | `seam` | [`storage`](../packages/storage/storage) | [`storage-json`](../packages/storage/storage-json), [`storage-sqlite`](../packages/storage/storage-sqlite) | [`storage-domain`](../packages/storage/storage-domain) | - | Backends register side by side under names; data forms (domain first) mount on the hub and translate typed operations into opaque KV-unit primitives. |
 | `ctx.storageDomain` | `core` | [`storage-domain`](../packages/storage/storage-domain) | - | [`workspace`](../packages/workspace/workspace), [`message-feedback`](../packages/feedback/message-feedback) | - | Waits for every configured backend, then publishes the domain form as one lifecycle-bound service for typed durable state. |

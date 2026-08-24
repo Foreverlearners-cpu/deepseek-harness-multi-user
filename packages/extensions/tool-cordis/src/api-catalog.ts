@@ -82,6 +82,7 @@ export interface TypeApiEntry {
 /** Service keys omitted from every model-facing runtime inspection. */
 export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
   'auth',
+  'authTokens',
   'cdc',
   'cordisInspect',
   'dynamicCordisRunner',
@@ -96,6 +97,100 @@ export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
 
 /** Every harness `ctx.<key>` service, sorted by key. */
 export const SERVICE_API: readonly ServiceApiEntry[] = [
+  {
+    key: 'accountAdministration',
+    summary: 'Explicit administrator capability guarded by one fail-closed authorizer.',
+    description: 'Explicit administrator capability guarded by one fail-closed authorizer.',
+    methods: [
+      {
+        signature: 'readonly authorizers: AccountAdminAuthorizerRegistry = new AccountAdminAuthorizerRegistry()',
+        description: 'Sole administrator authorization Provider registry.',
+        parameters: [],
+      },
+      {
+        signature: 'async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord>',
+        description: 'Create an account after explicit administrator authorization.',
+        parameters: [{ name: 'request', description: 'actor and registration input.' }],
+        returns: 'committed account record.',
+      },
+      {
+        signature: 'async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord>',
+        description: 'Update a target after explicit administrator authorization.',
+        parameters: [{ name: 'request', description: 'actor, target, revision, and patch.' }],
+        returns: 'committed target record.',
+      },
+      {
+        signature: 'async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord>',
+        description: 'Disable a target after explicit administrator authorization.',
+        parameters: [{ name: 'request', description: 'actor, target, revision, and lifecycle.' }],
+        returns: 'committed disabled target.',
+      },
+      {
+        signature: 'async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord>',
+        description: 'Enable a target after explicit administrator authorization.',
+        parameters: [{ name: 'request', description: 'actor, target, revision, and lifecycle.' }],
+        returns: 'committed active target.',
+      },
+      {
+        signature: 'async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord>',
+        description: 'Reset a target password after explicit administrator authorization.',
+        parameters: [{ name: 'request', description: 'actor, target, revision, and new password.' }],
+        returns: 'committed credential metadata.',
+      },
+      {
+        signature: 'async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void>',
+        description: 'Revoke target sessions after explicit administrator authorization.',
+        parameters: [{ name: 'request', description: 'actor, target, and lifecycle.' }],
+      },
+    ],
+  },
+  {
+    key: 'accounts',
+    summary: 'Coordinates users, credentials, authentication, and JWT lifecycle operations.',
+    description: 'Coordinates users, credentials, authentication, and JWT lifecycle operations.',
+    methods: [
+      {
+        signature: 'readonly registrationOperations: RegistrationOperationProviderRegistry = new RegistrationOperationProviderRegistry()',
+        description: 'Durable registration operation Provider registry.',
+        parameters: [],
+      },
+      {
+        signature: 'async register(request: AccountRegistrationInput): Promise<UserRecord>',
+        description: 'Idempotently register one active account.',
+        parameters: [{ name: 'request', description: 'profile, identifier, secret, and operation lifecycle.' }],
+        returns: 'the same committed user for every completed retry.',
+      },
+      {
+        signature: 'async login(request: AccountLoginRequest): Promise<AccountSessionResult>',
+        description: 'Authenticate a password, require an active user, and issue a JWT pair.',
+        parameters: [{ name: 'request', description: 'trusted transport login request.' }],
+        returns: 'active user plus newly issued credentials.',
+      },
+      {
+        signature: 'async refresh(request: AccountRefreshRequest): Promise<IssuedCredentialSet>',
+        description: 'Rotate a JWT refresh credential.',
+        parameters: [{ name: 'request', description: 'refresh secret and operation lifecycle.' }],
+        returns: 'replacement access and refresh credentials.',
+      },
+      {
+        signature: 'async logout(call: AuthenticatedCall): Promise<void>',
+        description: 'Revoke every JWT session owned by the current user.',
+        parameters: [{ name: 'call', description: 'exact current authenticated call.' }],
+      },
+      {
+        signature: 'async updateProfile(request: AccountProfileUpdateRequest): Promise<UserRecord>',
+        description: 'Update the current user\'s profile with optimistic concurrency.',
+        parameters: [{ name: 'request', description: 'current call, expected revision, and profile patch.' }],
+        returns: 'committed user record.',
+      },
+      {
+        signature: 'async changePassword(request: AccountPasswordChangeRequest): Promise<UserCredentialRecord>',
+        description: 'Change the current user\'s password and revoke all existing JWT sessions.',
+        parameters: [{ name: 'request', description: 'current call, revision, old/new secrets, and lifecycle.' }],
+        returns: 'committed non-secret credential metadata.',
+      },
+    ],
+  },
   {
     key: 'agentDefaultModel',
     summary: 'Owns the default model selection independently of any Host or transport.',
@@ -396,6 +491,55 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'ref', description: 'durable reference from the session log.' }, { name: 'signal', description: 'optional cancellation for backend read and verification work.' }],
         returns: 'the verified bytes and canonical reference.',
         throws: ['the signal reason when aborted, or a storage error when verification fails.'],
+      },
+    ],
+  },
+  {
+    key: 'authGateway',
+    summary: 'Extracts bounded credentials and delegates only public account operations.',
+    description: 'Extracts bounded credentials and delegates only public account operations.',
+    methods: [
+      {
+        signature: 'async authenticateHttp(request: GatewayHttpAuthenticationRequest): Promise<AuthenticatedCall>',
+        description: 'Authenticate one HTTP access carrier.',
+        parameters: [{ name: 'request', description: 'structured headers, cookies, query, and lifecycle.' }],
+        returns: 'Host-only call minted by the active authentication Provider.',
+      },
+      {
+        signature: 'async authenticateWebSocket(request: GatewayWebSocketAuthenticationRequest): Promise<GatewayWebSocketAuthenticationResult>',
+        description: 'Authenticate one WebSocket handshake without retaining raw carrier input.',
+        parameters: [{ name: 'request', description: 'structured handshake fields and lifecycle.' }],
+        returns: 'Host-only call minted for the WebSocket channel.',
+      },
+      {
+        signature: 'async register(request: GatewayRegistrationRequest): Promise<UserRecord>',
+        description: 'Register an account without issuing credentials.',
+        parameters: [{ name: 'request', description: 'bounded profile, password, and lifecycle input.' }],
+        returns: 'committed user record.',
+      },
+      {
+        signature: 'async login(request: GatewayLoginRequest): Promise<GatewaySessionResult>',
+        description: 'Password-login and place refresh material in an HttpOnly cookie.',
+        parameters: [{ name: 'request', description: 'bounded login body and lifecycle input.' }],
+        returns: 'user, access token, and cookie directives.',
+      },
+      {
+        signature: 'async refresh(request: GatewayRequest): Promise<GatewaySessionResult>',
+        description: 'Rotate the refresh cookie after Origin and double-submit CSRF checks.',
+        parameters: [{ name: 'request', description: 'structured browser request and lifecycle.' }],
+        returns: 'replacement access token and cookie directives.',
+      },
+      {
+        signature: 'async logout(request: GatewayHttpAuthenticationRequest): Promise<GatewayLogoutResult>',
+        description: 'Authenticate and revoke the current user\'s sessions.',
+        parameters: [{ name: 'request', description: 'HTTP bearer request and lifecycle.' }],
+        returns: 'cookie clearing directives.',
+      },
+      {
+        signature: 'guard<T>(call: AuthenticatedCall, handler: (current: AuthenticatedCall) => T | Promise<T>): T | Promise<T>',
+        description: 'Revalidate an authenticated call immediately before protected handler use.',
+        parameters: [{ name: 'call', description: 'exact Host-only call returned by this gateway.' }, { name: 'handler', description: 'protected operation that receives only the current call.' }],
+        returns: 'handler result.',
       },
     ],
   },
@@ -2025,6 +2169,73 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'userCredentials',
+    summary: 'Abstract credential service.',
+    description: 'Abstract credential service. Providers own normalization, uniqueness, verifier storage, dummy verification, and atomic revision checks.',
+    methods: [
+      {
+        signature: 'async normalize(input: LoginIdentifierInput): Promise<LoginIdentifier>',
+        description: 'Normalize one raw login identifier.',
+        parameters: [{ name: 'input', description: 'extensible kind and raw value.' }],
+        returns: 'immutable canonical identifier.',
+      },
+      {
+        signature: 'async get(userId: UserId): Promise<UserCredentialRecord | undefined>',
+        description: 'Read detached non-secret metadata for one user.',
+        parameters: [{ name: 'userId', description: 'stable target user id.' }],
+        returns: 'immutable metadata, or undefined when no aggregate exists.',
+      },
+      {
+        signature: 'async resolve(input: LoginIdentifierInput): Promise<UserId | undefined>',
+        description: 'Resolve a raw login identifier to its user, or undefined.',
+        parameters: [{ name: 'input', description: 'extensible kind and raw value.' }],
+        returns: 'stable user id, or undefined when no identifier matches.',
+      },
+      {
+        signature: 'list(userId: UserId): Promise<UserCredentialRecord | undefined>',
+        description: 'List login identifiers and password-state metadata for one user.',
+        parameters: [{ name: 'userId', description: 'stable target user id.' }],
+        returns: 'immutable metadata, or undefined when no aggregate exists.',
+      },
+      {
+        signature: 'async addIdentifier(request: AddLoginIdentifierRequest): Promise<UserCredentialRecord>',
+        description: 'Add one globally unique normalized login identifier.',
+        parameters: [{ name: 'request', description: 'target, revision, raw identifier, and audit context.' }],
+        returns: 'immutable committed metadata.',
+      },
+      {
+        signature: 'async removeIdentifier(request: RemoveLoginIdentifierRequest): Promise<UserCredentialRecord>',
+        description: 'Remove one normalized login identifier.',
+        parameters: [{ name: 'request', description: 'target, revision, raw identifier, and audit context.' }],
+        returns: 'immutable committed metadata.',
+      },
+      {
+        signature: 'async setPassword(request: SetPasswordRequest): Promise<UserCredentialRecord>',
+        description: 'Establish or administratively replace a password.',
+        parameters: [{ name: 'request', description: 'target, revision, new password, and audit context.' }],
+        returns: 'immutable committed metadata without password material.',
+      },
+      {
+        signature: 'async changePassword(request: ChangePasswordRequest): Promise<UserCredentialRecord>',
+        description: 'Atomically verify the current password and replace it.',
+        parameters: [{ name: 'request', description: 'target, revision, current and new passwords, and audit context.' }],
+        returns: 'immutable committed metadata without password material.',
+      },
+      {
+        signature: 'async disablePassword(request: DisablePasswordRequest): Promise<UserCredentialRecord>',
+        description: 'Disable password login without exposing or returning verifier material.',
+        parameters: [{ name: 'request', description: 'target, revision, and audit context.' }],
+        returns: 'immutable committed metadata with password login disabled.',
+      },
+      {
+        signature: 'async verifyPassword(request: VerifyPasswordRequest): Promise<boolean>',
+        description: 'Verify a password with an enumeration-resistant boolean result.',
+        parameters: [{ name: 'request', description: 'resolved target when present and candidate password.' }],
+        returns: 'true only for a matching enabled password; otherwise false.',
+      },
+    ],
+  },
+  {
     key: 'userQuestions',
     summary: '`ctx.userQuestions`: one active UI provider plus an `ask()` API.',
     description: '`ctx.userQuestions`: one active UI provider plus an `ask()` API.',
@@ -2041,6 +2252,61 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'request', description: 'Questions, owner agent, and abort signal.' }],
         returns: 'The answer chosen or typed by the human.',
         throws: ['{UserQuestionError} code `CALLER_NOT_LIVE` when a supplied agent is not the registry\'s exact live instance, or `DELEGATED_CALLER` when that live agent is owned by another agent.'],
+      },
+    ],
+  },
+  {
+    key: 'users',
+    summary: 'Abstract user directory.',
+    description: 'Abstract user directory. Providers own durable records and atomic revision checks; this base owns validation, stable failures, detached results, and post-commit events.',
+    methods: [
+      {
+        signature: 'async create(input: UserCreateInput = {}): Promise<UserRecord>',
+        description: 'Create one active user with a Provider-generated stable id.',
+        parameters: [{ name: 'input', description: 'optional profile and trusted operation metadata.' }],
+        returns: 'immutable committed user record.',
+      },
+      {
+        signature: 'async get(id: UserId): Promise<UserRecord | undefined>',
+        description: 'Get one current user record.',
+        parameters: [{ name: 'id', description: 'stable user identity.' }],
+        returns: 'immutable record, or undefined when absent.',
+      },
+      {
+        signature: 'async requireActive(id: UserId): Promise<UserRecord>',
+        description: 'Require that one user exists and is currently active.',
+        parameters: [{ name: 'id', description: 'stable user identity.' }],
+        returns: 'immutable active user record.',
+      },
+      {
+        signature: 'async update(request: UserUpdateRequest): Promise<UserRecord>',
+        description: 'Update mutable profile fields using optimistic concurrency.',
+        parameters: [{ name: 'request', description: 'target id, expected revision, patch, and operation metadata.' }],
+        returns: 'immutable committed user record.',
+      },
+      {
+        signature: 'disable(request: UserStatusRequest): Promise<UserRecord>',
+        description: 'Disable one active user using optimistic concurrency.',
+        parameters: [{ name: 'request', description: 'target id, expected revision, and operation metadata.' }],
+        returns: 'immutable disabled user record.',
+      },
+      {
+        signature: 'enable(request: UserStatusRequest): Promise<UserRecord>',
+        description: 'Enable one disabled user using optimistic concurrency.',
+        parameters: [{ name: 'request', description: 'target id, expected revision, and operation metadata.' }],
+        returns: 'immutable active user record.',
+      },
+      {
+        signature: 'delete(request: UserStatusRequest): Promise<UserRecord>',
+        description: 'Soft-delete one active or disabled user using optimistic concurrency.',
+        parameters: [{ name: 'request', description: 'target id, expected revision, and operation metadata.' }],
+        returns: 'immutable terminal user record.',
+      },
+      {
+        signature: 'async list(query: UserListQuery = {}): Promise<UserPage>',
+        description: 'List one bounded page of current users.',
+        parameters: [{ name: 'query', description: 'optional status, limit, and opaque cursor.' }],
+        returns: 'immutable page and optional continuation cursor.',
       },
     ],
   },
@@ -2179,6 +2445,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
 /** Every harness event, sorted by name. */
 export const EVENT_API: readonly EventApiEntry[] = [
   {
+    name: 'account/changed',
+    mode: 'emit',
+    signature: '\'account/changed\'(event: AccountChangeEvent): void',
+    summary: 'Completed account orchestration fact without credential material.',
+    description: 'Completed account orchestration fact without credential material.',
+    parameters: [{ name: 'event', description: 'sanitized account operation safe for audit listeners.' }],
+  },
+  {
     name: 'agent-loop/config-start-failed',
     mode: 'emit',
     signature: '\'agent-loop/config-start-failed\'(payload: { sessionId: SessionId; error: unknown }): void',
@@ -2297,6 +2571,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Ask composed answerers for one decision.',
     description: 'Ask composed answerers for one decision. Return an outcome to claim the request or call `next()`; failure yields the fail-closed default. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.',
     parameters: [{ name: 'req', description: 'the pending decision (agent, tool identity, reason, signal).' }],
+  },
+  {
+    name: 'auth-token/changed',
+    mode: 'emit',
+    signature: '\'auth-token/changed\'(event: AuthTokenChangeEvent): void',
+    summary: 'Committed token-family change without refresh secrets or digests.',
+    description: 'Committed token-family change without refresh secrets or digests.',
+    parameters: [{ name: 'event', description: 'sanitized lifecycle fact safe for trusted audit listeners.' }],
   },
   {
     name: 'auth/result',
@@ -2587,6 +2869,22 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'exec', description: 'the execution object that traversed the pipeline.' }, { name: 'result', description: 'a deep-frozen snapshot of the final returned result.' }],
   },
   {
+    name: 'user-credential/changed',
+    mode: 'emit',
+    signature: '\'user-credential/changed\'(event: UserCredentialChangeEvent): void',
+    summary: 'Committed credential metadata change without identifiers or password material.',
+    description: 'Committed credential metadata change without identifiers or password material.',
+    parameters: [{ name: 'event', description: 'sanitized fact safe for trusted audit listeners.' }],
+  },
+  {
+    name: 'user/changed',
+    mode: 'emit',
+    signature: '\'user/changed\'(event: UserChangeEvent): void',
+    summary: 'Committed user-directory change without profile or credential data.',
+    description: 'Committed user-directory change without profile or credential data.',
+    parameters: [{ name: 'event', description: 'sanitized lifecycle fact safe for trusted audit listeners.' }],
+  },
+  {
     name: 'workflow/agent-end',
     mode: 'emit',
     signature: '\'workflow/agent-end\'(info: WorkflowRunInfo, agent: WorkflowAgentEndInfo): void',
@@ -2639,8 +2937,84 @@ export const EVENT_API: readonly EventApiEntry[] = [
 /** Shapes of every exported type the Service and Event signatures reference (transitively), sorted by name. */
 export const TYPE_API: readonly TypeApiEntry[] = [
   {
+    name: 'AccountAdminAction',
+    declaration: 'export type AccountAdminAction = \'create\' | \'update\' | \'disable\' | \'enable\' | \'reset-password\' | \'revoke-sessions\';',
+  },
+  {
+    name: 'AccountAdminAuthorizationRequest',
+    declaration: 'export interface AccountAdminAuthorizationRequest {\n    readonly actor: AuthenticatedCall;\n    readonly action: AccountAdminAction;\n    readonly target?: UserId;\n}',
+  },
+  {
+    name: 'AccountAdminAuthorizer',
+    declaration: 'export interface AccountAdminAuthorizer {\n    authorize(request: AccountAdminAuthorizationRequest): Promise<void>;\n}',
+  },
+  {
+    name: 'AccountAdminAuthorizerRegistry',
+    declaration: 'export class AccountAdminAuthorizerRegistry {\n    register(provider: AccountAdminAuthorizer): () => void;\n    async authorize(actor: AuthenticatedCall, action: AccountAdminAction, target?: UserId): Promise<void>;\n}',
+  },
+  {
+    name: 'AccountChangeEvent',
+    declaration: 'export interface AccountChangeEvent {\n    readonly kind: \'registered\' | \'logged-in\' | \'logged-out\' | \'profile-updated\' | \'password-changed\' | \'admin-created\' | \'admin-updated\' | \'admin-disabled\' | \'admin-enabled\' | \'admin-password-reset\' | \'admin-sessions-revoked\';\n    readonly requestId: AuthenticationRequestId;\n    readonly userId: UserId;\n    readonly actorUserId?: UserId;\n    readonly time: number;\n}',
+  },
+  {
+    name: 'AccountLoginRequest',
+    declaration: 'export interface AccountLoginRequest extends AccountOperationRequest {\n    readonly channel: AuthenticationChannel;\n    readonly identifier: LoginIdentifierInput;\n    readonly password: string;\n}',
+  },
+  {
+    name: 'AccountOperationRequest',
+    declaration: 'export interface AccountOperationRequest {\n    readonly requestId: AuthenticationRequestId;\n    readonly signal: AbortSignal;\n}',
+  },
+  {
+    name: 'AccountPasswordChangeRequest',
+    declaration: 'export interface AccountPasswordChangeRequest extends AccountOperationRequest {\n    readonly call: AuthenticatedCall;\n    readonly expectedCredentialRevision: number;\n    readonly currentPassword: string;\n    readonly newPassword: string;\n}',
+  },
+  {
+    name: 'AccountProfileUpdateRequest',
+    declaration: 'export interface AccountProfileUpdateRequest {\n    readonly call: AuthenticatedCall;\n    readonly expectedRevision: number;\n    readonly displayName: string | null;\n}',
+  },
+  {
+    name: 'AccountRecoveryState',
+    declaration: 'export interface AccountRecoveryState {\n    readonly userId: UserId;\n    readonly operation: \'registration\' | \'credential-issue\' | \'password-change\' | \'disable\' | \'password-reset\';\n    readonly userStatus: UserRecord[\'status\'];\n    readonly credentialsConfigured: boolean;\n    readonly compensationComplete: boolean;\n}',
+  },
+  {
+    name: 'AccountRefreshRequest',
+    declaration: 'export interface AccountRefreshRequest extends AccountOperationRequest {\n    readonly refreshToken: string;\n}',
+  },
+  {
+    name: 'AccountRegistrationInput',
+    declaration: 'export interface AccountRegistrationInput extends AccountOperationRequest {\n    readonly identifier: LoginIdentifierInput;\n    readonly password: string;\n    readonly displayName?: string;\n    readonly extensions?: UserExtensions;\n}',
+  },
+  {
+    name: 'AccountSessionResult',
+    declaration: 'export interface AccountSessionResult {\n    readonly user: UserRecord;\n    readonly credentials: IssuedCredentialSet;\n}',
+  },
+  {
     name: 'AdapterRegistrationHandle',
     declaration: 'export interface AdapterRegistrationHandle {\n    (): void;\n    replace(providers: string[]): void;\n}',
+  },
+  {
+    name: 'AddLoginIdentifierRequest',
+    declaration: 'export interface AddLoginIdentifierRequest extends LoginIdentifierInput {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly context?: UserOperationContext;\n}',
+  },
+  {
+    name: 'AdminAccountCreateRequest',
+    declaration: 'export interface AdminAccountCreateRequest extends AccountRegistrationInput {\n    readonly actor: AuthenticatedCall;\n}',
+  },
+  {
+    name: 'AdminAccountStatusRequest',
+    declaration: 'export interface AdminAccountStatusRequest {\n    readonly actor: AuthenticatedCall;\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly requestId: AuthenticationRequestId;\n    readonly signal: AbortSignal;\n    readonly reason?: string;\n}',
+  },
+  {
+    name: 'AdminAccountUpdateRequest',
+    declaration: 'export interface AdminAccountUpdateRequest {\n    readonly actor: AuthenticatedCall;\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly patch: {\n        readonly displayName?: string | null;\n        readonly extensions?: UserExtensions;\n    };\n    readonly reason?: string;\n}',
+  },
+  {
+    name: 'AdminPasswordResetRequest',
+    declaration: 'export interface AdminPasswordResetRequest extends AccountOperationRequest {\n    readonly actor: AuthenticatedCall;\n    readonly userId: UserId;\n    readonly expectedCredentialRevision: number;\n    readonly newPassword: string;\n    readonly reason?: string;\n}',
+  },
+  {
+    name: 'AdminSessionRevokeRequest',
+    declaration: 'export interface AdminSessionRevokeRequest extends AccountOperationRequest {\n    readonly actor: AuthenticatedCall;\n    readonly userId: UserId;\n    readonly reason?: string;\n}',
   },
   {
     name: 'Agent',
@@ -2743,6 +3117,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
   },
   {
+    name: 'AuthenticatedCall',
+    declaration: 'export interface AuthenticatedCall extends VerifiedAuthentication {\n    readonly [AUTHENTICATED_CALL]: true;\n    readonly requestId: AuthenticationRequestId;\n    readonly channel: AuthenticationChannel;\n    readonly method: AuthenticationMethod;\n    readonly signal: AbortSignal;\n}',
+  },
+  {
     name: 'AuthenticatedPrincipal',
     declaration: 'export type AuthenticatedPrincipal = {\n    readonly kind: \'user\';\n    readonly id: UserId;\n} | {\n    readonly kind: \'service-account\';\n    readonly id: ServiceAccountId;\n} | {\n    readonly kind: \'local\';\n    readonly id: LocalPrincipalId;\n};',
   },
@@ -2775,6 +3153,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AuthenticationRequestId = Branded<\'AuthenticationRequestId\'>;',
   },
   {
+    name: 'AuthTokenChangeEvent',
+    declaration: 'export interface AuthTokenChangeEvent {\n    readonly kind: \'issued\' | \'rotated\' | \'revoked\' | \'reuse-detected\';\n    readonly requestId: AuthenticationRequestId;\n    readonly tokenFamilyId: TokenFamilyId;\n    readonly principal: AuthenticatedPrincipal;\n    readonly status: TokenFamilyStatus;\n    readonly revision: number;\n    readonly time: number;\n    readonly credentialId?: CredentialId;\n    readonly reason?: TokenRevocationReason;\n}',
+  },
+  {
     name: 'BackendRegistry',
     declaration: 'export class BackendRegistry {\n    register(name: string, backend: StorageBackend): () => void;\n    get(name: string): StorageBackend;\n    names(): string[];\n}',
   },
@@ -2797,6 +3179,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CancelOptions',
     declaration: 'export interface CancelOptions {\n    keepInbox?: boolean | undefined;\n}',
+  },
+  {
+    name: 'ChangePasswordRequest',
+    declaration: 'export interface ChangePasswordRequest {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly currentPassword: string;\n    readonly newPassword: string;\n    readonly context?: UserOperationContext;\n}',
   },
   {
     name: 'ClientResponse',
@@ -3015,6 +3401,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface DirectoryRegistrationHandle {\n    (): void;\n    replace(entries: readonly LlmConfigurableProvider[]): void;\n}',
   },
   {
+    name: 'DisablePasswordRequest',
+    declaration: 'export interface DisablePasswordRequest {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly context?: UserOperationContext;\n}',
+  },
+  {
     name: 'Domain',
     declaration: 'export interface Domain<S extends DomainSpec> {\n    readonly name: string;\n    readonly global: DomainGlobalHandleOf<S>;\n    table<N extends keyof S[\'tables\'] & string>(name: N): KvTable<TableKeyOf<S, N>, TableValueOf<S, N>>;\n    close(): Promise<void>;\n}',
   },
@@ -3155,6 +3545,54 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface FsWriteOutcome {\n    operation: \'create\' | \'update\';\n    version: FsVersion;\n    before: string | null;\n    after: string;\n}',
   },
   {
+    name: 'GatewayCookie',
+    declaration: 'export interface GatewayCookie {\n    readonly name: string;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'GatewayCookieDirective',
+    declaration: 'export interface GatewayCookieDirective {\n    readonly name: string;\n    readonly value: string;\n    readonly httpOnly: boolean;\n    readonly secure: boolean;\n    readonly sameSite: \'strict\';\n    readonly path: string;\n    readonly maxAgeSeconds?: number;\n}',
+  },
+  {
+    name: 'GatewayHeader',
+    declaration: 'export interface GatewayHeader {\n    readonly name: string;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'GatewayHttpAuthenticationRequest',
+    declaration: 'export interface GatewayHttpAuthenticationRequest extends GatewayRequest {\n}',
+  },
+  {
+    name: 'GatewayLoginRequest',
+    declaration: 'export interface GatewayLoginRequest extends GatewayRequest {\n    readonly identifier: LoginIdentifierInput;\n    readonly password: string;\n}',
+  },
+  {
+    name: 'GatewayLogoutResult',
+    declaration: 'export interface GatewayLogoutResult {\n    readonly cookies: readonly GatewayCookieDirective[];\n}',
+  },
+  {
+    name: 'GatewayQueryEntry',
+    declaration: 'export interface GatewayQueryEntry {\n    readonly name: string;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'GatewayRegistrationRequest',
+    declaration: 'export interface GatewayRegistrationRequest extends GatewayRequest {\n    readonly identifier: LoginIdentifierInput;\n    readonly password: string;\n    readonly displayName?: string;\n    readonly extensions?: UserExtensions;\n}',
+  },
+  {
+    name: 'GatewayRequest',
+    declaration: 'export interface GatewayRequest {\n    readonly requestId: string;\n    readonly signal: AbortSignal;\n    readonly headers?: readonly GatewayHeader[];\n    readonly cookies?: readonly GatewayCookie[];\n    readonly query?: readonly GatewayQueryEntry[];\n}',
+  },
+  {
+    name: 'GatewaySessionResult',
+    declaration: 'export interface GatewaySessionResult {\n    readonly user?: UserRecord;\n    readonly accessToken: string;\n    readonly accessExpiresAt?: number;\n    readonly cookies: readonly GatewayCookieDirective[];\n}',
+  },
+  {
+    name: 'GatewayWebSocketAuthenticationRequest',
+    declaration: 'export interface GatewayWebSocketAuthenticationRequest extends GatewayRequest {\n    readonly subprotocols?: readonly string[];\n}',
+  },
+  {
+    name: 'GatewayWebSocketAuthenticationResult',
+    declaration: 'export interface GatewayWebSocketAuthenticationResult {\n    readonly call: AuthenticatedCall;\n    readonly carrier: \'authorization\' | \'subprotocol\' | \'query\';\n    readonly adapter: {\n        readonly echoCredentialSubprotocol: false;\n        readonly redactSubprotocols: boolean;\n        readonly redactQuery: boolean;\n    };\n}',
+  },
+  {
     name: 'GenerateOptions',
     declaration: 'export interface GenerateOptions {\n    provider: string;\n    model: string;\n    reasoningEffort?: ReasoningEffortId;\n    messages: Message[];\n    system?: string;\n    tools?: ToolSchema[];\n    temperature?: number;\n    maxTokens?: number;\n    stop?: string[];\n    signal?: AbortSignal;\n    sessionId?: Branded<\'SessionId\'>;\n    purpose?: \'compaction\' | \'session-title\';\n}',
   },
@@ -3245,6 +3683,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'InvokeRemoteRequest',
     declaration: 'export interface InvokeRemoteRequest {\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'IssuedCredential',
+    declaration: 'export interface IssuedCredential {\n    readonly kind: \'access\' | \'refresh\' | \'api-key\';\n    readonly id: CredentialId;\n    readonly value: string;\n    readonly expiresAt?: number;\n    readonly tokenFamilyId?: TokenFamilyId;\n}',
+  },
+  {
+    name: 'IssuedCredentialSet',
+    declaration: 'export interface IssuedCredentialSet {\n    readonly credentials: readonly IssuedCredential[];\n}',
   },
   {
     name: 'JobDoneListener',
@@ -3385,6 +3831,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LocalPrincipalId',
     declaration: 'export type LocalPrincipalId = Branded<\'LocalPrincipalId\'>;',
+  },
+  {
+    name: 'LoginIdentifier',
+    declaration: 'export interface LoginIdentifier {\n    readonly kind: LoginIdentifierKind;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'LoginIdentifierInput',
+    declaration: 'export interface LoginIdentifierInput {\n    readonly kind: LoginIdentifierKind;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'LoginIdentifierKind',
+    declaration: 'export type LoginIdentifierKind = string;',
+  },
+  {
+    name: 'LoginIdentifierMetadata',
+    declaration: 'export interface LoginIdentifierMetadata extends LoginIdentifier {\n    readonly createdAt: number;\n}',
   },
   {
     name: 'LspHover',
@@ -3645,6 +4107,30 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RedactedSecret',
     declaration: 'export interface RedactedSecret {\n    path: string[];\n    set: boolean;\n}',
+  },
+  {
+    name: 'RegistrationOperationAdvanceRequest',
+    declaration: 'export interface RegistrationOperationAdvanceRequest {\n    readonly requestId: AuthenticationRequestId;\n    readonly expectedRevision: number;\n    readonly expectedStage: RegistrationOperationStage;\n    readonly stage: Exclude<RegistrationOperationStage, \'begun\' | \'completed\'>;\n    readonly userId: UserId;\n    readonly recovery?: AccountRecoveryState;\n}',
+  },
+  {
+    name: 'RegistrationOperationProvider',
+    declaration: 'export interface RegistrationOperationProvider {\n    begin(requestId: AuthenticationRequestId): Promise<RegistrationOperationRecord>;\n    read(requestId: AuthenticationRequestId): Promise<RegistrationOperationRecord | undefined>;\n    advance(request: RegistrationOperationAdvanceRequest): Promise<RegistrationOperationRecord>;\n    complete(requestId: AuthenticationRequestId, expectedRevision: number, result: UserRecord): Promise<RegistrationOperationRecord>;\n}',
+  },
+  {
+    name: 'RegistrationOperationProviderRegistry',
+    declaration: 'export class RegistrationOperationProviderRegistry {\n    register(provider: RegistrationOperationProvider): () => void;\n    require(): RegistrationOperationProvider;\n}',
+  },
+  {
+    name: 'RegistrationOperationRecord',
+    declaration: 'export interface RegistrationOperationRecord {\n    readonly requestId: AuthenticationRequestId;\n    readonly revision: number;\n    readonly stage: RegistrationOperationStage;\n    readonly userId?: UserId;\n    readonly recovery?: AccountRecoveryState;\n    readonly result?: UserRecord;\n}',
+  },
+  {
+    name: 'RegistrationOperationStage',
+    declaration: 'export type RegistrationOperationStage = \'begun\' | \'user-created\' | \'identifier-added\' | \'password-set\' | \'completed\' | \'failed\';',
+  },
+  {
+    name: 'RemoveLoginIdentifierRequest',
+    declaration: 'export interface RemoveLoginIdentifierRequest extends AddLoginIdentifierRequest {\n}',
   },
   {
     name: 'ReplayEnvelope',
@@ -4031,6 +4517,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionTitleUserMessage {\n    readonly seq: number;\n    readonly text: string;\n}',
   },
   {
+    name: 'SetPasswordRequest',
+    declaration: 'export interface SetPasswordRequest {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly password: string;\n    readonly context?: UserOperationContext;\n}',
+  },
+  {
     name: 'SettingsApplies',
     declaration: 'export type SettingsApplies = \'live\' | \'restart\';',
   },
@@ -4403,12 +4893,24 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TodoItem {\n    content: string;\n    status: \'pending\' | \'in_progress\' | \'completed\';\n}',
   },
   {
+    name: 'TokenFamilyId',
+    declaration: 'export type TokenFamilyId = Branded<\'TokenFamilyId\'>;',
+  },
+  {
+    name: 'TokenFamilyStatus',
+    declaration: 'export type TokenFamilyStatus = \'active\' | \'revoked\';',
+  },
+  {
     name: 'TokenMeasurement',
     declaration: 'export interface TokenMeasurement {\n    readonly logRevision: number;\n    readonly baseline: TokenMeasurementBaseline;\n    readonly surfaceDeltaTokens: number;\n    readonly totalTokens: number;\n    readonly surfaceTokens: number;\n    readonly nodes: readonly TokenSurfaceNode[];\n}',
   },
   {
     name: 'TokenMeasurementBaseline',
     declaration: 'export type TokenMeasurementBaseline = {\n    readonly kind: \'none\';\n    readonly tokens: 0;\n} | {\n    readonly kind: \'estimated\';\n    readonly tokens: number;\n} | {\n    readonly kind: \'usage\';\n    readonly tokens: number;\n    readonly usage: Readonly<TokenUsage>;\n};',
+  },
+  {
+    name: 'TokenRevocationReason',
+    declaration: 'export type TokenRevocationReason = \'requested\' | \'refresh-token-reuse\';',
   },
   {
     name: 'TokenSurfaceNode',
@@ -4599,16 +5101,80 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TypertTypeModel {\n    readonly name: string;\n    readonly declaration: string;\n}',
   },
   {
+    name: 'UserChangeEvent',
+    declaration: 'export type UserChangeEvent = UserEventBase & {\n    readonly kind: \'created\';\n} | UserEventBase & {\n    readonly kind: \'profile-updated\';\n} | UserEventBase & {\n    readonly kind: \'status-changed\';\n    readonly previousStatus: Exclude<UserStatus, \'deleted\'>;\n};',
+  },
+  {
+    name: 'UserCreateInput',
+    declaration: 'export interface UserCreateInput {\n    readonly displayName?: string;\n    readonly extensions?: UserExtensions;\n    readonly context?: UserOperationContext;\n}',
+  },
+  {
+    name: 'UserCredentialChangeEvent',
+    declaration: 'export interface UserCredentialChangeEvent {\n    readonly kind: \'identifier-added\' | \'identifier-removed\' | \'password-set\' | \'password-changed\' | \'password-disabled\';\n    readonly userId: UserId;\n    readonly revision: number;\n    readonly time: number;\n    readonly actorUserId?: UserId;\n    readonly correlationId?: string;\n    readonly reason?: string;\n}',
+  },
+  {
+    name: 'UserCredentialRecord',
+    declaration: 'export interface UserCredentialRecord {\n    readonly userId: UserId;\n    readonly revision: number;\n    readonly identifiers: readonly LoginIdentifierMetadata[];\n    readonly passwordEnabled: boolean;\n    readonly updatedAt: number;\n    readonly passwordChangedAt?: number;\n}',
+  },
+  {
+    name: 'UserExtensions',
+    declaration: 'export type UserExtensions = Readonly<Record<string, UserExtensionValue>>;',
+  },
+  {
+    name: 'UserExtensionValue',
+    declaration: 'export type UserExtensionValue = null | boolean | number | string | readonly UserExtensionValue[] | {\n    readonly [key: string]: UserExtensionValue;\n};',
+  },
+  {
     name: 'UserId',
     declaration: 'export type UserId = Branded<\'UserId\'>;',
+  },
+  {
+    name: 'UserListQuery',
+    declaration: 'export interface UserListQuery {\n    readonly status?: UserStatus;\n    readonly limit?: number;\n    readonly cursor?: string;\n}',
   },
   {
     name: 'UserMessage',
     declaration: 'export interface UserMessage extends Message {\n    readonly role: \'user\';\n}',
   },
   {
+    name: 'UserOperationContext',
+    declaration: 'export interface UserOperationContext {\n    readonly actorUserId?: UserId;\n    readonly correlationId?: string;\n    readonly reason?: string;\n}',
+  },
+  {
+    name: 'UserPage',
+    declaration: 'export interface UserPage {\n    readonly users: readonly UserRecord[];\n    readonly nextCursor?: string;\n}',
+  },
+  {
+    name: 'UserProfilePatch',
+    declaration: 'export interface UserProfilePatch {\n    readonly displayName?: string | null;\n    readonly extensions?: UserExtensions;\n}',
+  },
+  {
     name: 'UserQuestionProvider',
     declaration: 'export interface UserQuestionProvider {\n    ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer>;\n}',
+  },
+  {
+    name: 'UserRecord',
+    declaration: 'export interface UserRecord {\n    readonly userId: UserId;\n    readonly displayName?: string;\n    readonly status: UserStatus;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n    readonly revision: number;\n    readonly extensions: UserExtensions;\n}',
+  },
+  {
+    name: 'UserStatus',
+    declaration: 'export type UserStatus = \'active\' | \'disabled\' | \'deleted\';',
+  },
+  {
+    name: 'UserStatusRequest',
+    declaration: 'export interface UserStatusRequest {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly context?: UserOperationContext;\n}',
+  },
+  {
+    name: 'UserUpdateRequest',
+    declaration: 'export interface UserUpdateRequest {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly patch: UserProfilePatch;\n    readonly context?: UserOperationContext;\n}',
+  },
+  {
+    name: 'VerifiedAuthentication',
+    declaration: 'export interface VerifiedAuthentication {\n    readonly principal: AuthenticatedPrincipal;\n    readonly credentialId?: CredentialId;\n    readonly authenticatedAt: number;\n    readonly expiresAt?: number;\n}',
+  },
+  {
+    name: 'VerifyPasswordRequest',
+    declaration: 'export interface VerifyPasswordRequest {\n    readonly userId?: UserId;\n    readonly password: string;\n}',
   },
   {
     name: 'WebBootEntry',

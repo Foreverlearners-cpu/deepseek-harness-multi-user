@@ -51,14 +51,23 @@ export const inject = ['kafkaEvents', 'elasticsearch']
 
 /** Fixed CDC route and Elasticsearch destination. */
 export interface Config {
+  /** Kafka topic carrying session CDC events. */
   topic: string
+  /** Kafka consumer group for the search projection. */
   groupId: string
+  /** Stable Kafka subscription identity. */
   subscriptionId: string
+  /** Offset fallback applied when no committed position exists. */
   fallbackMode: KafkaSubscriptionFallbackMode
+  /** Maximum accepted encoded Kafka record size. */
   maxBytes: number
+  /** Source database name accepted by the projection. */
   database: string
+  /** Source table name accepted by the projection. */
   table: string
+  /** Event schema fingerprints accepted by the projection. */
   schemaFingerprints: string[]
+  /** Elasticsearch index receiving projected messages. */
   index: string
 }
 

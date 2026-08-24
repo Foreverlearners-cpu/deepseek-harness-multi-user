@@ -16,6 +16,9 @@
     },
     {
       "path": "../../runtime-diagnostics/invariants"
+    },
+    {
+      "path": "../user"
     }
   ]
 }

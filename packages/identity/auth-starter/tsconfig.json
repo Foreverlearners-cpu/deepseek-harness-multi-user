@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "lib/types" },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" }, { "path": "../../../vendor/schemastery" },
+    { "path": "../account" }, { "path": "../account-mysql" }, { "path": "../auth" },
+    { "path": "../auth-gateway" }, { "path": "../auth-jwt" }, { "path": "../auth-password" },
+    { "path": "../auth-token-mysql" }, { "path": "../user-credential-mysql" }, { "path": "../user-mysql" },
+    { "path": "../../multi/mysql" }, { "path": "../../runtime-diagnostics/invariants" }
+  ]
+}

@@ -342,6 +342,90 @@ export interface Config {
 
 来源：[`packages/attachment/attachment-local/src/index.ts:24`](../packages/attachment/attachment-local/src/index.ts)
 
+<a id="deepseek-aidsh-auth-gateway"></a>
+
+## `@deepseek-ai/dsh-auth-gateway`
+
+```ts config-catalog
+/** Configurable carrier names and browser-origin policy. */
+export interface AuthGatewayConfig {
+  /** Secure HttpOnly refresh-cookie name. */
+  readonly refreshCookieName?: string
+  /** Secure readable cookie name carrying the double-submit CSRF value. */
+  readonly csrfCookieName?: string
+  /** Request header name carrying the double-submit CSRF value. */
+  readonly csrfHeaderName?: string
+  /** Exact browser origins allowed to perform refresh. */
+  readonly allowedOrigins?: readonly string[]
+  /** Whether WebSocket handshakes may carry access tokens in query entries. */
+  readonly allowWebSocketQueryAccessToken?: boolean
+  /** Whether WebSocket handshakes may carry access tokens in subprotocol entries. */
+  readonly allowWebSocketBearerSubprotocol?: boolean
+}
+```
+
+来源：[`packages/identity/auth-gateway/src/types.ts:102`](../packages/identity/auth-gateway/src/types.ts)
+
+<a id="deepseek-aidsh-auth-jwt"></a>
+
+## `@deepseek-ai/dsh-auth-jwt`
+
+需要：`auth` · `authTokens` · `users`
+
+```ts config-catalog
+/** JWT issuer, audience, lifetimes, and rotation keyring. */
+export interface JwtAuthenticationConfig {
+  /** Exact issuer claim required on both Token types. */
+  readonly issuer: string
+  /** Exact single audience claim required on both Token types. */
+  readonly audience: string
+  /** Access lifetime in seconds; defaults to 900. */
+  readonly accessTtlSeconds?: number
+  /** Fixed refresh-family lifetime in seconds; defaults to 2,592,000. */
+  readonly refreshTtlSeconds?: number
+  /** JWT clock tolerance in seconds; defaults to zero. */
+  readonly clockToleranceSeconds?: number
+  /** Configured key id used to sign newly issued Token pairs. */
+  readonly activeKeyId: string
+  /** Verification keyring containing the active and retained rotation keys. */
+  readonly keys: readonly JwtSigningKeyConfig[]
+}
+
+/** One symmetric JWT signing and verification key. */
+export interface JwtSigningKeyConfig {
+  /** Stable protected-header key id. */
+  readonly keyId: string
+  /** Base64url-encoded secret containing 32-128 random bytes. */
+  readonly secret: string
+}
+```
+
+来源：[`packages/identity/auth-jwt/src/types.ts:18`](../packages/identity/auth-jwt/src/types.ts)
+
+<a id="deepseek-aidsh-auth-starter"></a>
+
+## `@deepseek-ai/dsh-auth-starter`
+
+```ts config-catalog
+/** Complete MySQL suite configuration. */
+export interface Config extends AuthenticationAssemblyConfig {
+  /** MySQL pool and database target. */
+  readonly mysql: MysqlConfig
+}
+
+/** Configuration shared by the full and minimal suites. */
+export interface AuthenticationAssemblyConfig {
+  /** JWT issuer, audience, lifetimes, and explicit signing keyring. */
+  readonly jwt: JwtAuthenticationConfig
+  /** Browser carrier and trusted-origin policy. */
+  readonly gateway?: AuthGatewayConfig
+}
+```
+
+依赖：[`AuthGatewayConfig`](#deepseek-aidsh-auth-gateway) · `JwtAuthenticationConfig` (`@deepseek-ai/dsh-auth-jwt/types`) · [`MysqlConfig`](#deepseek-aidsh-mysql)
+
+来源：[`packages/identity/auth-starter/src/index.ts:23`](../packages/identity/auth-starter/src/index.ts)
+
 <a id="deepseek-aidsh-bash-local"></a>
 
 ## `@deepseek-ai/dsh-bash-local`
@@ -443,7 +527,7 @@ export interface CdcTableRoute {
 }
 ```
 
-来源：[`packages/multi/cdc/src/index.ts:63`](../packages/multi/cdc/src/index.ts)
+来源：[`packages/multi/cdc/src/index.ts:124`](../packages/multi/cdc/src/index.ts)
 
 <a id="deepseek-aidsh-cdc-elasticsearch"></a>
 
@@ -489,7 +573,7 @@ export interface ElasticsearchCdcRoute {
 }
 ```
 
-依赖：[`KafkaSubscriptionFallbackMode`](../packages/multi/kafka/src/index.ts)
+依赖：[`KafkaSubscriptionFallbackMode`](subsystems/kafka.md)
 
 来源：[`packages/multi/cdc-elasticsearch/src/index.ts:45`](../packages/multi/cdc-elasticsearch/src/index.ts)
 
@@ -539,7 +623,7 @@ export interface RedisCdcRoute {
 }
 ```
 
-依赖：[`KafkaSubscriptionFallbackMode`](../packages/multi/kafka/src/index.ts)
+依赖：[`KafkaSubscriptionFallbackMode`](subsystems/kafka.md)
 
 来源：[`packages/multi/cdc-redis/src/index.ts:81`](../packages/multi/cdc-redis/src/index.ts)
 
@@ -1047,7 +1131,7 @@ export interface Config {
   tls: boolean
   /** Optional username/password SASL authentication. */
   sasl?: KafkaSaslConfig
-  /** Deadline for requests, shutdown drains, and client close attempts. */
+  /** Deadline for requests, subscription readiness, shutdown drains, and client close attempts. */
   requestTimeoutMs?: number
   /** TCP/TLS connection timeout. */
   connectionTimeoutMs?: number
@@ -1830,7 +1914,105 @@ export interface JsonRpcConfig {
 
 依赖：`Readable`（`node:stream`）· `Writable`（`node:stream`）
 
-来源：[`packages/sdk/server/src/index.ts:29`](../packages/sdk/server/src/index.ts)
+来源：[`packages/sdk/server/src/index.ts:25`](../packages/sdk/server/src/index.ts)
+
+<a id="deepseek-aidsh-session-cache-invalidation-redis"></a>
+
+## `@deepseek-ai/dsh-session-cache-invalidation-redis`
+
+需要：`kafkaEvents` · `redis`
+
+```ts config-catalog
+/** Explicit CDC route and Kafka subscription configuration. */
+export interface Config {
+  /** Authorized CDC topic. */
+  topic: string
+  /** Authorized consumer group. */
+  groupId: string
+  /** Subscription identity unique within `dsh-kafka-events`. */
+  subscriptionId: string
+  /** Start policy when no committed offset exists. */
+  fallbackMode: 'earliest' | 'latest' | 'fail'
+  /** Complete CDC payload limit. */
+  maxBytes: number
+  /** Exact source database. */
+  database: string
+  /** Exact source table. */
+  table: string
+  /** Exact accepted source schema fingerprint. */
+  schemaFingerprint: string
+}
+```
+
+来源：[`packages/session/session-cache-invalidation-redis/src/index.ts:234`](../packages/session/session-cache-invalidation-redis/src/index.ts)
+
+<a id="deepseek-aidsh-session-cdc-starter"></a>
+
+## `@deepseek-ai/dsh-session-cdc-starter`
+
+需要：`kafka` · `redis` · `elasticsearch`
+
+```ts config-catalog
+/** Complete starter configuration with explicit deployment-owned values. */
+export interface Config {
+  /** Shared authoritative CDC route. */
+  route: SessionCdcRouteConfig
+  /** Redis projection consumer configuration. */
+  redis: SessionCdcRedisConfig
+  /** Elasticsearch projection consumer configuration. */
+  elasticsearch: SessionCdcElasticsearchConfig
+  /** Optional operator-triggered reconciliation configuration. */
+  reconciler?: SessionCdcReconcilerConfig | undefined
+  /** Interval between aggregate consumer health checks. */
+  monitorIntervalMs: number
+}
+
+/** Shared authoritative CDC route. */
+export interface SessionCdcRouteConfig {
+  /** Kafka topic carrying authoritative session CDC events. */
+  topic: string
+  /** Source database name accepted by the route. */
+  database: string
+  /** Source table name accepted by the route. */
+  table: string
+  /** Maximum encoded Kafka record size. */
+  maxBytes: number
+}
+
+/** Redis consumer identity, offset fallback, and exact schema. */
+export interface SessionCdcRedisConfig {
+  /** Kafka consumer group used by the Redis projection. */
+  groupId: string
+  /** Stable subscription identity used by the Redis projection. */
+  subscriptionId: string
+  /** Offset fallback applied when no committed position exists. */
+  fallbackMode: 'earliest' | 'latest' | 'fail'
+  /** Exact event schema accepted by the Redis projection. */
+  schemaFingerprint: string
+}
+
+/** Elasticsearch consumer identity, offset fallback, accepted schemas, and index. */
+export interface SessionCdcElasticsearchConfig {
+  /** Kafka consumer group used by the search projection. */
+  groupId: string
+  /** Stable subscription identity used by the search projection. */
+  subscriptionId: string
+  /** Offset fallback applied when no committed position exists. */
+  fallbackMode: 'earliest' | 'latest' | 'fail'
+  /** Event schema fingerprints accepted by the search projection. */
+  schemaFingerprints: string[]
+  /** Elasticsearch index receiving projected session messages. */
+  index: string
+}
+
+/** Optional operator-triggered reconciliation service configuration. */
+export interface SessionCdcReconcilerConfig {
+  /** Maximum records processed by one reconciliation request. */
+  maxBatchSize: number
+}
+```
+
+来源：[`packages/session/session-cdc-starter/src/index.ts:58`](../packages/session/session-cdc-starter/src/index.ts)
 
 <a id="deepseek-aidsh-session-persistence-jsonl"></a>
 
@@ -1939,6 +2121,20 @@ export interface Config {
 
 来源：[`packages/session/session-projection-cache/src/index.ts:42`](../packages/session/session-projection-cache/src/index.ts)
 
+<a id="deepseek-aidsh-session-projection-reconciler"></a>
+
+## `@deepseek-ai/dsh-session-projection-reconciler`
+
+```ts config-catalog
+/** Reconciler configuration. */
+export interface Config {
+  /** Deployment limit for an individual source page. */
+  maxBatchSize: number
+}
+```
+
+来源：[`packages/session/session-projection-reconciler/src/index.ts:143`](../packages/session/session-projection-reconciler/src/index.ts)
+
 <a id="deepseek-aidsh-session-query-sqlite"></a>
 
 ## `@deepseek-ai/dsh-session-query-sqlite`
@@ -2004,6 +2200,40 @@ export interface Config {
 ```
 
 来源：[`packages/context/session-reference/src/config.ts:11`](../packages/context/session-reference/src/config.ts)
+
+<a id="deepseek-aidsh-session-search-projection-elasticsearch"></a>
+
+## `@deepseek-ai/dsh-session-search-projection-elasticsearch`
+
+需要：`kafkaEvents` · `elasticsearch`
+
+```ts config-catalog
+/** Fixed CDC route and Elasticsearch destination. */
+export interface Config {
+  /** Kafka topic carrying session CDC events. */
+  topic: string
+  /** Kafka consumer group for the search projection. */
+  groupId: string
+  /** Stable Kafka subscription identity. */
+  subscriptionId: string
+  /** Offset fallback applied when no committed position exists. */
+  fallbackMode: KafkaSubscriptionFallbackMode
+  /** Maximum accepted encoded Kafka record size. */
+  maxBytes: number
+  /** Source database name accepted by the projection. */
+  database: string
+  /** Source table name accepted by the projection. */
+  table: string
+  /** Event schema fingerprints accepted by the projection. */
+  schemaFingerprints: string[]
+  /** Elasticsearch index receiving projected messages. */
+  index: string
+}
+```
+
+依赖：[`KafkaSubscriptionFallbackMode`](subsystems/kafka.md)
+
+来源：[`packages/session/session-search-projection-elasticsearch/src/index.ts:53`](../packages/session/session-search-projection-elasticsearch/src/index.ts)
 
 <a id="deepseek-aidsh-session-telemetry-otel"></a>
 
@@ -3313,10 +3543,14 @@ export interface Config {
 
 这些插件通过 `cordis.yml` 中不含 `config:` 块的条目加载；它们未声明任何配置接口。
 
+- `@deepseek-ai/dsh-account`（[`packages/identity/account/src/index.ts`](../packages/identity/account/src/index.ts)）
+- `@deepseek-ai/dsh-account-mysql` — 需要 `accounts` · `mysql`（[`packages/identity/account-mysql/src/index.ts`](../packages/identity/account-mysql/src/index.ts)）
 - `@deepseek-ai/dsh-agent`（[`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts)）
 - `@deepseek-ai/dsh-api-gateway` — 需要 `typert`（[`packages/api/gateway/src/index.ts`](../packages/api/gateway/src/index.ts)）
 - `@deepseek-ai/dsh-api-remotes`（[`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts)）
 - `@deepseek-ai/dsh-auth`（[`packages/identity/auth/src/index.ts`](../packages/identity/auth/src/index.ts)）
+- `@deepseek-ai/dsh-auth-password` — 需要 `auth` · `userCredentials`（[`packages/identity/auth-password/src/index.ts`](../packages/identity/auth-password/src/index.ts)）
+- `@deepseek-ai/dsh-auth-token-mysql` — 需要 `mysql`（[`packages/identity/auth-token-mysql/src/index.ts`](../packages/identity/auth-token-mysql/src/index.ts)）
 - `@deepseek-ai/dsh-client-locale`（[`packages/client/locale/src/index.ts`](../packages/client/locale/src/index.ts)）
 - `@deepseek-ai/dsh-client-modules` — 需要 `webServer` · `loader`（[`packages/client/modules/src/index.ts`](../packages/client/modules/src/index.ts)）
 - `@deepseek-ai/dsh-client-runtime`（[`packages/client/runtime/src/index.ts`](../packages/client/runtime/src/index.ts)）
@@ -3360,6 +3594,7 @@ export interface Config {
 - `@deepseek-ai/dsh-host-directory-picker-auto` — 需要 `webServer` · `loader`（[`packages/host/directory-picker-auto/src/index.ts`](../packages/host/directory-picker-auto/src/index.ts)）
 - `@deepseek-ai/dsh-host-directory-picker-native`（[`packages/host/directory-picker-native/src/index.ts`](../packages/host/directory-picker-native/src/index.ts)）
 - `@deepseek-ai/dsh-host-plugin-inventory` — 需要 `loader`（[`packages/host/plugin-inventory/src/index.ts`](../packages/host/plugin-inventory/src/index.ts)）
+- `@deepseek-ai/dsh-kafka-events` — 需要 `kafka`（[`packages/multi/kafka-events/src/index.ts`](../packages/multi/kafka-events/src/index.ts)）
 - `@deepseek-ai/dsh-llm`（[`packages/llm/llm/src/index.ts`](../packages/llm/llm/src/index.ts)）
 - `@deepseek-ai/dsh-lsp`（[`packages/lsp/lsp/src/index.ts`](../packages/lsp/lsp/src/index.ts)）
 - `@deepseek-ai/dsh-schedule` — 需要 `agents` · `sessions` · `tools` · `sessionPersistence`（[`packages/schedule/schedule/src/index.ts`](../packages/schedule/schedule/src/index.ts)）
@@ -3377,6 +3612,8 @@ export interface Config {
 - `@deepseek-ai/dsh-tool-call-timeout-policy` — 需要 `tools`（[`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts)）
 - `@deepseek-ai/dsh-tool-cordis` — 需要 `tools` · `systemPrompt` · `dynamicCordisRunner` · `cordisInspect`（[`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts)）
 - `@deepseek-ai/dsh-tool-subagent-control` — 需要 `tools` · `subagents`（[`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts)）
+- `@deepseek-ai/dsh-user-credential-mysql` — 需要 `mysql`（[`packages/identity/user-credential-mysql/src/index.ts`](../packages/identity/user-credential-mysql/src/index.ts)）
+- `@deepseek-ai/dsh-user-mysql` — 需要 `mysql`（[`packages/identity/user-mysql/src/index.ts`](../packages/identity/user-mysql/src/index.ts)）
 - `@deepseek-ai/dsh-user-questions`（[`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts)）
 - `@deepseek-ai/dsh-workspace` — 需要 `storageDomain` · `sessionPersistence`（[`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts)）
 
@@ -3385,6 +3622,7 @@ export interface Config {
 抽象服务类——部署时应改为加载具体的实现包（参见[能力 seam](../.agents/notes/implemented/architecture/2026-06-13-capability-seams.md)）。
 
 - `@deepseek-ai/dsh-attachment` — 抽象 `AttachmentStore`（[`packages/attachment/attachment/src/index.ts`](../packages/attachment/attachment/src/index.ts)）
+- `@deepseek-ai/dsh-auth-token` — 抽象 `AuthTokenService`（[`packages/identity/auth-token/src/index.ts`](../packages/identity/auth-token/src/index.ts)）
 - `@deepseek-ai/dsh-code-runtime` — 抽象 `CodeRuntime`（[`packages/code-runtime/code-runtime/src/index.ts`](../packages/code-runtime/code-runtime/src/index.ts)）
 - `@deepseek-ai/dsh-compaction` — 抽象 `CompactionEngine`（[`packages/compaction/compaction/src/index.ts`](../packages/compaction/compaction/src/index.ts)）
 - `@deepseek-ai/dsh-credentials` — 抽象 `Credentials`（[`packages/credentials/credentials/src/index.ts`](../packages/credentials/credentials/src/index.ts)）
@@ -3398,6 +3636,8 @@ export interface Config {
 - `@deepseek-ai/dsh-shell` — 抽象 `ShellExecutor`（[`packages/shell/shell/src/index.ts`](../packages/shell/shell/src/index.ts)）
 - `@deepseek-ai/dsh-spill` — 抽象 `SpillStore`（[`packages/spill/spill/src/index.ts`](../packages/spill/spill/src/index.ts)）
 - `@deepseek-ai/dsh-subprocess` — 抽象 `SubprocessRuntime`（[`packages/subprocess/subprocess/src/index.ts`](../packages/subprocess/subprocess/src/index.ts)）
+- `@deepseek-ai/dsh-user` — 抽象 `UserDirectory`（[`packages/identity/user/src/index.ts`](../packages/identity/user/src/index.ts)）
+- `@deepseek-ai/dsh-user-credential` — 抽象 `UserCredentialService`（[`packages/identity/user-credential/src/index.ts`](../packages/identity/user-credential/src/index.ts)）
 - `@deepseek-ai/dsh-workflow` — 抽象 `WorkflowEngine`（[`packages/workflow/workflow/src/index.ts`](../packages/workflow/workflow/src/index.ts)）
 ## 库包（无插件入口）
 
@@ -3410,6 +3650,7 @@ export interface Config {
 - `@deepseek-ai/dsh-atomic-write`（[`packages/util/atomic-write/src/index.ts`](../packages/util/atomic-write/src/index.ts)）
 - `@deepseek-ai/dsh-base`（[`packages/bundle/base/src/index.ts`](../packages/bundle/base/src/index.ts)）
 - `@deepseek-ai/dsh-brand`（[`packages/util/brand/src/index.ts`](../packages/util/brand/src/index.ts)）
+- `@deepseek-ai/dsh-cdc-protocol`（[`packages/multi/cdc-protocol/src/index.ts`](../packages/multi/cdc-protocol/src/index.ts)）
 - `@deepseek-ai/dsh-client-schema-form`（[`packages/client/schema-form/src/index.ts`](../packages/client/schema-form/src/index.ts)）
 - `@deepseek-ai/dsh-client-test-runtime`（[`packages/test-support/client-runtime/src/index.ts`](../packages/test-support/client-runtime/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-attachment`（[`packages/client/ui-attachment/src/index.ts`](../packages/client/ui-attachment/src/index.ts)）

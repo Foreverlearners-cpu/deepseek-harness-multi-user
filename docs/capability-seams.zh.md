@@ -40,6 +40,11 @@ flowchart LR
   pkg_cdc["cdc"]
   pkg_cdc_redis["cdc-redis"]
   pkg_cdc_elasticsearch["cdc-elasticsearch"]
+  pkg_kafka_events["kafka-events"]
+  svc_kafkaEvents["ctx.kafkaEvents<br/>Typed Kafka event runners"]
+  pkg_session_cache_invalidation_redis["session-cache-invalidation-redis"]
+  pkg_session_search_projection_elasticsearch["session-search-projection-elasticsearch"]
+  pkg_session_cdc_starter["session-cdc-starter"]
   svc_cdc["ctx.cdc<br/>MySQL row-change capture"]
   pkg_typert_registry["typert-registry"]
   svc_typert["ctx.typert<br/>Runtime type registry"]
@@ -52,6 +57,9 @@ flowchart LR
   pkg_tool_bash["tool-bash"]
   pkg_hooks_claude_code["hooks-claude-code"]
   pkg_hooks_codex["hooks-codex"]
+  svc_sessionCdcStarter["ctx.sessionCdcStarter<br/>Supervised session CDC composition"]
+  pkg_session_projection_reconciler["session-projection-reconciler"]
+  svc_sessionProjectionReconciler["ctx.sessionProjectionReconciler<br/>Authoritative session projection rebuilding"]
   pkg_mysql["mysql"]
   svc_mysql["ctx.mysql<br/>MySQL connection infrastructure"]
   pkg_settings["settings"]
@@ -63,6 +71,19 @@ flowchart LR
   pkg_credentials_local["credentials-local"]
   pkg_auth["auth"]
   svc_auth["ctx.auth<br/>Host authentication runtime"]
+  pkg_auth_password["auth-password"]
+  pkg_auth_jwt["auth-jwt"]
+  pkg_account["account"]
+  pkg_auth_gateway["auth-gateway"]
+  svc_authGateway["ctx.authGateway<br/>Transport-neutral authentication gateway"]
+  svc_accounts["ctx.accounts<br/>Host account orchestration"]
+  svc_accountAdministration["ctx.accountAdministration<br/>Authorized account administration"]
+  pkg_auth_token["auth-token"]
+  svc_authTokens["ctx.authTokens<br/>Opaque refresh-token family seam"]
+  pkg_user["user"]
+  svc_users["ctx.users<br/>Human user directory seam"]
+  pkg_user_credential["user-credential"]
+  svc_userCredentials["ctx.userCredentials<br/>User login credential seam"]
   pkg_session_telemetry["session-telemetry"]
   svc_sessionTelemetry["ctx.sessionTelemetry<br/>Session telemetry seam"]
   pkg_session_telemetry_otel["session-telemetry-otel"]
@@ -209,6 +230,8 @@ flowchart LR
   pkg_cordis_host_runner["cordis-host-runner"]
   svc_dynamicCordisRunner["ctx.dynamicCordisRunner<br/>Dynamic Cordis package host runner"]
   svc_cordisInspect["ctx.cordisInspect<br/>Dynamic Cordis inspect registry"]
+  pkg_account --> svc_accountAdministration
+  pkg_account --> svc_accounts
   pkg_acp --> svc_approval
   pkg_agent --> svc_agents
   pkg_agent_default_model --> svc_agentDefaultModel
@@ -220,6 +243,10 @@ flowchart LR
   pkg_attachment --> svc_attachments
   pkg_attachment_local --> svc_attachments
   pkg_auth --> svc_auth
+  pkg_auth_gateway --> svc_authGateway
+  pkg_auth_jwt --> svc_auth
+  pkg_auth_password --> svc_auth
+  pkg_auth_token --> svc_authTokens
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
   pkg_cdc --> svc_cdc
@@ -247,6 +274,7 @@ flowchart LR
   pkg_jobs --> svc_jobs
   pkg_jobs_local --> svc_jobs
   pkg_kafka --> svc_kafka
+  pkg_kafka_events --> svc_kafkaEvents
   pkg_llm --> svc_llm
   pkg_llm_deepseek --> svc_llm
   pkg_llm_pi_ai --> svc_llm
@@ -264,11 +292,13 @@ flowchart LR
   pkg_sandbox_local --> svc_sandbox
   pkg_sandbox_policy --> svc_sandboxPolicy
   pkg_session --> svc_sessions
+  pkg_session_cdc_starter --> svc_sessionCdcStarter
   pkg_session_persistence --> svc_sessionPersistence
   pkg_session_persistence_jsonl --> svc_sessionPersistence
   pkg_session_persistence_sqlite --> svc_sessionPersistence
   pkg_session_projection --> svc_sessionProjections
   pkg_session_projection_cache --> svc_sessionProjectionCache
+  pkg_session_projection_reconciler --> svc_sessionProjectionReconciler
   pkg_session_query --> svc_sessionQuery
   pkg_session_query_sqlite --> svc_sessionQuery
   pkg_session_reference --> svc_sessionReferenceResolver
@@ -306,6 +336,8 @@ flowchart LR
   pkg_token_meter --> svc_tokenMeter
   pkg_tools --> svc_tools
   pkg_typert_registry --> svc_typert
+  pkg_user --> svc_users
+  pkg_user_credential --> svc_userCredentials
   pkg_user_questions --> svc_userQuestions
   pkg_web --> svc_web
   pkg_web_fetch_http --> svc_web
@@ -327,6 +359,8 @@ flowchart LR
   svc_approval --> pkg_tools
   svc_attachments --> pkg_host_runtime
   svc_attachments --> pkg_llm_pi_ai
+  svc_auth --> pkg_account
+  svc_authTokens --> pkg_auth_jwt
   svc_clientModules --> pkg_hmr
   svc_codeRuntime --> pkg_tools
   svc_compaction --> pkg_compaction_basic
@@ -351,6 +385,10 @@ flowchart LR
   svc_kafka --> pkg_cdc
   svc_kafka --> pkg_cdc_elasticsearch
   svc_kafka --> pkg_cdc_redis
+  svc_kafka --> pkg_kafka_events
+  svc_kafkaEvents --> pkg_session_cache_invalidation_redis
+  svc_kafkaEvents --> pkg_session_cdc_starter
+  svc_kafkaEvents --> pkg_session_search_projection_elasticsearch
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
@@ -368,6 +406,7 @@ flowchart LR
   svc_sessionPersistence --> pkg_session_query_sqlite
   svc_sessionPersistence --> pkg_tool_bash
   svc_sessionProjectionCache --> pkg_host_apiproxy
+  svc_sessionProjectionReconciler --> pkg_session_cdc_starter
   svc_sessionProjections --> pkg_host_apiproxy
   svc_sessionProjections --> pkg_session_title
   svc_sessionProjections --> pkg_tool_todo
@@ -425,7 +464,11 @@ flowchart LR
   svc_tools --> pkg_tool_web
   svc_typert --> pkg_api_gateway
   svc_typert --> pkg_typert_loader
+  svc_userCredentials --> pkg_account
+  svc_userCredentials --> pkg_auth_password
   svc_userQuestions --> pkg_tool_ask_user
+  svc_users --> pkg_account
+  svc_users --> pkg_auth_jwt
   svc_web --> pkg_tool_web
   svc_webServer --> pkg_connection
   svc_webServer --> pkg_hmr
@@ -444,15 +487,24 @@ flowchart LR
 | `ctx.toolResultPruner` | `core` | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | 在摘要压缩前，通过可回放的单节点表层替换来改写过大的当前工具结果。 |
 | `ctx.sessions` | `core` | [`session`](../packages/core/session) | - | [`agent-loop`](../packages/core/agent-loop), [`agent`](../packages/core/agent), [`session-persistence`](../packages/session/session-persistence), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), `subagent-inprocess`, [`invariants`](../packages/runtime-diagnostics/invariants), [`message-feedback`](../packages/feedback/message-feedback) | - | 拥有仅追加的 Session 实例，并发出持久的会话事件流。 |
 | `ctx.invariants` | `core` | [`invariants`](../packages/runtime-diagnostics/invariants) | - | [`session`](../packages/core/session), [`agent`](../packages/core/agent), [`scope`](../packages/core/scope), [`agent-loop`](../packages/core/agent-loop) | - | 配套子路径注册所属包本地的检查；该服务负责选择、唯一性、子 fiber，以及标明所属包的失败。 |
-| `ctx.kafka` | `core` | [`kafka`](../packages/multi/kafka) | - | [`cdc`](../packages/multi/cdc), [`cdc-redis`](../packages/multi/cdc-redis), [`cdc-elasticsearch`](../packages/multi/cdc-elasticsearch) | - | 拥有一个具名 Admin 客户端、启动元数据验证、有界健康元数据、分类错误和随 scope 关闭；producer 与 consumer 操作保持延后。 |
+| `ctx.kafka` | `core` | [`kafka`](../packages/multi/kafka) | - | [`cdc`](../packages/multi/cdc), [`cdc-redis`](../packages/multi/cdc-redis), [`cdc-elasticsearch`](../packages/multi/cdc-elasticsearch), [`kafka-events`](../packages/multi/kafka-events) | - | 拥有一个具名 Admin 客户端、启动元数据验证、有界健康元数据、分类错误和随 scope 关闭；producer 与 consumer 操作保持延后。 |
+| `ctx.kafkaEvents` | `core` | [`kafka-events`](../packages/multi/kafka-events) | - | [`session-cache-invalidation-redis`](../packages/session/session-cache-invalidation-redis), [`session-search-projection-elasticsearch`](../packages/session/session-search-projection-elasticsearch), [`session-cdc-starter`](../packages/session/session-cdc-starter) | - | 基于 `ctx.kafka` 创建类型化 producer 和由 scope 管理的顺序 consumer；领域 codec、路由、过滤、重试与幂等性仍由消费方负责。 |
 | `ctx.cdc` | `core` | [`cdc`](../packages/multi/cdc) | - | - | - | 捕获配置的 MySQL 行变更并向 Kafka 发布带版本的事件；下游投影独立消费 Kafka 流。 |
 | `ctx.typert` | `core` | [`typert-registry`](../packages/typert/registry) | - | [`typert-loader`](../packages/typert/loader), [`api-gateway`](../packages/api/gateway) | - | 插件直接或通过 dsh-typert-loader 注册实时 zod 贡献；API 网关消费调用描述符和提供方，其他运行时消费方则在各自边界查询 schema 与反射元数据。 |
 | `ctx.typertGateway` | `core` | [`api-gateway`](../packages/api/gateway) | - | - | - | 将生成的 Remote 描述符与实时 Cordis 服务关联，解析已注册的身份，并通过共享的 Connection RPC 载体提供一元调用。 |
 | `ctx.sessionPersistence` | `seam` | [`session-persistence`](../packages/session/session-persistence) | [`session-persistence-jsonl`](../packages/session/session-persistence-jsonl), [`session-persistence-sqlite`](../packages/session/session-persistence-sqlite) | [`agent-loop`](../packages/core/agent-loop), [`tool-bash`](../packages/shell/tool-bash), [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`hooks-codex`](../packages/hooks/hooks-codex), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), [`message-feedback`](../packages/feedback/message-feedback) | - | 各后端持久化同一套 SessionEvent 词汇；应用在组合时选择后端。 |
+| `ctx.sessionCdcStarter` | `bundle` | [`session-cdc-starter`](../packages/session/session-cdc-starter) | - | - | - | 挂载并监管类型化 Kafka 事件服务以及 Redis 和 Elasticsearch 会话 consumer，并可选择挂载同时覆盖两个 sink 的投影协调服务。 |
+| `ctx.sessionProjectionReconciler` | `core` | [`session-projection-reconciler`](../packages/session/session-projection-reconciler) | - | [`session-cdc-starter`](../packages/session/session-cdc-starter) | - | 从应用注册的权威来源，经由具名且幂等的 sink 执行一次由运维触发、可恢复的重建；该过程不消费 Kafka，也不引入跨 sink 事务。 |
 | `ctx.mysql` | `core` | [`mysql`](../packages/multi/mysql) | - | - | - | 该包同时包含服务定义和 mysql2 连接池提供方；领域持久化消费方保留为独立包。 |
 | `ctx.settings` | `seam` | [`settings`](../packages/settings/settings) | [`settings-file`](../packages/settings/settings-file) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | 插件注册命名空间 schema 并解析分层值；提供方存储原始文档。LLM（大语言模型）适配器在用户分区下将其入口配置注册为组合基础；Web 网关提供经过脱敏的分层描述符，并写入用户层。 |
 | `ctx.credentials` | `seam` | [`credentials`](../packages/credentials/credentials) | [`credentials-local`](../packages/credentials/credentials-local) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | 配置携带对机密信息的引用；提供方拥有实际值。消费方按操作解析，因此轮换后的凭据会在紧接着的下一次请求中生效；Web 网关提供不含实际值的视图和只写存储。 |
-| `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | - | - | - | 按证据类型选择唯一提供方，签发仅限进程内使用的已认证调用，并分派可选的凭证生命周期操作。 |
+| `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | [`auth-password`](../packages/identity/auth-password), [`auth-jwt`](../packages/identity/auth-jwt) | [`account`](../packages/identity/account) | - | 按证据类型选择唯一提供方，签发仅限进程内使用的已认证调用，并分派可选的凭证生命周期操作。 |
+| `ctx.authGateway` | `core` | [`auth-gateway`](../packages/identity/auth-gateway) | - | - | - | 在公开账号操作前执行有界 HTTP 与 WebSocket 凭证载体、浏览器 Refresh CSRF、传输安全错误与 Call 当前性校验。 |
+| `ctx.accounts` | `core` | [`account`](../packages/identity/account) | - | - | - | 协调用户、密码凭据与 JWT 生命周期服务中的持久化注册、登录和自助操作，同时保留 revision 与凭据状态栅栏。 |
+| `ctx.accountAdministration` | `core` | [`account`](../packages/identity/account) | - | - | - | 只有唯一的 `AccountAdminAuthorizer` 明确批准操作者、操作和目标后才执行管理员账号修改；缺少策略或策略拒绝时默认失败。 |
+| `ctx.authTokens` | `seam` | [`auth-token`](../packages/identity/auth-token) | - | [`auth-jwt`](../packages/identity/auth-jwt) | - | 生成不透明 refresh secret，只向 Provider 提供 digest，并定义原子轮换、复用触发的 family 撤销、安全检查与定向撤销。 |
+| `ctx.users` | `seam` | [`user`](../packages/identity/user) | - | [`account`](../packages/identity/account), [`auth-jwt`](../packages/identity/auth-jwt) | - | 定义稳定的人类用户记录、生命周期转换、乐观 revision、有界分页和脱敏提交事件；持久化与 Credential Provider 保持独立。 |
+| `ctx.userCredentials` | `seam` | [`user-credential`](../packages/identity/user-credential) | - | [`account`](../packages/identity/account), [`auth-password`](../packages/identity/auth-password) | - | 定义登录标识归一化与查询、密码验证、聚合乐观 revision 和脱敏提交事件；verifier 存储保持为 Provider 私有状态。 |
 | `ctx.sessionTelemetry` | `seam` | [`session-telemetry`](../packages/session/session-telemetry) | [`session-telemetry-otel`](../packages/session/session-telemetry-otel) | - | - | 该 seam 捕获会话记录、进行脱敏并交给一个后端；没有其他组件消费该服务，其输出会离开当前进程。 |
 | `ctx.storage` | `seam` | [`storage`](../packages/storage/storage) | [`storage-json`](../packages/storage/storage-json), [`storage-sqlite`](../packages/storage/storage-sqlite) | [`storage-domain`](../packages/storage/storage-domain) | - | 各后端以不同名称并列注册；数据形态（领域优先）挂载到枢纽上，并将类型化操作转换为不透明的 KV 单元原语。 |
 | `ctx.storageDomain` | `core` | [`storage-domain`](../packages/storage/storage-domain) | - | [`workspace`](../packages/workspace/workspace), [`message-feedback`](../packages/feedback/message-feedback) | - | 等待所有已配置后端就绪，然后将领域形态发布为一个受生命周期约束的服务，用于类型化持久状态。 |
