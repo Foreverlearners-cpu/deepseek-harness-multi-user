@@ -362,7 +362,7 @@ export abstract class UserCredentialService extends Service {
     context: Readonly<UserOperationContext>,
   ): Promise<UserCredentialRecord> {
     const allowed = mutation.kind === 'identifier-add'
-      ? ['credential-not-found', 'identifier-conflict', 'revision-conflict'] as const
+      ? ['invalid-input', 'credential-not-found', 'identifier-conflict', 'revision-conflict'] as const
       : mutation.kind === 'identifier-remove'
         ? ['credential-not-found', 'identifier-not-found', 'revision-conflict'] as const
         : mutation.kind === 'password-change'

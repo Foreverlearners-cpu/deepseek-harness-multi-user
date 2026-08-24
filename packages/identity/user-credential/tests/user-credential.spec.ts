@@ -154,6 +154,14 @@ describe('user credential validation', () => {
     expect(allowed.message).toBe('user-credential: login identifier is already assigned')
     expect(allowed.cause).toBeUndefined()
 
+    credentials.mutationFailure = new UserCredentialError('invalid-input', secret, { cause: new Error(secret) })
+    const providerLimit = await credentialFailure(credentials.addIdentifier({
+      userId: id('user-1'), expectedRevision: 0, kind: 'email', value: 'x@y.z',
+    }))
+    expect(providerLimit).toMatchObject({ code: 'invalid-input' })
+    expect(providerLimit.message).toBe('user-credential: Provider rejected the credential input')
+    expect(providerLimit.cause).toBeUndefined()
+
     credentials.mutationFailure = new UserCredentialError('invalid-credential', secret)
     const disallowed = await credentialFailure(credentials.addIdentifier({
       userId: id('user-1'), expectedRevision: 0, kind: 'email', value: 'x@y.z',
