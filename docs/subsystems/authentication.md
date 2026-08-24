@@ -154,6 +154,61 @@ assertCurrent(value: unknown): AuthenticatedCall
 
 Source: [`packages/identity/auth/src/index.ts:303`](../../packages/identity/auth/src/index.ts)
 
+<a id="ctxauthgateway--authgatewayservice"></a>
+
+### `ctx.authGateway` — `AuthGatewayService`
+
+Extracts bounded credentials and delegates only public account operations.
+
+```ts cordis-catalog
+/** Authenticate one HTTP access carrier.
+ * @param request - structured headers, cookies, query, and lifecycle.
+ * @returns Host-only call minted by the active authentication Provider.
+ */
+async authenticateHttp(request: GatewayHttpAuthenticationRequest): Promise<AuthenticatedCall>
+
+/** Authenticate one WebSocket handshake without retaining raw carrier input.
+ * @param request - structured handshake fields and lifecycle.
+ * @returns Host-only call minted for the WebSocket channel.
+ */
+async authenticateWebSocket(request: GatewayWebSocketAuthenticationRequest): Promise<AuthenticatedCall>
+
+/** Register an account without issuing credentials.
+ * @param request - bounded profile, password, and lifecycle input.
+ * @returns committed user record.
+ */
+async register(request: GatewayRegistrationRequest): Promise<UserRecord>
+
+/** Password-login and place refresh material in an HttpOnly cookie.
+ * @param request - bounded login body and lifecycle input.
+ * @returns user, access token, and cookie directives.
+ */
+async login(request: GatewayLoginRequest): Promise<GatewaySessionResult>
+
+/** Rotate the refresh cookie after Origin and double-submit CSRF checks.
+ * @param request - structured browser request and lifecycle.
+ * @returns replacement access token and cookie directives.
+ */
+async refresh(request: GatewayRequest): Promise<GatewaySessionResult>
+
+/** Authenticate and revoke the current user's sessions.
+ * @param request - HTTP bearer request and lifecycle.
+ * @returns cookie clearing directives.
+ */
+async logout(request: GatewayHttpAuthenticationRequest): Promise<GatewayLogoutResult>
+
+/** Revalidate an authenticated call immediately before protected handler use.
+ * @param call - exact Host-only call returned by this gateway.
+ * @param handler - protected operation that receives only the current call.
+ * @returns handler result.
+ */
+guard<T>(call: AuthenticatedCall, handler: (current: AuthenticatedCall) => T | Promise<T>): T | Promise<T>
+```
+
+Types: [UserRecord](user-directory.md)
+
+Source: [`packages/identity/auth-gateway/src/index.ts:185`](../../packages/identity/auth-gateway/src/index.ts)
+
 <a id="account-events"></a>
 
 ### `account/*` events

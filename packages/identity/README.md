@@ -8,5 +8,6 @@ Identity values and authentication contracts shared across product domains. Anon
 |---|---|---|
 | [`anonymous-user-id/`](anonymous-user-id/README.md) | Persists one anonymous Harness-home correlation id for telemetry, feedback, and DeepSeek requests | — |
 | [`auth/`](auth/README.md) | Selects authentication Providers, mints current request identity, and routes optional credential lifecycle operations | `auth` |
+| [`auth-gateway/`](auth-gateway/README.md) | Enforces HTTP and WebSocket carrier, CSRF, redaction, and current-call policy before delegating public account flows | `authGateway` |
 | [`auth-token/`](auth-token/README.md) | Defines opaque refresh-token families, atomic rotation, reuse detection, inspection, and revocation | `authTokens` |
 | [`user/`](user/README.md) | Defines stable human users, profile records, lifecycle state, and Provider-independent management operations | `users` |

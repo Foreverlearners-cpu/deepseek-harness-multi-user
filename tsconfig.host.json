@@ -163,6 +163,7 @@
     { "path": "./packages/identity/anonymous-user-id" },
     { "path": "./packages/identity/account" },
     { "path": "./packages/identity/auth" },
+    { "path": "./packages/identity/auth-gateway" },
     { "path": "./packages/identity/auth-jwt" },
     { "path": "./packages/identity/auth-token" },
     { "path": "./packages/identity/auth-password" },

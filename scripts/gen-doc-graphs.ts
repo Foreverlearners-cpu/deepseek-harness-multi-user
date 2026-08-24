@@ -214,6 +214,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations.',
   },
   {
+    key: 'authGateway',
+    pkg: 'auth-gateway',
+    title: 'Transport-neutral authentication gateway',
+    mode: 'core',
+    note: 'Enforces bounded HTTP and WebSocket credential carriers, browser refresh CSRF, transport-safe errors, and current-call validation before public account operations.',
+  },
+  {
     key: 'accounts',
     pkg: 'account',
     title: 'Host account orchestration',

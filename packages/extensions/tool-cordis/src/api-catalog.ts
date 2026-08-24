@@ -491,6 +491,55 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'authGateway',
+    summary: 'Extracts bounded credentials and delegates only public account operations.',
+    description: 'Extracts bounded credentials and delegates only public account operations.',
+    methods: [
+      {
+        signature: 'async authenticateHttp(request: GatewayHttpAuthenticationRequest): Promise<AuthenticatedCall>',
+        description: 'Authenticate one HTTP access carrier.',
+        parameters: [{ name: 'request', description: 'structured headers, cookies, query, and lifecycle.' }],
+        returns: 'Host-only call minted by the active authentication Provider.',
+      },
+      {
+        signature: 'async authenticateWebSocket(request: GatewayWebSocketAuthenticationRequest): Promise<AuthenticatedCall>',
+        description: 'Authenticate one WebSocket handshake without retaining raw carrier input.',
+        parameters: [{ name: 'request', description: 'structured handshake fields and lifecycle.' }],
+        returns: 'Host-only call minted for the WebSocket channel.',
+      },
+      {
+        signature: 'async register(request: GatewayRegistrationRequest): Promise<UserRecord>',
+        description: 'Register an account without issuing credentials.',
+        parameters: [{ name: 'request', description: 'bounded profile, password, and lifecycle input.' }],
+        returns: 'committed user record.',
+      },
+      {
+        signature: 'async login(request: GatewayLoginRequest): Promise<GatewaySessionResult>',
+        description: 'Password-login and place refresh material in an HttpOnly cookie.',
+        parameters: [{ name: 'request', description: 'bounded login body and lifecycle input.' }],
+        returns: 'user, access token, and cookie directives.',
+      },
+      {
+        signature: 'async refresh(request: GatewayRequest): Promise<GatewaySessionResult>',
+        description: 'Rotate the refresh cookie after Origin and double-submit CSRF checks.',
+        parameters: [{ name: 'request', description: 'structured browser request and lifecycle.' }],
+        returns: 'replacement access token and cookie directives.',
+      },
+      {
+        signature: 'async logout(request: GatewayHttpAuthenticationRequest): Promise<GatewayLogoutResult>',
+        description: 'Authenticate and revoke the current user\'s sessions.',
+        parameters: [{ name: 'request', description: 'HTTP bearer request and lifecycle.' }],
+        returns: 'cookie clearing directives.',
+      },
+      {
+        signature: 'guard<T>(call: AuthenticatedCall, handler: (current: AuthenticatedCall) => T | Promise<T>): T | Promise<T>',
+        description: 'Revalidate an authenticated call immediately before protected handler use.',
+        parameters: [{ name: 'call', description: 'exact Host-only call returned by this gateway.' }, { name: 'handler', description: 'protected operation that receives only the current call.' }],
+        returns: 'handler result.',
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index tap.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index tap. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
@@ -3490,6 +3539,50 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'FsWriteOutcome',
     declaration: 'export interface FsWriteOutcome {\n    operation: \'create\' | \'update\';\n    version: FsVersion;\n    before: string | null;\n    after: string;\n}',
+  },
+  {
+    name: 'GatewayCookie',
+    declaration: 'export interface GatewayCookie {\n    readonly name: string;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'GatewayCookieDirective',
+    declaration: 'export interface GatewayCookieDirective {\n    readonly name: string;\n    readonly value: string;\n    readonly httpOnly: boolean;\n    readonly secure: boolean;\n    readonly sameSite: \'strict\';\n    readonly path: string;\n    readonly maxAgeSeconds?: number;\n}',
+  },
+  {
+    name: 'GatewayHeader',
+    declaration: 'export interface GatewayHeader {\n    readonly name: string;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'GatewayHttpAuthenticationRequest',
+    declaration: 'export interface GatewayHttpAuthenticationRequest extends GatewayRequest {\n}',
+  },
+  {
+    name: 'GatewayLoginRequest',
+    declaration: 'export interface GatewayLoginRequest extends GatewayRequest {\n    readonly identifier: LoginIdentifierInput;\n    readonly password: string;\n}',
+  },
+  {
+    name: 'GatewayLogoutResult',
+    declaration: 'export interface GatewayLogoutResult {\n    readonly cookies: readonly GatewayCookieDirective[];\n}',
+  },
+  {
+    name: 'GatewayQueryEntry',
+    declaration: 'export interface GatewayQueryEntry {\n    readonly name: string;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'GatewayRegistrationRequest',
+    declaration: 'export interface GatewayRegistrationRequest extends GatewayRequest {\n    readonly identifier: LoginIdentifierInput;\n    readonly password: string;\n    readonly displayName?: string;\n    readonly extensions?: UserExtensions;\n}',
+  },
+  {
+    name: 'GatewayRequest',
+    declaration: 'export interface GatewayRequest {\n    readonly requestId: string;\n    readonly signal: AbortSignal;\n    readonly headers?: readonly GatewayHeader[];\n    readonly cookies?: readonly GatewayCookie[];\n    readonly query?: readonly GatewayQueryEntry[];\n}',
+  },
+  {
+    name: 'GatewaySessionResult',
+    declaration: 'export interface GatewaySessionResult {\n    readonly user?: UserRecord;\n    readonly accessToken: string;\n    readonly accessExpiresAt?: number;\n    readonly cookies: readonly GatewayCookieDirective[];\n}',
+  },
+  {
+    name: 'GatewayWebSocketAuthenticationRequest',
+    declaration: 'export interface GatewayWebSocketAuthenticationRequest extends GatewayRequest {\n    readonly subprotocols?: readonly string[];\n}',
   },
   {
     name: 'GenerateOptions',

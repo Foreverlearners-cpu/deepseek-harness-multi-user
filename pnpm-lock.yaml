@@ -4996,6 +4996,31 @@ importers:
         specifier: workspace:^
         version: link:../user
 
+  packages/identity/auth-gateway:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-account':
+        specifier: workspace:^
+        version: link:../account
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-auth-jwt':
+        specifier: workspace:^
+        version: link:../auth-jwt
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+
   packages/identity/auth-jwt:
     dependencies:
       '@deepseek-ai/schemastery':
