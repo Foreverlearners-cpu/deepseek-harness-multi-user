@@ -397,5 +397,3 @@ export async function apply(ctx: Context): Promise<void> {
     'account-mysql: registration operation Provider',
   )
 }
-
-export default apply

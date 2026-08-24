@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
+import { Context } from '@deepseek-ai/cordis'
 import {
   type AccountRecoveryState,
   type RegistrationOperationAdvanceRequest,
 } from '@deepseek-ai/dsh-account'
 import { authenticationRequestId } from '@deepseek-ai/dsh-auth'
 import { userId, type UserRecord } from '@deepseek-ai/dsh-user'
-import apply, {
+import * as accountMysql from '../src/index.ts'
+import {
   ACCOUNT_MYSQL_SCHEMA_VERSION,
   AccountMysqlRegistrationOperations,
   inject,
@@ -38,6 +41,12 @@ function setup(mysql = new FakeMysql()): {
   provider: AccountMysqlRegistrationOperations
 } {
   return { mysql, provider: new AccountMysqlRegistrationOperations(mysql.asService()) }
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((settle) => { resolve = settle })
+  return { promise, resolve }
 }
 
 async function advance(
@@ -312,6 +321,30 @@ describe('account-mysql plugin and schema', () => {
     await expect(mysql.connection(initializeSchema)).resolves.toBeUndefined()
   })
 
+  it('serializes concurrent schema initialization and creates the owned table once', async () => {
+    const mysql = new FakeMysql()
+    const entered = deferred()
+    const release = deferred()
+    let first = true
+    mysql.afterSchemaLock = async () => {
+      if (!first) return
+      first = false
+      entered.resolve()
+      await release.promise
+    }
+    const firstInitialization = mysql.connection(initializeSchema)
+    await entered.promise
+    let secondSettled = false
+    const secondInitialization = mysql.connection(initializeSchema).finally(() => { secondSettled = true })
+    await Promise.resolve()
+    expect(secondSettled).toBe(false)
+    release.resolve()
+    await expect(Promise.all([firstInitialization, secondInitialization])).resolves.toEqual([undefined, undefined])
+    expect(mysql.queries.filter(query => query.startsWith('CREATE TABLE dsh_account_registration_operations')))
+      .toHaveLength(1)
+    expect(mysql.queries.filter(query => query.startsWith('SELECT RELEASE_LOCK('))).toHaveLength(2)
+  })
+
   it('rejects unsafe schema states and lock failures', async () => {
     for (const mutate of [
       (mysql: FakeMysql) => { mysql.schemaLockResult = 0 },
@@ -330,24 +363,27 @@ describe('account-mysql plugin and schema', () => {
     await expect(combined.connection(initializeSchema)).rejects.toBeInstanceOf(AggregateError)
   })
 
-  it('registers after schema verification and redacts activation failures', async () => {
+  it('retains namespace injections through the real Loader and starts after both services', async () => {
     const mysql = new FakeMysql()
     const disposer = vi.fn()
     const register = vi.fn(() => disposer)
-    const effect = vi.fn((factory: () => () => void) => factory())
-    await expect(apply({
-      mysql: mysql.asService(),
-      accounts: { registrationOperations: { register } },
-      effect,
-    } as never)).resolves.toBeUndefined()
+    expect('default' in accountMysql).toBe(false)
+    const loader = Object.create(Loader.prototype) as Loader
+    const unwrapped = loader.unwrapExports(accountMysql) as typeof accountMysql
+    expect(unwrapped).toBe(accountMysql)
     expect(name).toBe('account-mysql')
     expect(inject).toEqual(['accounts', 'mysql'])
+    const ctx = new Context()
+    ctx.provide('mysql', mysql.asService())
+    ctx.provide('accounts', { registrationOperations: { register } } as never)
+    await ctx.plugin(unwrapped)
     expect(register).toHaveBeenCalledWith(expect.any(AccountMysqlRegistrationOperations))
-    expect(effect).toHaveBeenCalledWith(expect.any(Function), 'account-mysql: registration operation Provider')
+    await ctx.fiber.dispose()
+    expect(disposer).toHaveBeenCalledOnce()
 
     const failed = new FakeMysql()
     failed.failNext = new Error('CREATE password=secret')
-    const error = await apply({ mysql: failed.asService() } as never).catch((cause: unknown) => cause)
+    const error = await accountMysql.apply({ mysql: failed.asService() } as never).catch((cause: unknown) => cause)
     expect(error).toMatchObject({ code: 'unavailable', message: 'account-mysql: schema initialization failed' })
     expect(JSON.stringify(error)).not.toContain('password=secret')
   })

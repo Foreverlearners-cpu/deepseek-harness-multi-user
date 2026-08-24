@@ -52,6 +52,7 @@ export class FakeMysql {
   operationTableExists = false
   schemaLockResult: number | string | null = 1
   schemaUnlockResult: number | string | null = 1
+  afterSchemaLock: (() => Promise<void>) | undefined
   failNext: Error | undefined
   rejectNextConnection: Error | undefined
   rollbackFailure: Error | undefined
@@ -59,6 +60,8 @@ export class FakeMysql {
   hideNextLockedRead = false
   hideLockedReadCountdown: number | undefined
   private transactionRows: Map<string, FakeOperationRow> | undefined
+  private schemaLockHeld = false
+  private readonly schemaLockWaiters: Array<() => void> = []
 
   readonly connection = async <T>(callback: (connection: MysqlConnection) => T | Promise<T>): Promise<T> => {
     if (this.rejectNextConnection !== undefined) {
@@ -86,8 +89,22 @@ export class FakeMysql {
       }
       const normalized = sql.replaceAll(/\s+/g, ' ').trim()
       this.queries.push(normalized)
-      if (normalized.startsWith('SELECT GET_LOCK(')) return [[{ acquired: this.schemaLockResult }], []]
-      if (normalized.startsWith('SELECT RELEASE_LOCK(')) return [[{ released: this.schemaUnlockResult }], []]
+      if (normalized.startsWith('SELECT GET_LOCK(')) {
+        if (Number(this.schemaLockResult) !== 1) return [[{ acquired: this.schemaLockResult }], []]
+        if (this.schemaLockHeld) {
+          await new Promise<void>((resolve) => { this.schemaLockWaiters.push(resolve) })
+        }
+        this.schemaLockHeld = true
+        await this.afterSchemaLock?.()
+        return [[{ acquired: this.schemaLockResult }], []]
+      }
+      if (normalized.startsWith('SELECT RELEASE_LOCK(')) {
+        if (Number(this.schemaUnlockResult) === 1) {
+          this.schemaLockHeld = false
+          this.schemaLockWaiters.shift()?.()
+        }
+        return [[{ released: this.schemaUnlockResult }], []]
+      }
       if (normalized.startsWith('CREATE TABLE IF NOT EXISTS dsh_account_schema')) return [{ affectedRows: 0 }, []]
       if (normalized.startsWith('SELECT version FROM dsh_account_schema')) {
         return [this.schemaVersion === undefined ? [] : [{ version: this.schemaVersion }], []]

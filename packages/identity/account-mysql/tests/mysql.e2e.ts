@@ -4,7 +4,7 @@ import Mysql, { type Config as MysqlConfig } from '@deepseek-ai/dsh-mysql'
 import { Context } from '@deepseek-ai/cordis'
 import { RegistrationOperationProviderRegistry } from '@deepseek-ai/dsh-account'
 import { userId, type UserRecord } from '@deepseek-ai/dsh-user'
-import apply from '../src/index.ts'
+import * as accountMysql from '../src/index.ts'
 
 const target = process.env.DSH_MYSQL_TEST_URL
 const requestId = authenticationRequestId('account-mysql-e2e')
@@ -48,7 +48,7 @@ beforeEach(async () => {
   ctx.provide('accounts', {
     registrationOperations: new RegistrationOperationProviderRegistry(),
   } as never)
-  await ctx.plugin(apply)
+  await ctx.plugin(accountMysql)
 })
 
 afterEach(async () => {

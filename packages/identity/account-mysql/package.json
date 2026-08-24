@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-account": "workspace:^",
     "@deepseek-ai/dsh-auth": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
