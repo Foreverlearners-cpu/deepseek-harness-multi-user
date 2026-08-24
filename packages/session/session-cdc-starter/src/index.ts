@@ -197,7 +197,10 @@ export class SessionCdcStarterService extends Service {
     this.checkConsumers()
   }
 
-  /** Return detached aggregate health without records, errors, or backend credentials. */
+  /**
+   * Return detached aggregate health without records, errors, or backend credentials.
+   * @returns The aggregate starter and consumer health snapshot.
+   */
   health(): SessionCdcStarterHealth {
     const subscriptions = this.kafkaEvents?.health() ?? []
     return {

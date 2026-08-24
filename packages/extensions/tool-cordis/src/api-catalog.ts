@@ -87,8 +87,11 @@ export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
   'dynamicCordisRunner',
   'elasticsearch',
   'kafka',
+  'kafkaEvents',
   'mysql',
   'redis',
+  'sessionCdcStarter',
+  'sessionProjectionReconciler',
 ])
 
 /** Every harness `ctx.<key>` service, sorted by key. */

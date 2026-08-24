@@ -102,4 +102,37 @@ async subscribe(request: KafkaSubscribeRequest): Promise<KafkaSubscription>
 ```
 
 Source: [`packages/multi/kafka/src/index.ts:507`](../../packages/multi/kafka/src/index.ts)
+
+<a id="ctxkafkaevents--kafkaeventsservice"></a>
+
+### `ctx.kafkaEvents` — `KafkaEventsService`
+
+Service that creates typed producers and scope-owned typed consumers.
+
+```ts cordis-catalog
+/**
+ * Create a stateless typed producer.
+ * @param codec - event wire protocol.
+ * @param router - per-event Kafka routing.
+ * @returns a producer that delegates directly to `ctx.kafka.publish`.
+ */
+producer<T>(codec: EventCodec<T>, router: EventRouter<T>): KafkaEventProducer<T>
+
+/**
+ * Start one sequential typed consumer owned by the calling Cordis scope.
+ * Decode, filter, and handler failures reject `done`; the underlying Kafka
+ * service therefore does not commit the current record.
+ * @param options - Kafka subscription and typed event behavior.
+ * @returns the running subscription after the broker consumer is ready.
+ */
+async subscribe<T>(options: KafkaEventConsumerOptions<T>): Promise<KafkaEventSubscription>
+
+/**
+ * Return health for subscriptions currently owned by this service scope.
+ * @returns detached snapshots ordered by subscription id.
+ */
+health(): readonly KafkaEventConsumerHealth[]
+```
+
+Source: [`packages/multi/kafka-events/src/index.ts:306`](../../packages/multi/kafka-events/src/index.ts)
 <!-- END GENERATED cordis-surface -->

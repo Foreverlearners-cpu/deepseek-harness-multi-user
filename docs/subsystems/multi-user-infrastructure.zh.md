@@ -37,7 +37,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 Captures configured MySQL row changes and publishes them to Kafka.
 
-Source: [`packages/multi/cdc/src/index.ts:506`](../../packages/multi/cdc/src/index.ts)
+Source: [`packages/multi/cdc/src/index.ts:640`](../../packages/multi/cdc/src/index.ts)
 
 <a id="ctxelasticsearch--elasticsearchservice"></a>
 

@@ -50,7 +50,7 @@ async authenticate(attempt: AuthenticationAttempt): Promise<AuthenticatedCall>
 assertCurrent(value: unknown): AuthenticatedCall
 ```
 
-Source: [`packages/identity/auth/src/index.ts:279`](../../packages/identity/auth/src/index.ts)
+Source: [`packages/identity/auth/src/index.ts:303`](../../packages/identity/auth/src/index.ts)
 
 <a id="auth-events"></a>
 

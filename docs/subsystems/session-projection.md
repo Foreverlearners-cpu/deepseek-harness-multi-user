@@ -150,6 +150,49 @@ Types: [Session](session.md) · [SessionHeader](persistence.md) · [SessionId](c
 
 Source: [`packages/session/session-projection-cache/src/index.ts:71`](../../packages/session/session-projection-cache/src/index.ts)
 
+<a id="ctxsessionprojectionreconciler--sessionprojectionreconcilerservice"></a>
+
+### `ctx.sessionProjectionReconciler` — `SessionProjectionReconcilerService`
+
+Single-job service for authoritative session projection rebuilding.
+
+```ts cordis-catalog
+/**
+ * Register the only authoritative source.
+ * @param source - application-owned paginated snapshot reader.
+ * @returns idempotent disposer for this exact registration.
+ * @throws when a source is already registered.
+ */
+registerSource(source: SessionProjectionSource): () => void
+
+/**
+ * Register one named sink.
+ * @param sink - idempotent destination adapter.
+ * @returns idempotent disposer for this exact registration.
+ * @throws when its name is empty or already registered.
+ */
+registerSink(sink: SessionProjectionSink): () => void
+
+/**
+ * Run one authoritative reconciliation to the currently registered sinks.
+ * A page cursor advances only after every record reaches every sink. Source,
+ * sink, validation, and cancellation failures stop immediately and return the
+ * current page start for idempotent replay.
+ * @param request - resume position, bounded size, tenant, strategy, and cancellation.
+ * @returns completion or a privacy-bounded resumable failure.
+ * @throws when configuration is missing, invalid, or another job is active.
+ */
+reconcile(request: SessionProjectionReconcileRequest): Promise<SessionProjectionReconcileResult>
+
+/**
+ * Return current job progress without records, visible text, or exception details.
+ * @returns a detached idle or running snapshot.
+ */
+health(): SessionProjectionReconcilerHealth
+```
+
+Source: [`packages/session/session-projection-reconciler/src/index.ts:178`](../../packages/session/session-projection-reconciler/src/index.ts)
+
 <a id="ctxsessionprojections--sessionprojectionregistry"></a>
 
 ### `ctx.sessionProjections` — `SessionProjectionRegistry`
