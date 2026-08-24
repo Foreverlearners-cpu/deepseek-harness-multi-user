@@ -47,6 +47,130 @@ pnpm run build
 pnpm dsh web
 ```
 
+## Authentication suite
+
+The authentication suite provides a complete Host-only account path without coupling authentication to HTTP routing or authorization policy. The default [`dsh-auth-starter`](packages/identity/auth-starter/README.md) entry assembles MySQL-backed users, login credentials, refresh-token families, durable registration, Password and JWT authentication, account operations, and a transport-neutral gateway. Applications normally mount the Starter instead of wiring every package independently.
+
+### Packages and responsibilities
+
+| Layer | Packages | Responsibility |
+|---|---|---|
+| Authentication contract | [`dsh-auth`](packages/identity/auth/README.md) | Selects exactly one Provider by evidence kind, authenticates untrusted evidence, mints process-local `AuthenticatedCall` values, and checks their current provenance. |
+| User directory | [`dsh-user`](packages/identity/user/README.md), [`dsh-user-mysql`](packages/identity/user-mysql/README.md) | Defines stable users, profile and lifecycle revisions, then persists that directory in MySQL. |
+| Login credentials | [`dsh-user-credential`](packages/identity/user-credential/README.md), [`dsh-user-credential-mysql`](packages/identity/user-credential-mysql/README.md) | Defines normalized identifiers and password state; the MySQL Provider owns uniqueness, scrypt verifiers, transactions, and dummy verification. |
+| Refresh state | [`dsh-auth-token`](packages/identity/auth-token/README.md), [`dsh-auth-token-mysql`](packages/identity/auth-token-mysql/README.md) | Defines opaque refresh families, digest-only persistence, atomic rotation, replay detection, inspection, and revocation. |
+| Account orchestration | [`dsh-account`](packages/identity/account/README.md), [`dsh-account-mysql`](packages/identity/account-mysql/README.md) | Coordinates registration, login, refresh, logout, profile/password changes, and durable idempotent registration progress. |
+| Authentication Providers | [`dsh-auth-password`](packages/identity/auth-password/README.md), [`dsh-auth-jwt`](packages/identity/auth-jwt/README.md) | Verifies password evidence and independently signs and validates short-lived Access JWTs and rotating Refresh JWTs. |
+| Entry and composition | [`dsh-auth-gateway`](packages/identity/auth-gateway/README.md), [`dsh-auth-starter`](packages/identity/auth-starter/README.md) | Enforces HTTP/WebSocket credential carriers and composes the complete MySQL suite in dependency order. |
+
+`dsh-user`, `dsh-user-credential`, and `dsh-auth-token` are Provider-neutral service definitions. Their MySQL packages own durable data; Password and JWT packages consume those services without owning their tables.
+
+### Request lifecycle
+
+1. **Register:** the adapter calls `ctx.authGateway.register()`, `ctx.accounts` records durable progress, creates the user, adds the normalized identifier, sets the password, and returns the completed `UserRecord`.
+2. **Log in:** the gateway passes the identifier and password to `ctx.accounts`; `dsh-auth-password` resolves the identifier and performs real or dummy verification, active-user state is checked, and `dsh-auth-jwt` creates an Access JWT, Refresh JWT, and server-side refresh family.
+3. **Protect a request:** an Authorization Bearer reaches `authenticateHttp()`; the JWT Provider verifies signature, issuer, audience, Token type, expiry, family state, and active-user state. The gateway returns a process-local `AuthenticatedCall`, and `guard()` checks it again immediately before protected work.
+4. **Refresh:** the gateway requires the configured Refresh Cookie, an exact allowed Origin, and matching CSRF header and readable Cookie. It verifies the Refresh JWT and atomically rotates the opaque server-side Credential; the returned directive sets the replacement Refresh Cookie as Secure and HttpOnly, and replaying a rotated Refresh JWT revokes the whole family.
+5. **Log out:** the gateway authenticates the Access Bearer, revalidates the call, revokes every JWT family for that user, and returns directives that clear the Refresh and CSRF Cookies.
+
+### Run the complete MySQL suite from source
+
+After the source installation above, link the Starter into the Web profile:
+
+```sh
+pnpm dsh plugin --profile web add ./packages/identity/auth-starter
+```
+
+Create `auth.cordis.yml` in the repository root. The values and field names below are the Starter's published Cordis configuration:
+
+```yaml
+- insert:
+    - id: authentication
+      name: '@deepseek-ai/dsh-auth-starter'
+      config:
+        mysql:
+          host: 127.0.0.1
+          user: dsh
+          password: !!js env.DSH_MYSQL_PASSWORD
+          database: dsh
+        jwt:
+          issuer: https://auth.example
+          audience: dsh-web
+          activeKeyId: primary
+          keys:
+            - keyId: primary
+              secret: !!js env.DSH_AUTH_JWT_SECRET
+        gateway:
+          allowedOrigins: [https://app.example]
+```
+
+The Starter mounts only the Host-side `ctx.authGateway` service. It does not add HTTP routes, framework middleware, or a Web login UI; a framework adapter must translate native requests and responses to and from the gateway API before users can register or log in.
+
+Generate a 32-byte key with Node.js on Windows, macOS, or Linux, then set the printed value as the `DSH_AUTH_JWT_SECRET` environment variable for the Harness process. Do not paste the value into this file or commit it:
+
+```sh
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
+```
+
+Start the Web profile with the patch:
+
+```sh
+pnpm dsh web --patch ./auth.cordis.yml
+```
+
+`DSH_AUTH_JWT_SECRET` must be the canonical Base64url encoding of 32-128 random bytes. MySQL credentials and JWT signing material are mandatory; the Starter has no production secret defaults. The MySQL account must be allowed to create and use the suite-owned tables.
+
+### Call the public gateway
+
+Framework adapters pass structured headers, parsed Cookies, decoded Query entries, and bounded body fields to `ctx.authGateway`. This example uses the same public registration, login, Access Bearer, and `guard()` APIs exercised by the Starter tests:
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import '@deepseek-ai/dsh-auth-gateway'
+
+const signal = new AbortController().signal
+
+export async function registerAndAuthenticate(ctx: Context): Promise<string> {
+  const user = await ctx.authGateway.register({
+    requestId: 'register-1',
+    signal,
+    identifier: { kind: 'username', value: 'alice' },
+    password: 'correct horse battery staple',
+    displayName: 'Alice',
+  })
+
+  const login = await ctx.authGateway.login({
+    requestId: 'login-1',
+    signal,
+    identifier: { kind: 'username', value: 'alice' },
+    password: 'correct horse battery staple',
+  })
+
+  const call = await ctx.authGateway.authenticateHttp({
+    requestId: 'request-1',
+    signal,
+    headers: [{ name: 'Authorization', value: `Bearer ${login.accessToken}` }],
+  })
+
+  return ctx.authGateway.guard(call, current => current.principal.id === user.userId
+    ? current.principal.id
+    : Promise.reject(new Error('authenticated user changed')))
+}
+```
+
+Login returns adapter-neutral Cookie directives: the Refresh value defaults to the Secure, HttpOnly, SameSite=Strict `__Host-dsh_refresh` Cookie, while `__Host-dsh_csrf` carries the readable double-submit value. Adapters must use maintained Cookie parsers and must not log request objects, session results, tokens, passwords, or Cookie directives.
+
+### Security boundaries
+
+- Access and Refresh JWTs are distinct signed artifacts and are accepted only by their own flows; Refresh also requires current server-side family state.
+- Refresh rotation is single-use. Reuse of an old Refresh JWT revokes the family rather than issuing another session.
+- `AuthenticatedCall` is Host-only, process-local authority. It must not cross JSON, RPC, session storage, or another process.
+- `dsh-auth-gateway` returns structured operations and Cookie directives; it is not an HTTP router or framework middleware.
+- The Starter mounts account administration but no administrator authorizer. Administration fails closed until one explicit authorization Provider is registered.
+- Rate limiting, lockout, recovery, RBAC, tenant derivation, and long-lived WebSocket expiry policy remain separate plugins.
+
+For the complete contracts, see the [Starter guide](packages/identity/auth-starter/README.md), [authentication runtime](docs/subsystems/authentication.md), [user directory](docs/subsystems/user-directory.md), [user credentials](docs/subsystems/user-credentials.md), [refresh-token lifecycle](docs/subsystems/auth-token.md), and generated [configuration catalog](docs/config-catalog.md).
+
 ## Quick MySQL, Kafka, Redis, and Elasticsearch setup
 
 The following example publishes row changes made to `app.users` after startup to Kafka, then projects them independently into Redis and Elasticsearch. It uses the generic CDC plugins; for the session-specific composition, see [`dsh-session-cdc-starter`](packages/session/session-cdc-starter/README.md).
@@ -177,7 +301,25 @@ Redis and Elasticsearch must use different consumer groups. Sharing a group woul
 
 - Feel free to submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
 - Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
-- Join <a href="https://discord.gg/Ycq5dCaS4">DeepSeek Harness Discord community</a>.
+
+- Join the DeepSeek Harness WeCom group by scanning the assistant QR code and completing the survey; the assistant will invite you after submission.
+
+<table>
+  <thead>
+    <tr>
+      <th align="center">WeCom assistant</th>
+      <th align="center">Group survey</th>
+      <th align="center">WeChat official account</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center"><img src="assets/community-wecom-assistant.png" alt="DeepSeek Harness WeCom assistant QR code" width="180" height="180"></td>
+      <td align="center"><a href="https://trtgsjkv6r.feishu.cn/share/base/form/shrcnIt5twSVdLGD52KJBckGCgg"><img src="assets/community-wecom-survey.png" alt="DeepSeek Harness group survey QR code" width="180" height="180"></a></td>
+      <td align="center"><img src="assets/community-wechat-official-account.png" alt="DeepSeek Harness WeChat official account QR code" width="180" height="180"></td>
+    </tr>
+  </tbody>
+</table>
 
 ## Contributing
 
