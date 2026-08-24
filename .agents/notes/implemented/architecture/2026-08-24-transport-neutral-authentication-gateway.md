@@ -12,9 +12,9 @@ Authentication Providers and account orchestration intentionally do not know HTT
 
 `dsh-auth-gateway` owns a Host-only service that accepts structured transport fields instead of framework request objects. It preserves duplicate header, cookie, query, and subprotocol entries long enough to reject ambiguous credentials, then forwards only one bounded evidence value and the original request lifecycle to `ctx.auth` or `ctx.accounts`.
 
-HTTP business authentication accepts one access bearer or access cookie. Passwords exist only in bounded login and registration body fields. Browser refresh uses a path-scoped Secure HttpOnly cookie and requires an exact configured Origin plus a matching readable CSRF cookie and header. WebSocket authentication happens only during the handshake; refresh and password material in URL-like carriers is rejected.
+HTTP business authentication accepts only one Authorization Bearer. Passwords exist only in bounded login and registration body fields. Browser refresh uses exact `__Host-` Secure cookies with no Domain and `Path=/`, and requires an exact configured Origin plus a matching readable CSRF cookie and header. WebSocket authentication happens only during the handshake; Authorization is the default, while Query and Subprotocol carriers require separate explicit options and return mandatory adapter redaction instructions. Refresh and password material in URL-like carriers is rejected.
 
-The gateway returns fixed error codes and suggested HTTP statuses without causes. It returns refresh material only as an HttpOnly cookie instruction and keeps `AuthenticatedCall` inside the Host. Protected handlers use `guard()`, which calls `ctx.auth.assertCurrent()` immediately before identity use, so authentication has both Provider verification at entry and current-registration, cancellation, and expiry validation at use.
+The gateway returns fixed error codes and suggested HTTP statuses without causes. It returns refresh material only as an HttpOnly cookie instruction and keeps `AuthenticatedCall` inside the Host. Protected handlers use `guard()`, which calls `ctx.auth.assertCurrent()` immediately before identity use. This second check covers Host provenance, current Provider registration, cancellation, and expiry; it does not repeat JWT signature verification. Access and refresh JWTs are independently verified by their own flows.
 
 The service delegates only `ctx.accounts` public methods. Administrator account methods remain outside the gateway and require an independently authorized administration adapter.
 
@@ -32,6 +32,6 @@ The service delegates only `ctx.accounts` public methods. Administrator account 
 
 HTTP and WebSocket frameworks need small adapters that retain duplicate security fields and parse cookies with maintained framework APIs. The gateway is independently testable and does not constrain router selection.
 
-Secure defaults reject refresh until exact origins are configured and reject WebSocket access tokens in query strings unless explicitly enabled. Deployments must configure origins and serialize cookie directives correctly.
+Secure defaults reject refresh until exact origins are configured and reject WebSocket access tokens in Query or Subprotocol fields unless explicitly enabled. Deployments must configure origins, preserve the `__Host-` Cookie attributes, serialize cookie directives correctly, and apply returned WebSocket redaction instructions.
 
 The package does not provide rate limiting, lockout, recovery, or long-lived WebSocket disconnection policy. Those controls remain separately composable instead of becoming hidden behavior in credential parsing.

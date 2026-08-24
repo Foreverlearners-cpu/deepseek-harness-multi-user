@@ -24,15 +24,14 @@ import type {
   GatewayRequest,
   GatewaySessionResult,
   GatewayWebSocketAuthenticationRequest,
+  GatewayWebSocketAuthenticationResult,
 } from './types.ts'
 
 export type * from './types.ts'
 
-const DEFAULT_REFRESH_COOKIE = '__Secure-dsh_refresh'
-const DEFAULT_ACCESS_COOKIE = '__Host-dsh_access'
-const DEFAULT_CSRF_COOKIE = '__Secure-dsh_csrf'
+const DEFAULT_REFRESH_COOKIE = '__Host-dsh_refresh'
+const DEFAULT_CSRF_COOKIE = '__Host-dsh_csrf'
 const DEFAULT_CSRF_HEADER = 'x-dsh-csrf'
-const DEFAULT_REFRESH_PATH = '/auth/refresh'
 const MAX_ENTRIES = 64
 const MAX_NAME_BYTES = 128
 const MAX_VALUE_BYTES = 16_384
@@ -45,23 +44,21 @@ const SUBPROTOCOL_PREFIX = 'dsh-auth-bearer.'
 
 interface ResolvedSpec {
   readonly refreshCookieName: string
-  readonly accessCookieName: string
   readonly csrfCookieName: string
   readonly csrfHeaderName: string
-  readonly refreshCookiePath: string
   readonly allowedOrigins: ReadonlySet<string>
   readonly allowWebSocketQueryAccessToken: boolean
+  readonly allowWebSocketBearerSubprotocol: boolean
 }
 
 /** Cordis configuration schema. */
 export const Config = z.object({
   refreshCookieName: z.string().default(DEFAULT_REFRESH_COOKIE),
-  accessCookieName: z.string().default(DEFAULT_ACCESS_COOKIE),
   csrfCookieName: z.string().default(DEFAULT_CSRF_COOKIE),
   csrfHeaderName: z.string().default(DEFAULT_CSRF_HEADER),
-  refreshCookiePath: z.string().default(DEFAULT_REFRESH_PATH),
   allowedOrigins: z.array(z.string()).default([]),
   allowWebSocketQueryAccessToken: z.boolean().default(false),
+  allowWebSocketBearerSubprotocol: z.boolean().default(false),
 }) as unknown as z<AuthGatewayConfig>
 
 /** Transport-safe gateway failure without an underlying cause or secret. */
@@ -86,20 +83,17 @@ function bytes(value: string): number {
   return Buffer.byteLength(value, 'utf8')
 }
 
-function validName(value: string): boolean {
-  return /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(value)
+function validHostCookieName(value: string): boolean {
+  return /^__Host-[!#$%&'*+.^_`|~0-9A-Za-z-]{1,121}$/.test(value)
 }
 
 function resolveSpec(config: AuthGatewayConfig): ResolvedSpec {
   const refreshCookieName = config.refreshCookieName ?? DEFAULT_REFRESH_COOKIE
-  const accessCookieName = config.accessCookieName ?? DEFAULT_ACCESS_COOKIE
   const csrfCookieName = config.csrfCookieName ?? DEFAULT_CSRF_COOKIE
   const csrfHeaderName = (config.csrfHeaderName ?? DEFAULT_CSRF_HEADER).toLowerCase()
-  const refreshCookiePath = config.refreshCookiePath ?? DEFAULT_REFRESH_PATH
-  if (![refreshCookieName, accessCookieName, csrfCookieName].every(validName)
+  if (![refreshCookieName, csrfCookieName].every(validHostCookieName)
     || !/^[a-z0-9-]{1,128}$/.test(csrfHeaderName)
-    || !refreshCookiePath.startsWith('/') || refreshCookiePath.includes(';')
-    || new Set([refreshCookieName, accessCookieName, csrfCookieName]).size !== 3) {
+    || refreshCookieName === csrfCookieName) {
     throw new TypeError('auth-gateway: carrier configuration is invalid')
   }
   const origins = config.allowedOrigins ?? []
@@ -119,12 +113,11 @@ function resolveSpec(config: AuthGatewayConfig): ResolvedSpec {
   if (allowedOrigins.size !== origins.length) throw new TypeError('auth-gateway: allowed origins must be unique')
   return Object.freeze({
     refreshCookieName,
-    accessCookieName,
     csrfCookieName,
     csrfHeaderName,
-    refreshCookiePath,
     allowedOrigins,
     allowWebSocketQueryAccessToken: config.allowWebSocketQueryAccessToken ?? false,
+    allowWebSocketBearerSubprotocol: config.allowWebSocketBearerSubprotocol ?? false,
   })
 }
 
@@ -138,21 +131,48 @@ function requestId(request: GatewayRequest) {
   }
 }
 
-function entries(values: readonly (GatewayHeader | GatewayCookie | GatewayQueryEntry)[] | undefined): Map<string, string> {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function entries(values: unknown, caseInsensitive: boolean): Map<string, string> {
   if (values === undefined) return new Map()
-  if (values.length > MAX_ENTRIES) throw new AuthGatewayError('invalid-request', 400)
+  if (!Array.isArray(values) || values.length > MAX_ENTRIES) throw new AuthGatewayError('invalid-request', 400)
   const result = new Map<string, string>()
   for (const entry of values) {
-    if (typeof entry.name !== 'string' || typeof entry.value !== 'string'
+    if (!isRecord(entry) || typeof entry.name !== 'string' || typeof entry.value !== 'string'
       || bytes(entry.name) === 0 || bytes(entry.name) > MAX_NAME_BYTES || bytes(entry.value) > MAX_VALUE_BYTES) {
       throw new AuthGatewayError('invalid-request', 400)
     }
-    const key = entry.name.toLowerCase()
+    const key = caseInsensitive ? entry.name.toLowerCase() : entry.name
     if (result.has(key)) throw new AuthGatewayError('invalid-request', 400)
     result.set(key, entry.value)
   }
   return result
 }
+
+function headers(values: readonly GatewayHeader[] | undefined): Map<string, string> {
+  return entries(values, true)
+}
+
+function cookies(values: readonly GatewayCookie[] | undefined): Map<string, string> {
+  return entries(values, false)
+}
+
+function query(values: readonly GatewayQueryEntry[] | undefined): Map<string, string> {
+  return entries(values, false)
+}
+
+function hasQueryName(values: ReadonlyMap<string, string>, names: ReadonlySet<string>): boolean {
+  for (const name of values.keys()) {
+    if (names.has(name.toLowerCase())) return true
+  }
+  return false
+}
+
+const ACCESS_QUERY_NAMES = new Set([ACCESS_QUERY])
+const SECRET_QUERY_NAMES = new Set([REFRESH_QUERY, PASSWORD_QUERY])
+const CREDENTIAL_QUERY_NAMES = new Set([ACCESS_QUERY, REFRESH_QUERY, PASSWORD_QUERY])
 
 function bearer(value: string | undefined): string | undefined {
   if (value === undefined) return undefined
@@ -200,14 +220,13 @@ export class AuthGatewayService extends Service {
    */
   async authenticateHttp(request: GatewayHttpAuthenticationRequest): Promise<AuthenticatedCall> {
     const lifecycle = requestId(request)
-    const headers = entries(request.headers)
-    const cookies = entries(request.cookies)
-    const query = entries(request.query)
-    if (query.has(ACCESS_QUERY) || query.has(REFRESH_QUERY) || query.has(PASSWORD_QUERY)
-      || cookies.has(this.spec.refreshCookieName.toLowerCase())) {
+    const headerValues = headers(request.headers)
+    cookies(request.cookies)
+    const queryValues = query(request.query)
+    if (hasQueryName(queryValues, CREDENTIAL_QUERY_NAMES)) {
       throw new AuthGatewayError('invalid-request', 400)
     }
-    const token = one([bearer(headers.get('authorization')), cookies.get(this.spec.accessCookieName.toLowerCase())])
+    const token = one([bearer(headerValues.get('authorization'))])
     return this.authenticate(token, lifecycle, request.signal, 'http')
   }
 
@@ -215,35 +234,42 @@ export class AuthGatewayService extends Service {
    * @param request - structured handshake fields and lifecycle.
    * @returns Host-only call minted for the WebSocket channel.
    */
-  async authenticateWebSocket(request: GatewayWebSocketAuthenticationRequest): Promise<AuthenticatedCall> {
+  async authenticateWebSocket(request: GatewayWebSocketAuthenticationRequest): Promise<GatewayWebSocketAuthenticationResult> {
     const lifecycle = requestId(request)
-    const headers = entries(request.headers)
-    const cookies = entries(request.cookies)
-    const query = entries(request.query)
-    if (query.has(REFRESH_QUERY) || query.has(PASSWORD_QUERY)
-      || cookies.has(this.spec.refreshCookieName.toLowerCase())) {
+    const headerValues = headers(request.headers)
+    cookies(request.cookies)
+    const queryValues = query(request.query)
+    if (hasQueryName(queryValues, SECRET_QUERY_NAMES)
+      || (hasQueryName(queryValues, ACCESS_QUERY_NAMES) && !queryValues.has(ACCESS_QUERY))) {
       throw new AuthGatewayError('invalid-request', 400)
     }
-    const protocols = request.subprotocols ?? []
-    if (protocols.length > MAX_ENTRIES) throw new AuthGatewayError('invalid-request', 400)
+    const protocols: unknown = request.subprotocols === undefined ? [] : request.subprotocols
+    if (!Array.isArray(protocols) || protocols.length > MAX_ENTRIES) throw new AuthGatewayError('invalid-request', 400)
     let protocolToken: string | undefined
     for (const protocol of protocols) {
       if (typeof protocol !== 'string' || bytes(protocol) > MAX_VALUE_BYTES) throw new AuthGatewayError('invalid-request', 400)
       if (/refresh|password/i.test(protocol)) throw new AuthGatewayError('invalid-request', 400)
       if (protocol.startsWith(SUBPROTOCOL_PREFIX)) {
+        if (!this.spec.allowWebSocketBearerSubprotocol) throw new AuthGatewayError('invalid-request', 400)
         if (protocolToken !== undefined) throw new AuthGatewayError('invalid-request', 400)
         protocolToken = protocol.slice(SUBPROTOCOL_PREFIX.length)
       }
     }
-    const queryToken = query.get(ACCESS_QUERY)
+    const queryToken = queryValues.get(ACCESS_QUERY)
     if (queryToken !== undefined && !this.spec.allowWebSocketQueryAccessToken) throw new AuthGatewayError('invalid-request', 400)
-    const token = one([
-      bearer(headers.get('authorization')),
-      cookies.get(this.spec.accessCookieName.toLowerCase()),
-      protocolToken,
-      queryToken,
-    ])
-    return this.authenticate(token, lifecycle, request.signal, 'websocket')
+    const headerToken = bearer(headerValues.get('authorization'))
+    const token = one([headerToken, protocolToken, queryToken])
+    const call = await this.authenticate(token, lifecycle, request.signal, 'websocket')
+    const carrier = headerToken !== undefined ? 'authorization' : protocolToken !== undefined ? 'subprotocol' : 'query'
+    return Object.freeze({
+      call,
+      carrier,
+      adapter: Object.freeze({
+        echoCredentialSubprotocol: false,
+        redactSubprotocols: protocolToken !== undefined,
+        redactQuery: queryToken !== undefined,
+      }),
+    })
   }
 
   /** Register an account without issuing credentials.
@@ -296,17 +322,17 @@ export class AuthGatewayService extends Service {
    */
   async refresh(request: GatewayRequest): Promise<GatewaySessionResult> {
     const lifecycle = requestId(request)
-    const headers = entries(request.headers)
-    const cookies = entries(request.cookies)
-    const query = entries(request.query)
-    if (headers.has('authorization') || cookies.has(this.spec.accessCookieName.toLowerCase())
-      || query.has(ACCESS_QUERY) || query.has(REFRESH_QUERY) || query.has(PASSWORD_QUERY)) {
+    const headerValues = headers(request.headers)
+    const cookieValues = cookies(request.cookies)
+    const queryValues = query(request.query)
+    if (headerValues.has('authorization')
+      || hasQueryName(queryValues, CREDENTIAL_QUERY_NAMES)) {
       throw new AuthGatewayError('invalid-request', 400)
     }
-    const origin = headers.get('origin')
-    const csrfHeader = headers.get(this.spec.csrfHeaderName)
-    const csrfCookie = cookies.get(this.spec.csrfCookieName.toLowerCase())
-    const refreshToken = cookies.get(this.spec.refreshCookieName.toLowerCase())
+    const origin = headerValues.get('origin')
+    const csrfHeader = headerValues.get(this.spec.csrfHeaderName)
+    const csrfCookie = cookieValues.get(this.spec.csrfCookieName)
+    const refreshToken = cookieValues.get(this.spec.refreshCookieName)
     if (origin === undefined || !this.spec.allowedOrigins.has(origin)
       || csrfHeader === undefined || csrfCookie === undefined || !equalSecret(csrfHeader, csrfCookie)
       || refreshToken === undefined || refreshToken === '') {
@@ -362,12 +388,11 @@ export class AuthGatewayService extends Service {
   }
 
   private rejectCredentialCarriers(request: GatewayRequest): void {
-    const headers = entries(request.headers)
-    const cookies = entries(request.cookies)
-    const query = entries(request.query)
-    if (headers.has('authorization') || cookies.has(this.spec.accessCookieName.toLowerCase())
-      || cookies.has(this.spec.refreshCookieName.toLowerCase())
-      || query.has(ACCESS_QUERY) || query.has(REFRESH_QUERY) || query.has(PASSWORD_QUERY)) {
+    const headerValues = headers(request.headers)
+    cookies(request.cookies)
+    const queryValues = query(request.query)
+    if (headerValues.has('authorization')
+      || hasQueryName(queryValues, CREDENTIAL_QUERY_NAMES)) {
       throw new AuthGatewayError('invalid-request', 400)
     }
   }
@@ -404,13 +429,13 @@ export class AuthGatewayService extends Service {
       httpOnly,
       secure: true,
       sameSite: 'strict' as const,
-      path: this.spec.refreshCookiePath,
+      path: '/',
       ...(expiresAt === undefined ? {} : { maxAgeSeconds: Math.max(0, Math.floor((expiresAt - Date.now()) / 1000)) }),
     })
   }
 
   private clear(name: string, httpOnly: boolean): GatewayCookieDirective {
-    return Object.freeze({ name, value: '', httpOnly, secure: true, sameSite: 'strict', path: this.spec.refreshCookiePath, maxAgeSeconds: 0 })
+    return Object.freeze({ name, value: '', httpOnly, secure: true, sameSite: 'strict', path: '/', maxAgeSeconds: 0 })
   }
 
   private map(cause: unknown): AuthGatewayError {

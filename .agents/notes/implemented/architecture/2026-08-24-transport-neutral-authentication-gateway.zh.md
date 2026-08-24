@@ -12,9 +12,9 @@ Status: implemented
 
 `dsh-auth-gateway` 提供 Host-only 服务，接收结构化传输字段而不是框架 Request 对象。它保留重复 Header、Cookie、Query 与 Subprotocol 条目，直到拒绝歧义凭证，然后只把唯一且有长度限制的 Evidence 值和原始请求生命周期传给 `ctx.auth` 或 `ctx.accounts`。
 
-HTTP 业务认证接受唯一的 Access Bearer 或 Access Cookie。密码只存在于有长度限制的登录与注册 Body 字段中。浏览器 Refresh 使用限定 Path 的 Secure HttpOnly Cookie，并要求配置中的 Origin 完全匹配，同时要求可读 CSRF Cookie 与 Header 相同。WebSocket 只在握手阶段认证；URL 类载体中的 Refresh 与 Password 会被拒绝。
+HTTP 业务认证只接受唯一的 Authorization Bearer。密码只存在于有长度限制的登录与注册 Body 字段中。浏览器 Refresh 使用精确 `__Host-` Secure Cookie、无 Domain 与 `Path=/`，并要求配置中的 Origin 完全匹配，同时要求可读 CSRF Cookie 与 Header 相同。WebSocket 只在握手阶段认证；Authorization 是默认方式，Query 与 Subprotocol 载体分别要求显式选项，并返回强制适配器脱敏指令。URL 类载体中的 Refresh 与 Password 会被拒绝。
 
-Gateway 返回固定错误码与建议 HTTP 状态，不携带 Cause。Refresh 信息只通过 HttpOnly Cookie 指令返回，`AuthenticatedCall` 保持在 Host 内。受保护 Handler 使用 `guard()`，它在身份使用前立即调用 `ctx.auth.assertCurrent()`，因此认证同时包含入口 Provider 验证，以及使用时的当前注册、取消和过期检查。
+Gateway 返回固定错误码与建议 HTTP 状态，不携带 Cause。Refresh 信息只通过 HttpOnly Cookie 指令返回，`AuthenticatedCall` 保持在 Host 内。受保护 Handler 使用 `guard()`，它在身份使用前立即调用 `ctx.auth.assertCurrent()`。第二层检查覆盖 Host 来源、当前 Provider 注册、取消与过期，不会重复 JWT 签名验证。Access 与 Refresh JWT 分别由各自流程独立验签。
 
 服务只委托 `ctx.accounts` 的公开方法。管理员账号方法保持在 Gateway 之外，并要求独立授权的管理适配器。
 
@@ -32,6 +32,6 @@ Gateway 返回固定错误码与建议 HTTP 状态，不携带 Cause。Refresh �
 
 HTTP 与 WebSocket 框架需要小型适配器，保留重复安全字段，并使用框架维护的 API 解析 Cookie。Gateway 可以独立测试，也不限制 Router 选择。
 
-安全默认值会拒绝 Refresh，直到配置精确 Origin；WebSocket Query Access Token 也会被拒绝，除非显式启用。部署必须配置 Origin 并正确序列化 Cookie 指令。
+安全默认值会拒绝 Refresh，直到配置精确 Origin；WebSocket Query 或 Subprotocol Access Token 也会被拒绝，除非显式启用。部署必须配置 Origin、保留 `__Host-` Cookie 属性、正确序列化 Cookie 指令，并应用返回的 WebSocket 脱敏指令。
 
 本包不提供速率限制、锁定、找回或长连接 WebSocket 断连策略。这些控制保持独立可组合，而不是成为凭证解析中的隐藏行为。

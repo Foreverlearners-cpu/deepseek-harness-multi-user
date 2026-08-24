@@ -97,8 +97,8 @@ function refreshRequest(csrf = 'csrf-value') {
       { name: 'X-DSH-CSRF', value: csrf },
     ],
     cookies: [
-      { name: '__Secure-dsh_refresh', value: 'refresh-token' },
-      { name: '__Secure-dsh_csrf', value: csrf },
+      { name: '__Host-dsh_refresh', value: 'refresh-token' },
+      { name: '__Host-dsh_csrf', value: csrf },
     ],
   }
 }
@@ -108,12 +108,11 @@ describe('auth gateway', () => {
     expect(() => new AuthGatewayService(new Context())).not.toThrow()
     const invalid = [
       { refreshCookieName: 'bad cookie' },
-      { accessCookieName: 'bad cookie' },
       { csrfCookieName: 'bad cookie' },
+      { csrfCookieName: '__host-dsh_csrf' },
       { csrfHeaderName: 'bad_header' },
-      { refreshCookiePath: 'relative' },
-      { refreshCookiePath: '/ok;domain=bad' },
-      { accessCookieName: '__Secure-dsh_refresh' },
+      { refreshCookieName: 'dsh_refresh' },
+      { csrfCookieName: '__Host-dsh_refresh' },
       { allowedOrigins: ['not a URL'] },
       { allowedOrigins: ['https://app.example/'] },
       { allowedOrigins: ['ftp://app.example'] },
@@ -136,14 +135,17 @@ describe('auth gateway', () => {
     expect(call.requestId).toBe('request-1')
   })
 
-  it('rejects bearer conflicts with access cookies, query credentials, and refresh cookies', async () => {
+  it('uses only Authorization for HTTP access authentication and ignores ambient cookies', async () => {
     const { gateway } = await setup()
-    await expect(gateway.authenticateHttp({ ...http(), cookies: [{ name: '__Host-dsh_access', value: 'access-token' }] }))
-      .rejects.toMatchObject({ code: 'invalid-request', status: 400 })
+    await expect(gateway.authenticateHttp({ ...http(), cookies: [{ name: '__Host-dsh_access', value: 'other-token' }] }))
+      .resolves.toMatchObject({ channel: 'http' })
+    await expect(gateway.authenticateHttp({
+      requestId: 'cookie-only', signal, cookies: [{ name: '__Host-dsh_access', value: 'access-token' }],
+    })).rejects.toMatchObject({ code: 'invalid-request', status: 400 })
     await expect(gateway.authenticateHttp({ ...http(), query: [{ name: 'access_token', value: 'access-token' }] }))
       .rejects.toMatchObject({ code: 'invalid-request' })
-    await expect(gateway.authenticateHttp({ ...http(), cookies: [{ name: '__Secure-dsh_refresh', value: 'refresh-token' }] }))
-      .rejects.toMatchObject({ code: 'invalid-request' })
+    await expect(gateway.authenticateHttp({ ...http(), cookies: [{ name: '__Host-dsh_refresh', value: 'refresh-token' }] }))
+      .resolves.toMatchObject({ channel: 'http' })
   })
 
   it('rejects duplicate security headers after case folding and malformed bearer values', async () => {
@@ -172,6 +174,16 @@ describe('auth gateway', () => {
       await expect(gateway.authenticateHttp({ requestId: 'bounded', signal, headers: headers as never }))
         .rejects.toMatchObject({ code: 'invalid-request' })
     }
+    for (const request of [
+      { ...http(), headers: null as never },
+      { ...http(), cookies: {} as never },
+      { ...http(), cookies: [null] as never },
+      { ...http(), query: [null] as never },
+    ]) {
+      const failure = await gateway.authenticateHttp(request).catch((error: unknown) => error)
+      expect(failure).toBeInstanceOf(AuthGatewayError)
+      expect(failure).toMatchObject({ code: 'invalid-request' })
+    }
     await expect(gateway.authenticateHttp({ requestId: 'missing', signal })).rejects.toMatchObject({ code: 'invalid-request' })
     await expect(gateway.authenticateHttp({
       requestId: 'empty', signal, cookies: [{ name: '__Host-dsh_access', value: '' }],
@@ -190,16 +202,26 @@ describe('auth gateway', () => {
 
   it('authenticates WebSocket handshakes by header or subprotocol and forwards the channel', async () => {
     const { gateway } = await setup()
-    expect((await gateway.authenticateWebSocket({ ...http() })).channel).toBe('websocket')
-    const call = await gateway.authenticateWebSocket({
+    expect(await gateway.authenticateWebSocket({ ...http() })).toMatchObject({
+      call: { channel: 'websocket' },
+      carrier: 'authorization',
+      adapter: { echoCredentialSubprotocol: false, redactSubprotocols: false, redactQuery: false },
+    })
+    const result = await (await setup({ allowWebSocketBearerSubprotocol: true })).gateway.authenticateWebSocket({
       requestId: 'ws-1', signal, subprotocols: ['chat', 'dsh-auth-bearer.access-token'],
     })
-    expect(call.requestId).toBe('ws-1')
+    expect(result.call.requestId).toBe('ws-1')
+    expect(result).toMatchObject({
+      carrier: 'subprotocol',
+      adapter: { echoCredentialSubprotocol: false, redactSubprotocols: true, redactQuery: false },
+    })
   })
 
   it('forbids password and refresh leakage in WebSocket query or subprotocol carriers', async () => {
     const { gateway } = await setup()
     await expect(gateway.authenticateWebSocket({ ...http(), query: [{ name: 'password', value: 'secret' }] }))
+      .rejects.toMatchObject({ code: 'invalid-request' })
+    await expect(gateway.authenticateWebSocket({ ...http(), query: [{ name: 'Password', value: 'secret' }] }))
       .rejects.toMatchObject({ code: 'invalid-request' })
     await expect(gateway.authenticateWebSocket({
       requestId: 'ws-1', signal, subprotocols: ['dsh-auth-refresh.refresh-token'],
@@ -207,12 +229,21 @@ describe('auth gateway', () => {
     await expect(gateway.authenticateWebSocket({
       requestId: 'ws-1', signal, query: [{ name: 'access_token', value: 'access-token' }],
     })).rejects.toMatchObject({ code: 'invalid-request' })
+    await expect(gateway.authenticateWebSocket({
+      requestId: 'ws-subprotocol-disabled', signal, subprotocols: ['dsh-auth-bearer.access-token'],
+    })).rejects.toMatchObject({ code: 'invalid-request' })
+    await expect(gateway.authenticateWebSocket({
+      requestId: 'ws-query-case', signal, query: [{ name: 'ACCESS_TOKEN', value: 'access-token' }],
+    })).rejects.toMatchObject({ code: 'invalid-request' })
   })
 
   it('bounds WebSocket protocol input and rejects repeated bearer protocols', async () => {
-    const { gateway } = await setup()
+    const { gateway } = await setup({ allowWebSocketBearerSubprotocol: true })
     await expect(gateway.authenticateWebSocket({
       requestId: 'ws-many', signal, subprotocols: Array.from({ length: 65 }, () => 'chat'),
+    })).rejects.toMatchObject({ code: 'invalid-request' })
+    await expect(gateway.authenticateWebSocket({
+      requestId: 'ws-container', signal, subprotocols: null as never,
     })).rejects.toMatchObject({ code: 'invalid-request' })
     await expect(gateway.authenticateWebSocket({
       requestId: 'ws-type', signal, subprotocols: [1 as never],
@@ -228,9 +259,11 @@ describe('auth gateway', () => {
 
   it('allows an explicitly configured WebSocket query access token but still enforces one carrier', async () => {
     const { gateway } = await setup({ allowWebSocketQueryAccessToken: true })
-    expect((await gateway.authenticateWebSocket({
+    const result = await gateway.authenticateWebSocket({
       requestId: 'ws-query', signal, query: [{ name: 'access_token', value: 'access-token' }],
-    })).channel).toBe('websocket')
+    })
+    expect(result.call.channel).toBe('websocket')
+    expect(result).toMatchObject({ carrier: 'query', adapter: { redactQuery: true, redactSubprotocols: false } })
     await expect(gateway.authenticateWebSocket({
       ...http(), query: [{ name: 'access_token', value: 'access-token' }],
     })).rejects.toMatchObject({ code: 'invalid-request' })
@@ -244,8 +277,8 @@ describe('auth gateway', () => {
     expect(result.user).toBe(user)
     expect(result.accessToken).toBe('access-token')
     expect(result.cookies).toMatchObject([
-      { name: '__Secure-dsh_refresh', value: 'refresh-token', httpOnly: true, secure: true, sameSite: 'strict' },
-      { name: '__Secure-dsh_csrf', httpOnly: false, secure: true, sameSite: 'strict' },
+      { name: '__Host-dsh_refresh', value: 'refresh-token', httpOnly: true, secure: true, sameSite: 'strict', path: '/' },
+      { name: '__Host-dsh_csrf', httpOnly: false, secure: true, sameSite: 'strict', path: '/' },
     ])
     expect(JSON.stringify({ ...result, cookies: undefined })).not.toContain('refresh-token')
     expect(accounts.login).toHaveBeenCalledWith(expect.objectContaining({ channel: 'http', requestId: 'login-1', signal }))
@@ -286,15 +319,35 @@ describe('auth gateway', () => {
     })).rejects.toMatchObject({ code: 'forbidden', status: 403 })
     await expect(gateway.refresh({
       ...refreshRequest(),
-      cookies: [{ name: '__Secure-dsh_refresh', value: 'refresh-token' }, { name: '__Secure-dsh_csrf', value: 'other' }],
+      cookies: [{ name: '__Host-dsh_refresh', value: 'refresh-token' }, { name: '__Host-dsh_csrf', value: 'other' }],
     })).rejects.toMatchObject({ code: 'forbidden' })
     for (const csrf of ['', 'x'.repeat(257)]) {
       await expect(gateway.refresh(refreshRequest(csrf))).rejects.toMatchObject({ code: 'forbidden' })
     }
     await expect(gateway.refresh({
       ...refreshRequest(),
-      cookies: [{ name: '__Secure-dsh_refresh', value: 'refresh-token' }, { name: '__Secure-dsh_csrf', value: 'x'.repeat(257) }],
+      cookies: [{ name: '__Host-dsh_refresh', value: 'refresh-token' }, { name: '__Host-dsh_csrf', value: 'x'.repeat(257) }],
     })).rejects.toMatchObject({ code: 'forbidden' })
+    await expect(gateway.refresh({
+      ...refreshRequest(),
+      cookies: [{ name: '__host-dsh_refresh', value: 'refresh-token' }, { name: '__Host-dsh_csrf', value: 'csrf-value' }],
+    })).rejects.toMatchObject({ code: 'forbidden' })
+    await expect(gateway.refresh({
+      ...refreshRequest(),
+      cookies: [
+        { name: '__Host-dsh_refresh', value: 'refresh-token' },
+        { name: '__host-dsh_refresh', value: 'attacker-token' },
+        { name: '__Host-dsh_csrf', value: 'csrf-value' },
+      ],
+    })).resolves.toMatchObject({ accessToken: 'next-access' })
+    await expect(gateway.refresh({
+      ...refreshRequest(),
+      cookies: [
+        { name: '__Host-dsh_refresh', value: 'refresh-token' },
+        { name: '__Host-dsh_refresh', value: 'attacker-token' },
+        { name: '__Host-dsh_csrf', value: 'csrf-value' },
+      ],
+    })).rejects.toMatchObject({ code: 'invalid-request' })
   })
 
   it('maps delegated login, refresh, and logout failures without secret details', async () => {
@@ -333,8 +386,8 @@ describe('auth gateway', () => {
     const result = await gateway.logout(http())
     expect(accounts.logout).toHaveBeenCalledOnce()
     expect(result.cookies).toMatchObject([
-      { name: '__Secure-dsh_refresh', value: '', maxAgeSeconds: 0 },
-      { name: '__Secure-dsh_csrf', value: '', maxAgeSeconds: 0 },
+      { name: '__Host-dsh_refresh', value: '', maxAgeSeconds: 0, path: '/' },
+      { name: '__Host-dsh_csrf', value: '', maxAgeSeconds: 0, path: '/' },
     ])
   })
 

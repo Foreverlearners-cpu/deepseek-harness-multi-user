@@ -171,7 +171,7 @@ async authenticateHttp(request: GatewayHttpAuthenticationRequest): Promise<Authe
  * @param request - structured handshake fields and lifecycle.
  * @returns Host-only call minted for the WebSocket channel.
  */
-async authenticateWebSocket(request: GatewayWebSocketAuthenticationRequest): Promise<AuthenticatedCall>
+async authenticateWebSocket(request: GatewayWebSocketAuthenticationRequest): Promise<GatewayWebSocketAuthenticationResult>
 
 /** Register an account without issuing credentials.
  * @param request - bounded profile, password, and lifecycle input.
@@ -207,7 +207,7 @@ guard<T>(call: AuthenticatedCall, handler: (current: AuthenticatedCall) => T | P
 
 Types: [UserRecord](user-directory.md)
 
-Source: [`packages/identity/auth-gateway/src/index.ts:185`](../../packages/identity/auth-gateway/src/index.ts)
+Source: [`packages/identity/auth-gateway/src/index.ts:205`](../../packages/identity/auth-gateway/src/index.ts)
 
 <a id="account-events"></a>
 

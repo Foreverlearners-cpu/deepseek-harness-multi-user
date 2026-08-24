@@ -349,22 +349,20 @@ Source: [`packages/attachment/attachment-local/src/index.ts:24`](../packages/att
 export interface AuthGatewayConfig {
   /** Secure HttpOnly refresh-cookie name. */
   readonly refreshCookieName?: string
-  /** Optional access-cookie name accepted as an alternative to Authorization. */
-  readonly accessCookieName?: string
   /** Secure readable cookie name carrying the double-submit CSRF value. */
   readonly csrfCookieName?: string
   /** Request header name carrying the double-submit CSRF value. */
   readonly csrfHeaderName?: string
-  /** Narrow path shared by refresh and CSRF cookies. */
-  readonly refreshCookiePath?: string
   /** Exact browser origins allowed to perform refresh. */
   readonly allowedOrigins?: readonly string[]
   /** Whether WebSocket handshakes may carry access tokens in query entries. */
   readonly allowWebSocketQueryAccessToken?: boolean
+  /** Whether WebSocket handshakes may carry access tokens in subprotocol entries. */
+  readonly allowWebSocketBearerSubprotocol?: boolean
 }
 ```
 
-Source: [`packages/identity/auth-gateway/src/types.ts:95`](../packages/identity/auth-gateway/src/types.ts)
+Source: [`packages/identity/auth-gateway/src/types.ts:106`](../packages/identity/auth-gateway/src/types.ts)
 
 <a id="deepseek-aidsh-auth-jwt"></a>
 

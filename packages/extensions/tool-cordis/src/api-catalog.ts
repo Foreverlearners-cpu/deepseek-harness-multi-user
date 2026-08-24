@@ -502,7 +502,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Host-only call minted by the active authentication Provider.',
       },
       {
-        signature: 'async authenticateWebSocket(request: GatewayWebSocketAuthenticationRequest): Promise<AuthenticatedCall>',
+        signature: 'async authenticateWebSocket(request: GatewayWebSocketAuthenticationRequest): Promise<GatewayWebSocketAuthenticationResult>',
         description: 'Authenticate one WebSocket handshake without retaining raw carrier input.',
         parameters: [{ name: 'request', description: 'structured handshake fields and lifecycle.' }],
         returns: 'Host-only call minted for the WebSocket channel.',
@@ -3583,6 +3583,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'GatewayWebSocketAuthenticationRequest',
     declaration: 'export interface GatewayWebSocketAuthenticationRequest extends GatewayRequest {\n    readonly subprotocols?: readonly string[];\n}',
+  },
+  {
+    name: 'GatewayWebSocketAuthenticationResult',
+    declaration: 'export interface GatewayWebSocketAuthenticationResult {\n    readonly call: AuthenticatedCall;\n    readonly carrier: \'authorization\' | \'subprotocol\' | \'query\';\n    readonly adapter: {\n        readonly echoCredentialSubprotocol: false;\n        readonly redactSubprotocols: boolean;\n        readonly redactQuery: boolean;\n    };\n}',
   },
   {
     name: 'GenerateOptions',

@@ -53,6 +53,17 @@ export interface GatewayWebSocketAuthenticationRequest extends GatewayRequest {
   readonly subprotocols?: readonly string[]
 }
 
+/** Adapter instructions accompanying a WebSocket handshake call. */
+export interface GatewayWebSocketAuthenticationResult {
+  readonly call: AuthenticatedCall
+  readonly carrier: 'authorization' | 'subprotocol' | 'query'
+  readonly adapter: {
+    readonly echoCredentialSubprotocol: false
+    readonly redactSubprotocols: boolean
+    readonly redactQuery: boolean
+  }
+}
+
 /** Password login input whose secret came from a bounded request body. */
 export interface GatewayLoginRequest extends GatewayRequest {
   readonly identifier: LoginIdentifierInput
@@ -95,16 +106,14 @@ export interface GatewayLogoutResult {
 export interface AuthGatewayConfig {
   /** Secure HttpOnly refresh-cookie name. */
   readonly refreshCookieName?: string
-  /** Optional access-cookie name accepted as an alternative to Authorization. */
-  readonly accessCookieName?: string
   /** Secure readable cookie name carrying the double-submit CSRF value. */
   readonly csrfCookieName?: string
   /** Request header name carrying the double-submit CSRF value. */
   readonly csrfHeaderName?: string
-  /** Narrow path shared by refresh and CSRF cookies. */
-  readonly refreshCookiePath?: string
   /** Exact browser origins allowed to perform refresh. */
   readonly allowedOrigins?: readonly string[]
   /** Whether WebSocket handshakes may carry access tokens in query entries. */
   readonly allowWebSocketQueryAccessToken?: boolean
+  /** Whether WebSocket handshakes may carry access tokens in subprotocol entries. */
+  readonly allowWebSocketBearerSubprotocol?: boolean
 }

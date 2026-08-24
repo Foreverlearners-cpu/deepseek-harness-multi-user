@@ -257,6 +257,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   GatewayRequest: 'authentication.md',
   GatewaySessionResult: 'authentication.md',
   GatewayWebSocketAuthenticationRequest: 'authentication.md',
+  GatewayWebSocketAuthenticationResult: 'authentication.md',
   AuthenticationAttempt: 'authentication.md',
   AuthenticationCredentialInfo: 'authentication.md',
   AuthenticationEventRecord: 'authentication.md',
