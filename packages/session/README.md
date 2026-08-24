@@ -33,6 +33,8 @@ Serves current, log-derived per-session state to client carriers.
 
 [`session-cache-invalidation-redis/`](session-cache-invalidation-redis/README.md) consumes validated session-message CDC events and protects tenant-isolated Redis caches with authoritative revision watermarks.
 
+[`session-cdc-starter/`](session-cdc-starter/README.md) composes and supervises the Redis and Elasticsearch CDC consumers, with optional authoritative reconciliation through `ctx.sessionCdcStarter` and `ctx.sessionProjectionReconciler`.
+
 ## Titles
 
 Derives durable session titles from the session log, with an optional model-backed provider.

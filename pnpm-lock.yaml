@@ -6215,6 +6215,40 @@ importers:
         specifier: workspace:^
         version: link:../../multi/redis
 
+  packages/session/session-cdc-starter:
+    dependencies:
+      '@deepseek-ai/dsh-kafka-events':
+        specifier: workspace:^
+        version: link:../../multi/kafka-events
+      '@deepseek-ai/dsh-session-cache-invalidation-redis':
+        specifier: workspace:^
+        version: link:../session-cache-invalidation-redis
+      '@deepseek-ai/dsh-session-projection-reconciler':
+        specifier: workspace:^
+        version: link:../session-projection-reconciler
+      '@deepseek-ai/dsh-session-search-projection-elasticsearch':
+        specifier: workspace:^
+        version: link:../session-search-projection-elasticsearch
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-elasticsearch':
+        specifier: workspace:^
+        version: link:../../multi/elasticsearch
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-kafka':
+        specifier: workspace:^
+        version: link:../../multi/kafka
+      '@deepseek-ai/dsh-redis':
+        specifier: workspace:^
+        version: link:../../multi/redis
+
   packages/session/session-checkpoint-policy:
     devDependencies:
       '@deepseek-ai/cordis':
@@ -12196,10 +12230,6 @@ packages:
     resolution: {integrity: sha512-nTjqfcBFEipKdXCv4YDQWCfmcLZKm81ldF0pAopTvyrFGVbcR6P/VAAd5G7N+0tTr8QqiU0tFadD6FK4NtJwOA==, tarball: https://registry.npmmirror.com/content-type/-/content-type-1.0.5.tgz}
     engines: {node: '>= 0.6'}
 
-  content-type@2.0.0:
-    resolution: {integrity: sha512-j/O/d7GcZCyNl7/hwZAb606rzqkyvaDctLmckbxLzHvFBzTJHuGEdodATcP3yIRoDrLHkIATJuvzbFlp/ki2cQ==, tarball: https://registry.npmmirror.com/content-type/-/content-type-2.0.0.tgz}
-    engines: {node: '>=18'}
-
   content-type@2.1.0:
     resolution: {integrity: sha512-mj7UPXE0jaqaOsukNZRUEfEi2AcL7C/vwmwcHV0O97eO1E1pxBZuyjlZrx5seTaNBg1U6+o35wpa35Qfcc+7ag==, tarball: https://registry.npmmirror.com/content-type/-/content-type-2.1.0.tgz}
     engines: {node: '>=18'}
@@ -17392,7 +17422,7 @@ snapshots:
   body-parser@2.3.0:
     dependencies:
       bytes: 3.1.2
-      content-type: 2.0.0
+      content-type: 2.1.0
       debug: 4.4.3
       http-errors: 2.0.1
       iconv-lite: 0.7.3
@@ -17486,8 +17516,6 @@ snapshots:
   content-disposition@1.1.0: {}
 
   content-type@1.0.5: {}
-
-  content-type@2.0.0: {}
 
   content-type@2.1.0: {}
 
@@ -20009,7 +20037,7 @@ snapshots:
 
   type-is@2.1.0:
     dependencies:
-      content-type: 2.0.0
+      content-type: 2.1.0
       media-typer: 1.1.1
       mime-types: 3.0.2
 

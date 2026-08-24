@@ -33,6 +33,8 @@
 
 [`session-cache-invalidation-redis/`](session-cache-invalidation-redis/README.md) 消费已校验的 session message CDC event，并使用权威 revision watermark 保护 tenant 隔离的 Redis cache。
 
+[`session-cdc-starter/`](session-cdc-starter/README.md) 组合并监督 Redis 与 Elasticsearch CDC consumer，并通过 `ctx.sessionCdcStarter` 以及可选的 `ctx.sessionProjectionReconciler` 提供权威对账。
+
 ## 标题
 
 从会话日志派生持久会话标题，并支持可选的模型驱动提供方。
