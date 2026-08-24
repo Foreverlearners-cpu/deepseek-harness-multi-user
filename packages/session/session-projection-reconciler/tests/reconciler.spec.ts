@@ -52,7 +52,11 @@ describe('SessionProjectionReconcilerService', () => {
   it('reconciles multiple pages in record-major registration order', async () => {
     const { service } = await setup(2)
     const second = SessionProjectionCursor('page-2')
-    const reads: Array<{ cursor?: string; batchSize: number; tenantId?: string }> = []
+    const reads: Array<{
+      cursor: string | undefined
+      batchSize: number
+      tenantId: string | undefined
+    }> = []
     service.registerSource(source(async (request): Promise<SessionProjectionPage> => {
       reads.push({ cursor: request.cursor, batchSize: request.batchSize, tenantId: request.tenantId })
       return request.cursor === undefined
