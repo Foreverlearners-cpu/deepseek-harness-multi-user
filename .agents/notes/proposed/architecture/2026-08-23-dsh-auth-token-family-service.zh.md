@@ -16,7 +16,7 @@ Refresh secret 是 bearer Credential。持久化明文或非原子的消费替�
 
 公开操作为 `issueFamily`、`rotate`、`inspect` 和 `revoke`。JWT Provider 独立拥有 access-token 签名与验证，并可通过 `dsh-auth` 的 Credential 生命周期能力公开这些操作。后续 MySQL Provider 拥有 schema、事务、锁、索引、migration 和事务 outbox。
 
-JWT 组合具有明确的失败边界。JWT Provider 在 refresh-family 签发或轮换提交前解析并验证签名密钥，并准备好所有可能失败的签名依赖。提交后的签名必须是不会失败的内存操作。无法保证这一点的 Provider 必须在暴露签名失败前同步撤销刚提交的 family 作为补偿；本包自身不执行 JWT 签名或这层编排。
+JWT 组合具有明确的失败边界。`issueFamilyWithPreparation` 和 `rotateWithPreparation` 允许 JWT Provider 在持久化 Provider 构造并锁定候选记录之后、修改持久状态之前，通过 Host-only callback 签名 artifact。Callback 失败时不会留下已签发 family，或会让当前 refresh Credential 保持 active。本包自身不执行 JWT 签名。
 
 ## Secret 处理
 
@@ -32,7 +32,7 @@ Refresh-token 输入在散列或执行 Provider 工作前限制为最多 4 KiB U
 
 ## 原子轮换与复用
 
-Provider 在一个事务中锁定 digest，检查 family 和 Credential 的过期时间与状态，消费一个 active Credential，插入一个 active 替代项，并增加 family revision。Commit 返回已消费的 rotated Credential 与替代项，使基类可以在返回新 secret 前校验 id、digest、时间、family 关系和 revision。
+Provider 在一个事务中锁定 digest，检查 family 与 Credential 的过期时间和状态，构造已消费记录与替代记录，并调用 Host preparation callback。只有 callback 成功后，它才能消费 active Credential、插入 active 替代项、增加 family revision 并提交。基类在 preparation 前校验候选项，并要求返回 commit 与已准备候选项完全相同。
 
 匹配 rotated digest 就是复用。Provider 在同一事务中撤销 active family 与所有 active Credential，记录 `refresh-token-reuse`，增加 revision，并返回 reuse commit。基类发出 `reuse-detected`，然后抛出 `refresh-token-reused`。已撤销 family 失败时不再改变 revision。
 
@@ -64,7 +64,7 @@ Provider 在一个事务中锁定 digest，检查 family 和 Credential 的过�
 - Provider commit 会校验 family revision 与绝对过期语义。
 - 检查和撤销结果绑定到其请求目标。
 - 提交后的监听器失败绝不会让生命周期操作失败。
-- JWT 组合在提交前准备签名，或通过同步撤销已提交 family 进行补偿。
+- JWT 组合在 Provider 事务内准备签名；preparation 失败时不提交新状态。
 - 检查和事件排除 secret、digest、access token、claim 与诊断。
 - 撤销支持 Credential、family 和 principal 目标，并保持幂等。
 - 共享套件覆盖签发、轮换、复用、过期、检查、脱敏和撤销。

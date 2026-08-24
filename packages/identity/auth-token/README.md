@@ -11,7 +11,9 @@ This package does not encode or verify JWTs, issue access tokens, authenticate p
 | API | Purpose |
 |---|---|
 | `ctx.authTokens.issueFamily(request)` | Create one active family and return its first refresh secret exactly once |
+| `ctx.authTokens.issueFamilyWithPreparation(request, prepare)` | Prepare a Host artifact before atomically creating the family |
 | `ctx.authTokens.rotate(request)` | Consume one refresh secret atomically and return its replacement |
+| `ctx.authTokens.rotateWithPreparation(request, prepare)` | Prepare a Host artifact before atomically consuming and replacing the Credential |
 | `ctx.authTokens.inspect(request)` | Return safe family and credential metadata without secrets or digests |
 | `ctx.authTokens.revoke(request)` | Revoke by refresh credential, token family, or principal |
 
@@ -37,6 +39,8 @@ Unknown tokens fail with `refresh-token-invalid`. Expired tokens fail with `refr
 
 A Provider subclasses `AuthTokenService` and implements `createFamilyRecord`, `rotateFamilyRecord`, `inspectRecords`, and `revokeRecords`. The create and rotation inputs contain a `RefreshTokenDigest`, never a refresh secret. Durable rows must store that digest and must not log, retain, or return the secret.
 
+`createFamilyRecord` receives a preparation callback. It starts a transaction, constructs the exact pending rows, invokes the callback, and writes only after the callback succeeds. A callback failure rolls back or leaves no rows. `rotateFamilyRecord` locks and validates the current Credential, constructs its exact rotated and replacement records, invokes its preparation callback with that candidate commit, and mutates storage only after success. Callback failure leaves the old Credential active. The Provider must invoke preparation exactly once and return the same candidate it prepared.
+
 `rotateFamilyRecord` locks or conditionally updates the matched credential and family in one transaction. It returns either a validated `rotated` commit containing the consumed and replacement records, or a `reused` commit containing the family revocation. `revokeRecords` changes every selected active family and its active credentials in one transaction and is idempotent for already revoked families.
 
 Provider results are bound to the requested target. `inspectRecords` may return only families selected by the requested family, principal, or Credential. For Credential-target revocation, `revokeRecords` must return `matchedCredential` as verifiable proof that the requested Credential belongs to the one returned family; family and principal targets must not return that proof.
@@ -45,7 +49,7 @@ The shared suite in `tests/contract.ts` is the normative Provider test. Each Pro
 
 ## Combining with Access Tokens
 
-This package does not sign JWTs. A JWT Provider must resolve and validate a usable signing key and prepare every potentially failing signing dependency before it commits `issueFamily` or `rotate`. After the refresh-family commit, access-token serialization and signing must be an in-memory operation that is expected not to fail. If a Provider cannot guarantee that boundary, it must synchronously revoke the newly committed family as compensation before surfacing the signing failure.
+This package does not sign JWTs. A JWT Provider resolves and validates a usable signing key, then calls `issueFamilyWithPreparation` or `rotateWithPreparation`. Its callback signs the access and refresh artifacts while the persistence transaction is still uncommitted. A signing failure rejects the token operation and the Provider commits no new family or rotation; post-commit revocation is not the consistency mechanism.
 
 ## Events
 

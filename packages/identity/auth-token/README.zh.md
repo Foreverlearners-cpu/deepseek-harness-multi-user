@@ -11,7 +11,9 @@
 | API | 用途 |
 |---|---|
 | `ctx.authTokens.issueFamily(request)` | 创建 active family，并且只返回一次首个 refresh secret |
+| `ctx.authTokens.issueFamilyWithPreparation(request, prepare)` | 在原子创建 family 前准备 Host artifact |
 | `ctx.authTokens.rotate(request)` | 原子消费一个 refresh secret，并返回替代 secret |
+| `ctx.authTokens.rotateWithPreparation(request, prepare)` | 在原子消费与替换 Credential 前准备 Host artifact |
 | `ctx.authTokens.inspect(request)` | 返回不包含 secret 或 digest 的安全 family 与 Credential 元数据 |
 | `ctx.authTokens.revoke(request)` | 按 refresh Credential、token family 或 principal 撤销 |
 
@@ -37,6 +39,8 @@ Refresh Credential 的状态为 `active`、`rotated` 或 `revoked`。成功轮�
 
 Provider 继承 `AuthTokenService`，实现 `createFamilyRecord`、`rotateFamilyRecord`、`inspectRecords` 和 `revokeRecords`。创建与轮换输入只包含 `RefreshTokenDigest`，绝不包含 refresh secret。持久记录必须保存 digest，并且不能记录、保留或返回 secret。
 
+`createFamilyRecord` 接收 preparation callback。它启动事务、构造完全一致的待写记录、调用 callback，并且只在 callback 成功后写入。Callback 失败会回滚或不留下任何记录。`rotateFamilyRecord` 锁定并验证当前 Credential，构造完全一致的 rotated 与 replacement 记录，把该候选 commit 传给 preparation callback，并且只在成功后修改存储。Callback 失败会让旧 Credential 保持 active。Provider 必须严格调用 preparation 一次，并返回它准备的同一候选项。
+
 `rotateFamilyRecord` 在一个事务中锁定或条件更新匹配的 Credential 与 family。它返回经过验证的 `rotated` commit（含已消费记录与替代记录），或者返回含 family 撤销的 `reused` commit。`revokeRecords` 在一个事务中修改所有选中的 active family 及其 active Credential，并对已经撤销的 family 保持幂等。
 
 Provider 结果必须绑定到请求目标。`inspectRecords` 只能返回由所请求 family、principal 或 Credential 选中的 family。按 Credential 撤销时，`revokeRecords` 必须返回 `matchedCredential`，作为所请求 Credential 属于唯一返回 family 的可验证证明；family 和 principal 目标不能返回该证明。
@@ -45,7 +49,7 @@ Provider 结果必须绑定到请求目标。`inspectRecords` 只能返回由所
 
 ## 与 Access Token 组合
 
-本包不签名 JWT。JWT Provider 必须先解析并验证可用的签名密钥，并在提交 `issueFamily` 或 `rotate` 前准备好所有可能失败的签名依赖。Refresh-family 提交后，access-token 序列化和签名必须是预期不会失败的内存操作。如果 Provider 无法保证这个边界，就必须在暴露签名失败前同步撤销刚提交的 family 作为补偿。
+本包不签名 JWT。JWT Provider 先解析并验证可用签名 key，再调用 `issueFamilyWithPreparation` 或 `rotateWithPreparation`。其 callback 会在持久化事务尚未提交时签名 access 与 refresh artifact。签名失败会拒绝 Token 操作，Provider 不提交新 family 或轮换；提交后撤销不再是强一致性机制。
 
 ## 事件
 
