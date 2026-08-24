@@ -402,6 +402,30 @@ export interface JwtSigningKeyConfig {
 
 来源：[`packages/identity/auth-jwt/src/types.ts:18`](../packages/identity/auth-jwt/src/types.ts)
 
+<a id="deepseek-aidsh-auth-starter"></a>
+
+## `@deepseek-ai/dsh-auth-starter`
+
+```ts config-catalog
+/** Complete MySQL suite configuration. */
+export interface Config extends AuthenticationAssemblyConfig {
+  /** MySQL pool and database target. */
+  readonly mysql: MysqlConfig
+}
+
+/** Configuration shared by the full and minimal suites. */
+export interface AuthenticationAssemblyConfig {
+  /** JWT issuer, audience, lifetimes, and explicit signing keyring. */
+  readonly jwt: JwtAuthenticationConfig
+  /** Browser carrier and trusted-origin policy. */
+  readonly gateway?: AuthGatewayConfig
+}
+```
+
+依赖：[`AuthGatewayConfig`](#deepseek-aidsh-auth-gateway) · `JwtAuthenticationConfig` (`@deepseek-ai/dsh-auth-jwt/types`) · [`MysqlConfig`](#deepseek-aidsh-mysql)
+
+来源：[`packages/identity/auth-starter/src/index.ts:23`](../packages/identity/auth-starter/src/index.ts)
+
 <a id="deepseek-aidsh-bash-local"></a>
 
 ## `@deepseek-ai/dsh-bash-local`

@@ -5088,6 +5088,61 @@ importers:
         specifier: workspace:^
         version: link:../user-credential
 
+  packages/identity/auth-starter:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-account':
+        specifier: workspace:^
+        version: link:../account
+      '@deepseek-ai/dsh-account-mysql':
+        specifier: workspace:^
+        version: link:../account-mysql
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-auth-gateway':
+        specifier: workspace:^
+        version: link:../auth-gateway
+      '@deepseek-ai/dsh-auth-jwt':
+        specifier: workspace:^
+        version: link:../auth-jwt
+      '@deepseek-ai/dsh-auth-password':
+        specifier: workspace:^
+        version: link:../auth-password
+      '@deepseek-ai/dsh-auth-token':
+        specifier: workspace:^
+        version: link:../auth-token
+      '@deepseek-ai/dsh-auth-token-mysql':
+        specifier: workspace:^
+        version: link:../auth-token-mysql
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+      '@deepseek-ai/dsh-user-credential':
+        specifier: workspace:^
+        version: link:../user-credential
+      '@deepseek-ai/dsh-user-credential-mysql':
+        specifier: workspace:^
+        version: link:../user-credential-mysql
+      '@deepseek-ai/dsh-user-mysql':
+        specifier: workspace:^
+        version: link:../user-mysql
+
   packages/identity/auth-token:
     devDependencies:
       '@deepseek-ai/cordis':

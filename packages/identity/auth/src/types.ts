@@ -53,7 +53,8 @@ export interface VerifiedAuthentication {
   readonly expiresAt?: number
 }
 
-declare const AUTHENTICATED_CALL: unique symbol
+/** Type-only nominal marker that prevents callers from constructing authenticated calls. */
+export declare const AUTHENTICATED_CALL: unique symbol
 
 /** Immutable request identity minted only by the active authentication service. */
 export interface AuthenticatedCall extends VerifiedAuthentication {
