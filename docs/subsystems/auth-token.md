@@ -4,6 +4,8 @@ English | [中文](auth-token.zh.md)
 
 The auth-token subsystem is [`@deepseek-ai/dsh-auth-token`](../../packages/identity/auth-token/README.md), a Host-only Service Definition for opaque refresh-token family state. It complements [`dsh-auth`](authentication.md): authentication establishes a principal and dispatches a credential Provider, while this service gives JWT and other token Providers one reusable rotation and revocation model.
 
+[`@deepseek-ai/dsh-auth-token-mysql`](../../packages/identity/auth-token-mysql/README.md) is the durable MySQL Provider. It owns digest-only credential storage, schema versioning, row locking, and atomic family reuse revocation through the separate `ctx.mysql` connection service.
+
 ## Secret ownership
 
 The service generates each refresh secret and returns it only from `issueFamily` or `rotate`. Provider hooks receive a SHA-256 `RefreshTokenDigest`; inspection and events remove both secret and digest. A storage Provider persists digest rows, and a transport Consumer decides how the returned secret reaches the client.

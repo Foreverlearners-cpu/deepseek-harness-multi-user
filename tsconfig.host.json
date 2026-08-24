@@ -163,6 +163,7 @@
     { "path": "./packages/identity/anonymous-user-id" },
     { "path": "./packages/identity/auth" },
     { "path": "./packages/identity/auth-token" },
+    { "path": "./packages/identity/auth-token-mysql" },
     { "path": "./packages/identity/user" },
     { "path": "./packages/multi/elasticsearch" },
     { "path": "./packages/multi/redis" },

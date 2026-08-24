@@ -4,6 +4,8 @@
 
 Auth-token 子系统是 [`@deepseek-ai/dsh-auth-token`](../../packages/identity/auth-token/README.md)，它是用于不透明 refresh-token family 状态的 Host-only Service Definition。它补充 [`dsh-auth`](authentication.md)：认证服务建立 principal 并分派 Credential Provider，而该服务为 JWT 和其他 Token Provider 提供可复用的轮换与撤销模型。
 
+[`@deepseek-ai/dsh-auth-token-mysql`](../../packages/identity/auth-token-mysql/README.md) 是持久 MySQL Provider。它通过独立的 `ctx.mysql` 连接服务拥有只保存 digest 的 credential storage、schema version、行锁和原子 family 重用吊销。
+
 ## Secret 所有权
 
 服务生成每个 refresh secret，并且只从 `issueFamily` 或 `rotate` 返回。Provider hook 接收 SHA-256 `RefreshTokenDigest`；检查结果和事件同时移除 secret 与 digest。存储 Provider 持久化 digest 行，传输 Consumer 决定怎样把返回的 secret 交给客户端。
