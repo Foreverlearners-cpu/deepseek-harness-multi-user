@@ -12,7 +12,16 @@ interface ExistingTableRow extends RowDataPacket {
   table_name: string
 }
 
+interface AdvisoryLockRow extends RowDataPacket {
+  acquired: number | string | null
+}
+
+interface AdvisoryUnlockRow extends RowDataPacket {
+  released: number | string | null
+}
+
 const OWNED_TABLES = ['dsh_user_credentials', 'dsh_user_login_identifiers'] as const
+const SCHEMA_LOCK_NAME = "CONCAT('dsh:user-credential:', LEFT(SHA2(DATABASE(), 256), 40))"
 
 const CREATE_CREDENTIALS_TABLE = `
   CREATE TABLE dsh_user_credentials (
@@ -47,39 +56,65 @@ const CREATE_IDENTIFIERS_TABLE = `
  * @param connection - callback-scoped MySQL connection.
  */
 export async function initializeSchema(connection: MysqlConnection): Promise<void> {
-  await connection.query(`
-    CREATE TABLE IF NOT EXISTS dsh_user_credential_schema (
-      schema_name VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
-      version INT UNSIGNED NOT NULL
-    ) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin
-  `)
-  const [versions] = await connection.query<SchemaVersionRow[]>(
-    'SELECT version FROM dsh_user_credential_schema WHERE schema_name = ?',
-    ['user-credentials'],
+  const [locks] = await connection.query<AdvisoryLockRow[]>(
+    `SELECT GET_LOCK(${SCHEMA_LOCK_NAME}, 30) AS acquired`,
   )
-  if (versions.length > 1
-    || (versions.length === 1 && Number(versions[0]?.version) !== USER_CREDENTIAL_MYSQL_SCHEMA_VERSION)) {
-    throw new Error(`user-credential-mysql: incompatible schema version; expected ${String(USER_CREDENTIAL_MYSQL_SCHEMA_VERSION)}`)
+  if (Number(locks[0]?.acquired) !== 1) {
+    throw new Error('user-credential-mysql: could not acquire schema initialization lock')
   }
-  const [tables] = await connection.query<ExistingTableRow[]>(
-    `SELECT TABLE_NAME AS table_name FROM information_schema.TABLES
-     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (?, ?)`,
-    [...OWNED_TABLES],
-  )
-  const existing = new Set(tables.map(row => row.table_name))
-  if (versions.length === 1) {
-    if (existing.size !== OWNED_TABLES.length || OWNED_TABLES.some(table => !existing.has(table))) {
-      throw new Error('user-credential-mysql: versioned credential tables are incomplete')
+  let initializationFailure: unknown
+  try {
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS dsh_user_credential_schema (
+        schema_name VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+        version INT UNSIGNED NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin
+    `)
+    const [versions] = await connection.query<SchemaVersionRow[]>(
+      'SELECT version FROM dsh_user_credential_schema WHERE schema_name = ?',
+      ['user-credentials'],
+    )
+    if (versions.length > 1
+      || (versions.length === 1 && Number(versions[0]?.version) !== USER_CREDENTIAL_MYSQL_SCHEMA_VERSION)) {
+      throw new Error(`user-credential-mysql: incompatible schema version; expected ${String(USER_CREDENTIAL_MYSQL_SCHEMA_VERSION)}`)
     }
-    return
+    const [tables] = await connection.query<ExistingTableRow[]>(
+      `SELECT TABLE_NAME AS table_name FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (?, ?)`,
+      [...OWNED_TABLES],
+    )
+    const existing = new Set(tables.map(row => row.table_name))
+    if (versions.length === 1) {
+      if (existing.size !== OWNED_TABLES.length || OWNED_TABLES.some(table => !existing.has(table))) {
+        throw new Error('user-credential-mysql: versioned credential tables are incomplete')
+      }
+      return
+    }
+    if (existing.size !== 0) {
+      throw new Error('user-credential-mysql: unversioned credential table already exists')
+    }
+    await connection.query(CREATE_CREDENTIALS_TABLE)
+    await connection.query(CREATE_IDENTIFIERS_TABLE)
+    await connection.query(
+      'INSERT INTO dsh_user_credential_schema (schema_name, version) VALUES (?, ?)',
+      ['user-credentials', USER_CREDENTIAL_MYSQL_SCHEMA_VERSION],
+    )
+  } catch (cause) {
+    initializationFailure = cause
+    throw cause
+  } finally {
+    try {
+      const [unlocks] = await connection.query<AdvisoryUnlockRow[]>(
+        `SELECT RELEASE_LOCK(${SCHEMA_LOCK_NAME}) AS released`,
+      )
+      if (Number(unlocks[0]?.released) !== 1) {
+        throw new Error('user-credential-mysql: could not release schema initialization lock')
+      }
+    } catch (releaseFailure) {
+      if (initializationFailure !== undefined) {
+        throw new AggregateError([initializationFailure, releaseFailure], 'user-credential-mysql: schema initialization and lock release failed')
+      }
+      throw releaseFailure
+    }
   }
-  if (existing.size !== 0) {
-    throw new Error('user-credential-mysql: unversioned credential table already exists')
-  }
-  await connection.query(CREATE_CREDENTIALS_TABLE)
-  await connection.query(CREATE_IDENTIFIERS_TABLE)
-  await connection.query(
-    'INSERT INTO dsh_user_credential_schema (schema_name, version) VALUES (?, ?)',
-    ['user-credentials', USER_CREDENTIAL_MYSQL_SCHEMA_VERSION],
-  )
 }

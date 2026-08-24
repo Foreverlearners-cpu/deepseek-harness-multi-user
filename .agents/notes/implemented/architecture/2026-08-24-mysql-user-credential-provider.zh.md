@@ -10,11 +10,11 @@ Status: implemented
 
 ## Decision
 
-`@deepseek-ai/dsh-user-credential-mysql` 基于 Host-only `ctx.mysql` 连接服务继承 `UserCredentialService`。它拥有独立的带版本元数据表、aggregate 表和归一化标识表。标识表在 `(kind, normalized_value)` 上建立 binary `utf8mb4` 唯一索引；归一化在存储或查询前去除首尾空白、执行 NFKC，并使用与 locale 无关的英语小写规则。
+`@deepseek-ai/dsh-user-credential-mysql` 基于 Host-only `ctx.mysql` 连接服务继承 `UserCredentialService`。它拥有独立的带版本元数据表、aggregate 表和归一化标识表。Schema 初始化持有 database-scoped MySQL advisory lock，并在取得锁后重新检查持久状态。标识表在 `(kind, normalized_value)` 上建立 binary `utf8mb4` 唯一索引；归一化会去除首尾空白并执行 NFKC，只有大小写不敏感的 `email` 和 `username` kind 还会使用与 locale 无关的英语小写规则。
 
 密码 verifier version 1 使用 Node.js scrypt、固定持久参数、新鲜随机 salt 和 timing-safe derived-key 比较。Provider 在使用持久字段前根据该 version 验证每个字段。标识无法解析、aggregate 不存在或密码禁用时使用进程内随机 salt dummy verifier。Secret 和 verifier 字段绝不跨越 Provider API、事件或诊断接口。
 
-标识与密码状态共享一个 aggregate revision。修改会锁定 aggregate 行、比较 expected revision、应用子行或 verifier 变化、用相同 revision 条件更新、重新读取元数据并提交。Duplicate-key 竞争根据尝试的插入映射为标识冲突或 revision 冲突。其他存储、加密、异常行和事务失败全部由 Service Definition 重建为不含 cause 的 `provider-unavailable` 错误。
+标识与密码状态共享一个 aggregate revision。元数据读取从 aggregate 查询到标识查询持续持有 `FOR SHARE`，使两部分表示同一个 revision。修改会锁定 aggregate 行、比较 expected revision、应用子行或 verifier 变化、用相同 revision 条件更新、重新读取元数据并提交。Duplicate-key 竞争根据尝试的插入映射为标识冲突或 revision 冲突。其他存储、加密、异常行和事务失败全部由 Service Definition 重建为不含 cause 的 `provider-unavailable` 错误。
 
 ## Alternatives considered
 

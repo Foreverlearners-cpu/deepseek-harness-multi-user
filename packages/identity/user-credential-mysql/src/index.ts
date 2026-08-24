@@ -138,19 +138,29 @@ export class UserCredentialMysqlService extends UserCredentialService {
   }
 
   protected normalizeLoginIdentifier(input: LoginIdentifierInput): Promise<string> {
-    const value = input.value.trim().normalize('NFKC').toLocaleLowerCase('en-US')
+    const normalized = input.value.trim().normalize('NFKC')
+    const value = input.kind === 'email' || input.kind === 'username'
+      ? normalized.toLocaleLowerCase('en-US')
+      : normalized
     if (value.length === 0) throw new UserCredentialError('invalid-input', 'user-credential-mysql: identifier is empty')
     return Promise.resolve(value)
   }
 
   protected async readCredentialRecord(userId: UserId): Promise<UserCredentialRecord | undefined> {
     return this.ctx.mysql.connection(async (connection) => {
-      const [rows] = await connection.execute<CredentialRow[]>(
-        `SELECT ${SELECT_CREDENTIAL} FROM dsh_user_credentials WHERE user_id = ?`,
-        [userId],
-      )
-      const row = rows[0]
-      return row === undefined ? undefined : credentialRecord(connection, row)
+      await connection.beginTransaction()
+      try {
+        const [rows] = await connection.execute<CredentialRow[]>(
+          `SELECT ${SELECT_CREDENTIAL} FROM dsh_user_credentials WHERE user_id = ? FOR SHARE`,
+          [userId],
+        )
+        const row = rows[0]
+        const record = row === undefined ? undefined : await credentialRecord(connection, row)
+        await connection.commit()
+        return record
+      } catch (cause) {
+        return rollback(connection, cause)
+      }
     })
   }
 

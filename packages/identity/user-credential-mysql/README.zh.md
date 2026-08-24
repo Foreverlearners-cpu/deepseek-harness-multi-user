@@ -6,7 +6,7 @@
 
 ## 组合
 
-在本插件之前挂载一个 `dsh-mysql` 服务，并且只挂载一个 `ctx.userCredentials` Provider。激活时创建或验证 `dsh_user_credential_schema`、`dsh_user_credentials` 和 `dsh_user_login_identifiers`。已有版本不兼容、带版本 schema 不完整或存在无版本同名数据表都会拒绝激活。
+在本插件之前挂载一个 `dsh-mysql` 服务，并且只挂载一个 `ctx.userCredentials` Provider。激活时持有 database-scoped MySQL advisory lock，并在锁内创建或验证 `dsh_user_credential_schema`、`dsh_user_credentials` 和 `dsh_user_login_identifiers`；并发初始化器取得锁后会重新检查状态。无法取得或释放锁、已有版本不兼容、带版本 schema 不完整或存在无版本同名数据表都会拒绝激活。
 
 ```yaml
 - name: mysql
@@ -20,7 +20,7 @@
   package: '@deepseek-ai/dsh-user-credential-mysql'
 ```
 
-Consumer 使用与 Provider 无关的 `ctx.userCredentials` API。标识值在唯一性检查或查询前会去除首尾空白、执行 Unicode NFKC 归一化，并使用与部署 locale 无关的英语规则转成小写。归一化后的 `(kind, value)` 在全局唯一；标识表使用 `utf8mb4_bin`，避免 MySQL 再隐式执行另一套大小写或重音归一化。
+Consumer 使用与 Provider 无关的 `ctx.userCredentials` API。所有标识值在唯一性检查或查询前都会去除首尾空白并执行 Unicode NFKC 归一化。`email` 和 `username` 还会使用与部署 locale 无关的英语规则转成小写；扩展 kind 保留大小写。归一化后的 `(kind, value)` 在全局唯一；标识表使用 `utf8mb4_bin`，避免 MySQL 再隐式执行另一套大小写或重音归一化。
 
 ## 密码 Verifier
 
@@ -30,7 +30,7 @@ Consumer 使用与 Provider 无关的 `ctx.userCredentials` API。标识值在�
 
 ## 事务与失败
 
-标识和密码状态共享一个 aggregate 行与 revision。每次修改用 `SELECT ... FOR UPDATE` 锁定 aggregate，验证 expected revision，应用标识或 verifier 状态，使用同一 revision 条件更新，重新读取元数据，然后提交。唯一 `(kind, normalized_value)` 索引在不同用户和进程之间串行化标识分配。只有本 Provider 返回已提交结果后，基础服务才发出脱敏事件。
+标识和密码状态共享一个 aggregate 行与 revision。元数据读取在同一事务中使用 `SELECT ... FOR SHARE`，使返回的 revision 与标识行属于同一个加锁快照。每次修改用 `SELECT ... FOR UPDATE` 锁定 aggregate，验证 expected revision，应用标识或 verifier 状态，使用同一 revision 条件更新，重新读取元数据，然后提交。唯一 `(kind, normalized_value)` 索引在不同用户和进程之间串行化标识分配。只有本 Provider 返回已提交结果后，基础服务才发出脱敏事件。
 
 预期内的重复标识、状态不存在、当前密码无效和 revision 冲突保留稳定的 `dsh-user-credential` 错误码。SQL、schema、异常 verifier、事务、加密和回滚失败由基础服务重建为 `provider-unavailable`，不保留 Provider 消息或 cause。
 

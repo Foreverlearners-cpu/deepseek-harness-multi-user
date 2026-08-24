@@ -33,6 +33,18 @@ function copyCredentials(rows: Map<string, FakeCredentialRow>): Map<string, Fake
   return new Map([...rows].map(([id, row]) => [id, copyCredential(row)]))
 }
 
+class AsyncLock {
+  private tail = Promise.resolve()
+
+  async acquire(): Promise<() => void> {
+    const previous = this.tail
+    let release!: () => void
+    this.tail = new Promise((resolve) => { release = resolve })
+    await previous
+    return release
+  }
+}
+
 /** Stateful MySQL test service restricted to SQL owned by this Provider. */
 export class FakeMysql {
   readonly credentials = new Map<string, FakeCredentialRow>()
@@ -48,36 +60,38 @@ export class FakeMysql {
   hideNextPostUpdate = false
   duplicateNextCredential = false
   duplicateNextIdentifier = false
+  schemaLockResult: number | null = 1
+  schemaUnlockResult: number | null = 1
+  afterSchemaLock: (() => Promise<void>) | undefined
+  afterSharedCredentialRead: (() => Promise<void>) | undefined
   private nextIdentifierId = 1
-  private transactionCredentials: Map<string, FakeCredentialRow> | undefined
-  private transactionIdentifiers: FakeIdentifierRow[] | undefined
-  private connectionTail: Promise<void> = Promise.resolve()
+  private readonly transactionLock = new AsyncLock()
+  private readonly schemaLock = new AsyncLock()
 
   readonly connection = async <T>(callback: (connection: MysqlConnection) => T | Promise<T>): Promise<T> => {
-    const previous = this.connectionTail
-    let release!: () => void
-    this.connectionTail = new Promise((resolve) => { release = resolve })
-    await previous
-    try {
-      return await callback(this.driver())
-    } finally {
-      release()
-    }
+    return callback(this.driver())
   }
 
   asService(): Mysql {
     return this as unknown as Mysql
   }
 
-  private activeCredentials(): Map<string, FakeCredentialRow> {
-    return this.transactionCredentials ?? this.credentials
-  }
-
-  private activeIdentifiers(): FakeIdentifierRow[] {
-    return this.transactionIdentifiers ?? this.identifiers
-  }
-
   private driver(): MysqlConnection {
+    let inTransaction = false
+    let transactionDirty = false
+    let transactionCredentials: Map<string, FakeCredentialRow> | undefined
+    let transactionIdentifiers: FakeIdentifierRow[] | undefined
+    let releaseTransactionLock: (() => void) | undefined
+    let releaseSchemaLock: (() => void) | undefined
+
+    const acquireTransactionLock = async (): Promise<void> => {
+      if (!inTransaction) throw new Error('transaction lock requested outside transaction')
+      if (releaseTransactionLock !== undefined) return
+      releaseTransactionLock = await this.transactionLock.acquire()
+      transactionCredentials = copyCredentials(this.credentials)
+      transactionIdentifiers = structuredClone(this.identifiers)
+    }
+
     const query = async (sql: string, parameters: unknown[] = []): Promise<unknown> => {
       if (this.failNext !== undefined) {
         const failure = this.failNext
@@ -89,6 +103,18 @@ export class FakeMysql {
       if (this.failSql !== undefined && normalized.includes(this.failSql)) {
         this.failSql = undefined
         throw new Error('targeted SQL failure')
+      }
+      if (normalized.startsWith('SELECT GET_LOCK(')) {
+        if (this.schemaLockResult !== 1) return [[{ acquired: this.schemaLockResult }], []]
+        releaseSchemaLock = await this.schemaLock.acquire()
+        await this.afterSchemaLock?.()
+        return [[{ acquired: this.schemaLockResult }], []]
+      }
+      if (normalized.startsWith('SELECT RELEASE_LOCK(')) {
+        if (releaseSchemaLock === undefined) return [[{ released: 0 }], []]
+        releaseSchemaLock()
+        releaseSchemaLock = undefined
+        return [[{ released: this.schemaUnlockResult }], []]
       }
       if (normalized.startsWith('CREATE TABLE IF NOT EXISTS dsh_user_credential_schema')) return [{ affectedRows: 0 }, []]
       if (normalized.startsWith('SELECT version FROM dsh_user_credential_schema')) {
@@ -112,34 +138,56 @@ export class FakeMysql {
         this.schemaVersion = parameters[1] as number
         return [{ affectedRows: 1 }, []]
       }
-      return this.executeSql(normalized, parameters)
+      if (normalized.startsWith('SELECT user_id, revision, password_version')
+        && (normalized.includes('FOR UPDATE') || normalized.includes('FOR SHARE'))) {
+        await acquireTransactionLock()
+      }
+      const result = this.executeSql(
+        normalized,
+        parameters,
+        transactionCredentials ?? this.credentials,
+        transactionIdentifiers ?? this.identifiers,
+      )
+      if (inTransaction && /^(?:INSERT|DELETE|UPDATE) /.test(normalized)) transactionDirty = true
+      if (normalized.includes('FOR SHARE')) await this.afterSharedCredentialRead?.()
+      return result
     }
     return {
       query,
       execute: query,
       beginTransaction: async () => {
-        this.transactionCredentials = copyCredentials(this.credentials)
-        this.transactionIdentifiers = structuredClone(this.identifiers)
+        if (inTransaction) throw new Error('transaction already active')
+        inTransaction = true
       },
       commit: async () => {
-        if (this.transactionCredentials === undefined || this.transactionIdentifiers === undefined) throw new Error('no transaction')
-        this.credentials.clear()
-        for (const [id, row] of this.transactionCredentials) this.credentials.set(id, row)
-        this.identifiers.splice(0, this.identifiers.length, ...this.transactionIdentifiers)
-        this.transactionCredentials = undefined
-        this.transactionIdentifiers = undefined
+        if (!inTransaction || transactionCredentials === undefined || transactionIdentifiers === undefined) throw new Error('no transaction')
+        if (transactionDirty) {
+          this.credentials.clear()
+          for (const [id, row] of transactionCredentials) this.credentials.set(id, row)
+          this.identifiers.splice(0, this.identifiers.length, ...transactionIdentifiers)
+        }
+        inTransaction = false
+        releaseTransactionLock?.()
+        releaseTransactionLock = undefined
       },
       rollback: async () => {
-        if (this.rollbackFailure !== undefined) throw this.rollbackFailure
-        this.transactionCredentials = undefined
-        this.transactionIdentifiers = undefined
+        const failure = this.rollbackFailure
+        inTransaction = false
+        transactionCredentials = undefined
+        transactionIdentifiers = undefined
+        releaseTransactionLock?.()
+        releaseTransactionLock = undefined
+        if (failure !== undefined) throw failure
       },
     } as unknown as MysqlConnection
   }
 
-  private executeSql(sql: string, parameters: unknown[]): unknown {
-    const credentials = this.activeCredentials()
-    const identifiers = this.activeIdentifiers()
+  private executeSql(
+    sql: string,
+    parameters: unknown[],
+    credentials: Map<string, FakeCredentialRow>,
+    identifiers: FakeIdentifierRow[],
+  ): unknown {
     if (sql.startsWith('SELECT user_id, revision, password_version')) {
       const row = credentials.get(parameters[0] as string)
       if (!sql.includes('FOR UPDATE') && this.hideNextPostUpdate) {

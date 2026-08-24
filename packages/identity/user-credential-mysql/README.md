@@ -6,7 +6,7 @@ MySQL Service Provider for [`dsh-user-credential`](../user-credential). It suppl
 
 ## Composition
 
-Mount one `dsh-mysql` service before this plugin and mount exactly one `ctx.userCredentials` Provider. Activation creates or verifies `dsh_user_credential_schema`, `dsh_user_credentials`, and `dsh_user_login_identifiers`. An existing incompatible version, an incomplete versioned schema, or an unversioned same-name data table rejects activation.
+Mount one `dsh-mysql` service before this plugin and mount exactly one `ctx.userCredentials` Provider. Activation holds a database-scoped MySQL advisory lock while it creates or verifies `dsh_user_credential_schema`, `dsh_user_credentials`, and `dsh_user_login_identifiers`. Concurrent initializers recheck state after acquiring the lock. Failure to acquire or release the lock, an incompatible version, an incomplete versioned schema, or an unversioned same-name data table rejects activation.
 
 ```yaml
 - name: mysql
@@ -20,7 +20,7 @@ Mount one `dsh-mysql` service before this plugin and mount exactly one `ctx.user
   package: '@deepseek-ai/dsh-user-credential-mysql'
 ```
 
-Consumers use the provider-neutral `ctx.userCredentials` API. Identifier values are trimmed, Unicode NFKC-normalized, and lowercased with locale-independent English casing before uniqueness or lookup. The normalized `(kind, value)` pair is globally unique; the identifier table uses `utf8mb4_bin` so MySQL does not apply a second implicit case or accent normalization.
+Consumers use the provider-neutral `ctx.userCredentials` API. Every identifier value is trimmed and Unicode NFKC-normalized before uniqueness or lookup. `email` and `username` values are additionally lowercased with locale-independent English casing; extension kinds preserve case. The normalized `(kind, value)` pair is globally unique; the identifier table uses `utf8mb4_bin` so MySQL does not apply a second implicit case or accent normalization.
 
 ## Password Verifiers
 
@@ -30,7 +30,7 @@ Raw passwords exist only as operation parameters and scrypt inputs. The schema s
 
 ## Transactions and Failures
 
-Identifiers and password state share one aggregate row and revision. Each mutation locks the aggregate with `SELECT ... FOR UPDATE`, validates the expected revision, applies identifier or verifier state, updates with the same revision predicate, rereads metadata, and commits. The unique `(kind, normalized_value)` index serializes identifier assignment across users and processes. The base service emits its sanitized event only after this Provider returns the committed result.
+Identifiers and password state share one aggregate row and revision. Metadata reads use one transaction and `SELECT ... FOR SHARE`, so the returned revision and identifier rows belong to one locked snapshot. Each mutation locks the aggregate with `SELECT ... FOR UPDATE`, validates the expected revision, applies identifier or verifier state, updates with the same revision predicate, rereads metadata, and commits. The unique `(kind, normalized_value)` index serializes identifier assignment across users and processes. The base service emits its sanitized event only after this Provider returns the committed result.
 
 Expected duplicate identifiers, missing state, invalid current passwords, and revision conflicts retain their stable `dsh-user-credential` error codes. SQL, schema, malformed verifier, transaction, cryptographic, and rollback failures are rebuilt by the base service as `provider-unavailable` without Provider messages or causes.
 

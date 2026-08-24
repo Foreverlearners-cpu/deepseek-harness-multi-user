@@ -10,11 +10,11 @@ The provider-neutral user credential service needs durable multi-process identif
 
 ## Decision
 
-`@deepseek-ai/dsh-user-credential-mysql` subclasses `UserCredentialService` over the Host-only `ctx.mysql` connection service. It owns separate versioned metadata, aggregate, and normalized-identifier tables. The identifier table has a binary `utf8mb4` unique index over `(kind, normalized_value)`; normalization trims, applies NFKC, and uses locale-independent English lowercase before storage or lookup.
+`@deepseek-ai/dsh-user-credential-mysql` subclasses `UserCredentialService` over the Host-only `ctx.mysql` connection service. It owns separate versioned metadata, aggregate, and normalized-identifier tables. Schema initialization holds a database-scoped MySQL advisory lock and rechecks persisted state after acquisition. The identifier table has a binary `utf8mb4` unique index over `(kind, normalized_value)`; normalization trims and applies NFKC, then uses locale-independent English lowercase only for the case-insensitive `email` and `username` kinds.
 
 Password verifier version 1 uses Node.js scrypt with fixed persisted parameters, a fresh random salt, and timing-safe derived-key comparison. The Provider validates every persisted field against that version before using it. A process-local random-salt dummy verifier runs for an unresolved identifier, absent aggregate, or disabled password. Secrets and verifier fields never cross the Provider API, event, or diagnostic interface.
 
-Identifiers and password state share one aggregate revision. Mutations lock the aggregate row, compare expected revision, apply child-row or verifier changes, update through the same revision predicate, reread metadata, and commit. Duplicate-key races map to identifier or revision conflicts according to the attempted insert. Every other storage, crypto, malformed-row, and transaction failure is rebuilt by the Service Definition as a cause-free `provider-unavailable` error.
+Identifiers and password state share one aggregate revision. Metadata reads hold `FOR SHARE` from the aggregate read through the identifier read, so both parts represent one revision. Mutations lock the aggregate row, compare expected revision, apply child-row or verifier changes, update through the same revision predicate, reread metadata, and commit. Duplicate-key races map to identifier or revision conflicts according to the attempted insert. Every other storage, crypto, malformed-row, and transaction failure is rebuilt by the Service Definition as a cause-free `provider-unavailable` error.
 
 ## Alternatives considered
 

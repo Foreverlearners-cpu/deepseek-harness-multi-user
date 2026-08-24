@@ -48,6 +48,12 @@ function bareRow(id = 'user-1'): FakeCredentialRow {
   }
 }
 
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((settle) => { resolve = settle })
+  return { promise, resolve }
+}
+
 describe('UserCredentialMysqlService', () => {
   it('initializes and verifies the utf8mb4 schema version', async () => {
     expect(USER_CREDENTIAL_MYSQL_SCHEMA_VERSION).toBe(1)
@@ -65,6 +71,45 @@ describe('UserCredentialMysqlService', () => {
     existing.credentialTableExists = true
     existing.identifierTableExists = true
     await expect(setup(existing)).resolves.toMatchObject({ mysql: existing })
+  })
+
+  it('serializes concurrent schema initialization and rechecks state inside the advisory lock', async () => {
+    const mysql = new FakeMysql()
+    const entered = deferred()
+    const release = deferred()
+    let first = true
+    mysql.afterSchemaLock = async () => {
+      if (!first) return
+      first = false
+      entered.resolve()
+      await release.promise
+    }
+    const firstSetup = setup(mysql)
+    await entered.promise
+    let secondSettled = false
+    const secondSetup = setup(mysql).finally(() => { secondSettled = true })
+    await Promise.resolve()
+    expect(secondSettled).toBe(false)
+    release.resolve()
+    await expect(Promise.all([firstSetup, secondSetup])).resolves.toHaveLength(2)
+    expect(mysql.queries.filter(query => query.startsWith('CREATE TABLE dsh_user_credentials'))).toHaveLength(1)
+    expect(mysql.queries.filter(query => query.startsWith('CREATE TABLE dsh_user_login_identifiers'))).toHaveLength(1)
+    expect(mysql.queries.filter(query => query.startsWith('SELECT RELEASE_LOCK('))).toHaveLength(2)
+  })
+
+  it('fails loud when the schema advisory lock cannot be acquired or released', async () => {
+    const unavailable = new FakeMysql()
+    unavailable.schemaLockResult = 0
+    await expect(setup(unavailable)).rejects.toThrow(/could not acquire/)
+
+    const releaseFailure = new FakeMysql()
+    releaseFailure.schemaUnlockResult = null
+    await expect(setup(releaseFailure)).rejects.toThrow(/could not release/)
+
+    const combined = new FakeMysql()
+    combined.schemaVersion = 2
+    combined.schemaUnlockResult = 0
+    await expect(setup(combined)).rejects.toBeInstanceOf(AggregateError)
   })
 
   it('rejects incompatible, incomplete, and unversioned credential schemas', async () => {
@@ -88,6 +133,34 @@ describe('UserCredentialMysqlService', () => {
       .resolves.toEqual({ kind: 'username', value: 'alice' })
     await expect(credentials.normalize({ kind: 'username', value: '  ' }))
       .rejects.toMatchObject({ code: 'invalid-input' })
+    await expect(credentials.normalize({ kind: 'employee-id', value: '  ＡbC  ' }))
+      .resolves.toEqual({ kind: 'employee-id', value: 'AbC' })
+  })
+
+  it('returns an aggregate revision and identifiers from one locked snapshot', async () => {
+    const { mysql, credentials } = await setup()
+    const id = userId('user-1')
+    const original = await credentials.addIdentifier({ userId: id, expectedRevision: 0, kind: 'email', value: 'one@example.com' })
+    const entered = deferred()
+    const release = deferred()
+    mysql.afterSharedCredentialRead = async () => {
+      mysql.afterSharedCredentialRead = undefined
+      entered.resolve()
+      await release.promise
+    }
+    const read = credentials.get(id)
+    await entered.promise
+    let mutationSettled = false
+    const mutation = credentials.addIdentifier({ userId: id, expectedRevision: original.revision, kind: 'email', value: 'two@example.com' })
+      .finally(() => { mutationSettled = true })
+    await Promise.resolve()
+    expect(mutationSettled).toBe(false)
+    release.resolve()
+    await expect(read).resolves.toEqual(original)
+    await expect(mutation).resolves.toMatchObject({
+      revision: 2,
+      identifiers: [{ value: 'one@example.com' }, { value: 'two@example.com' }],
+    })
   })
 
   it('uses versioned random-salt scrypt verifiers and rejects unsupported fields', async () => {
@@ -173,7 +246,7 @@ describe('UserCredentialMysqlService', () => {
       revision = current.revision
     }
     await expect(credentials.addIdentifier({ userId: id, expectedRevision: revision, kind: 'username', value: 'overflow' }))
-      .rejects.toMatchObject({ code: 'provider-unavailable' })
+      .rejects.toMatchObject({ code: 'invalid-input' })
   })
 
   it('maps non-duplicate insert failures and disabled password changes', async () => {
