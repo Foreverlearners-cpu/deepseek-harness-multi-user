@@ -3218,11 +3218,13 @@ Source: [`packages/workflow/workflow-worker-thread/src/index.ts:32`](../packages
 These load from a `cordis.yml` entry with no `config:` block; they declare no configuration API.
 
 - `@deepseek-ai/dsh-account` ([`packages/identity/account/src/index.ts`](../packages/identity/account/src/index.ts))
+- `@deepseek-ai/dsh-account-mysql` — requires `accounts` · `mysql` ([`packages/identity/account-mysql/src/index.ts`](../packages/identity/account-mysql/src/index.ts))
 - `@deepseek-ai/dsh-agent` ([`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts))
 - `@deepseek-ai/dsh-api-gateway` — requires `typert` ([`packages/api/gateway/src/index.ts`](../packages/api/gateway/src/index.ts))
 - `@deepseek-ai/dsh-api-remotes` ([`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts))
 - `@deepseek-ai/dsh-auth` ([`packages/identity/auth/src/index.ts`](../packages/identity/auth/src/index.ts))
 - `@deepseek-ai/dsh-auth-password` — requires `auth` · `userCredentials` ([`packages/identity/auth-password/src/index.ts`](../packages/identity/auth-password/src/index.ts))
+- `@deepseek-ai/dsh-auth-token-mysql` — requires `mysql` ([`packages/identity/auth-token-mysql/src/index.ts`](../packages/identity/auth-token-mysql/src/index.ts))
 - `@deepseek-ai/dsh-client-locale` ([`packages/client/locale/src/index.ts`](../packages/client/locale/src/index.ts))
 - `@deepseek-ai/dsh-client-modules` — requires `webServer` · `loader` ([`packages/client/modules/src/index.ts`](../packages/client/modules/src/index.ts))
 - `@deepseek-ai/dsh-client-runtime` ([`packages/client/runtime/src/index.ts`](../packages/client/runtime/src/index.ts))

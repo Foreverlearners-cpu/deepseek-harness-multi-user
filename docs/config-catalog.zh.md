@@ -3220,11 +3220,13 @@ export interface Config {
 这些插件通过 `cordis.yml` 中不含 `config:` 块的条目加载；它们未声明任何配置接口。
 
 - `@deepseek-ai/dsh-account`（[`packages/identity/account/src/index.ts`](../packages/identity/account/src/index.ts)）
+- `@deepseek-ai/dsh-account-mysql` — 需要 `accounts` · `mysql`（[`packages/identity/account-mysql/src/index.ts`](../packages/identity/account-mysql/src/index.ts)）
 - `@deepseek-ai/dsh-agent`（[`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts)）
 - `@deepseek-ai/dsh-api-gateway` — 需要 `typert`（[`packages/api/gateway/src/index.ts`](../packages/api/gateway/src/index.ts)）
 - `@deepseek-ai/dsh-api-remotes`（[`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts)）
 - `@deepseek-ai/dsh-auth`（[`packages/identity/auth/src/index.ts`](../packages/identity/auth/src/index.ts)）
 - `@deepseek-ai/dsh-auth-password` — 需要 `auth` · `userCredentials`（[`packages/identity/auth-password/src/index.ts`](../packages/identity/auth-password/src/index.ts)）
+- `@deepseek-ai/dsh-auth-token-mysql` — 需要 `mysql`（[`packages/identity/auth-token-mysql/src/index.ts`](../packages/identity/auth-token-mysql/src/index.ts)）
 - `@deepseek-ai/dsh-client-locale`（[`packages/client/locale/src/index.ts`](../packages/client/locale/src/index.ts)）
 - `@deepseek-ai/dsh-client-modules` — 需要 `webServer` · `loader`（[`packages/client/modules/src/index.ts`](../packages/client/modules/src/index.ts)）
 - `@deepseek-ai/dsh-client-runtime`（[`packages/client/runtime/src/index.ts`](../packages/client/runtime/src/index.ts)）
