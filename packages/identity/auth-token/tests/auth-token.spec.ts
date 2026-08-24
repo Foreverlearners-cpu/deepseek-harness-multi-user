@@ -30,13 +30,11 @@ describe('auth-token validation and containment', () => {
       requestId,
       signal: new AbortController().signal,
       refreshToken: 'wrong',
-      expiresAt: 2_000,
     })).rejects.toMatchObject({ code: 'refresh-token-invalid' })
     await expect(authTokens.rotate({
       requestId,
       signal: new AbortController().signal,
       refreshToken: `dsh_rt_${'界'.repeat(MAX_REFRESH_TOKEN_BYTES)}`,
-      expiresAt: 2_000,
     })).rejects.toMatchObject({ code: 'refresh-token-invalid' })
   })
 

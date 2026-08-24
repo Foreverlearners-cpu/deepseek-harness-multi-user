@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/auth-token.md
-auth-token.md: c823b31a3486a58cfd7a2acdc04aeea518ada700
-auth-token.zh.md: a6c5dd5eeb051a7342356637eb55159a7b3f38fc
+auth-token.md: eb92785eba92e8eda9f9089830ccaacd8b136385
+auth-token.zh.md: 415787ea726786d2291df6ca1b1b4e6282f33edd

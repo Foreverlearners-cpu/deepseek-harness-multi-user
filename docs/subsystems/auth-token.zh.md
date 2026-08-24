@@ -45,7 +45,7 @@ async issueFamily(request: TokenFamilyIssueRequest): Promise<TokenFamilyIssueRes
 /**
  * Atomically consume one refresh token and replace it exactly once.
  * Reuse revokes the entire family before the method rejects.
- * @param request - current refresh secret, replacement expiry, and operation lifecycle.
+ * @param request - current refresh secret and operation lifecycle.
  * @returns committed family metadata and a replacement refresh secret.
  */
 async rotate(request: RefreshTokenRotateRequest): Promise<TokenFamilyIssueResult>
@@ -86,5 +86,5 @@ Committed token-family change without refresh secrets or digests.
 'auth-token/changed'(event: AuthTokenChangeEvent): void
 ```
 
-Source: [`packages/identity/auth-token/src/types.ts:216`](../../packages/identity/auth-token/src/types.ts)
+Source: [`packages/identity/auth-token/src/types.ts:214`](../../packages/identity/auth-token/src/types.ts)
 <!-- END GENERATED cordis-surface -->

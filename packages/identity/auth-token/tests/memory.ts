@@ -53,7 +53,6 @@ export class MemoryAuthTokens extends AuthTokenService {
       return Promise.resolve({ kind: 'reused', previousFamily: family, currentFamily: current, reusedCredential: credential })
     }
     if (credential.status !== 'active') throw new AuthTokenError('token-family-revoked', 'memory credential is revoked')
-    if (input.expiresAt > family.expiresAt) throw new AuthTokenError('invalid-input', 'memory replacement exceeds family expiry')
     const consumedCredential: RefreshCredentialRecord = {
       ...credential,
       status: 'rotated',
@@ -66,7 +65,7 @@ export class MemoryAuthTokens extends AuthTokenService {
       digest: input.replacementDigest,
       status: 'active',
       issuedAt: input.time,
-      expiresAt: input.expiresAt,
+      expiresAt: family.expiresAt,
     }
     const currentFamily: TokenFamilyRecord = { ...family, updatedAt: input.time, revision: family.revision + 1 }
     this.credentials.set(consumedCredential.credentialId, consumedCredential)

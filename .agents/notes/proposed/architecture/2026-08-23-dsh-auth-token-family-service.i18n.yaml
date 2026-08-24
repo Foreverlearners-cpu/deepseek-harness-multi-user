@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-23-dsh-auth-token-family-service.md
-2026-08-23-dsh-auth-token-family-service.md: a690d00e44334802054bc9003c88ee441844772f
-2026-08-23-dsh-auth-token-family-service.zh.md: 358095972acbfd0ab106d77a55df0fc3aabcdc31
+2026-08-23-dsh-auth-token-family-service.md: d5744648b03ba56a21dc7fa3f84b8aada09ca3e3
+2026-08-23-dsh-auth-token-family-service.zh.md: 65fb4632c2daa8354c11adf01c058af51bb5a53f

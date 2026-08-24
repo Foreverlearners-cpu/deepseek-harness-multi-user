@@ -21,7 +21,7 @@ Every operation carries a Host-generated `AuthenticationRequestId` and `AbortSig
 
 A family starts at revision 1. Every committed rotation or first revocation increments revision by exactly one. Idempotent revocation of an already revoked family does not change its revision. The revision orders committed family changes; it is not a caller-selected optimistic lock.
 
-`TokenFamilyRecord.expiresAt` is an absolute family lifetime established at issue. Each replacement refresh credential must expire in the future and no later than the family. Rotation never extends family lifetime. A Provider compares expiry and consumes the current digest in the same transaction.
+`TokenFamilyRecord.expiresAt` is an absolute family lifetime established at issue. Every replacement refresh credential inherits that exact expiry from the locked family record; the opaque refresh secret does not disclose it and the caller cannot choose it. Rotation therefore never extends or accidentally shortens family lifetime. A Provider checks expiry and consumes the current digest in the same transaction.
 
 Refresh credentials are `active`, `rotated`, or `revoked`. A successful rotation changes the consumed credential to `rotated`, creates one `active` replacement, and increments the family revision atomically. Two concurrent rotations of one secret cannot both succeed.
 
