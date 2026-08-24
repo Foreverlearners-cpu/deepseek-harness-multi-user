@@ -73,6 +73,15 @@ function attempt(token: string) {
   }
 }
 
+async function rejection(operation: Promise<unknown>): Promise<unknown> {
+  try {
+    await operation
+  } catch (error) {
+    return error
+  }
+  throw new Error('expected operation to reject')
+}
+
 async function forgeAccess(payload: Record<string, unknown>): Promise<string> {
   const now = Math.floor(Date.now() / 1_000)
   return new SignJWT({
@@ -87,6 +96,27 @@ async function forgeAccess(payload: Record<string, unknown>): Promise<string> {
     sid: 'family-forged',
     ...payload,
   }).setProtectedHeader({ alg: JWT_ALGORITHM, kid: 'key-1', typ: 'access' })
+    .sign(Buffer.from(firstSecret, 'base64url'))
+}
+
+async function forgeRefresh(
+  payload: Record<string, unknown> = {},
+  header: Record<string, unknown> = {},
+): Promise<string> {
+  const now = Math.floor(Date.now() / 1_000)
+  return new SignJWT({
+    iss: 'https://issuer.example',
+    aud: 'dsh-host',
+    sub: 'user-1',
+    iat: now,
+    nbf: now,
+    exp: now + 3_600,
+    jti: 'refresh-forged',
+    pk: 'user',
+    sid: 'family-forged',
+    rft: 'dsh_rt_forged',
+    ...payload,
+  }).setProtectedHeader({ alg: JWT_ALGORITHM, kid: 'key-1', typ: 'refresh', ...header })
     .sign(Buffer.from(firstSecret, 'base64url'))
 }
 
@@ -189,7 +219,7 @@ describe('JWT authentication lifecycle', () => {
     expect(decodeProtectedHeader(credential(replaced, 'refresh').value).kid).toBe('key-2')
   })
 
-  it('synchronously revokes a committed family when JWT signing fails', async () => {
+  it('does not create a family when JWT signing fails during issue preparation', async () => {
     class FailingProvider extends JwtAuthenticationProvider {
       protected override sign(_jwt: SignJWT, _key: Uint8Array): Promise<string> {
         return Promise.reject(new Error('sign failed'))
@@ -202,7 +232,32 @@ describe('JWT authentication lifecycle', () => {
       signal,
       target: { kind: 'principal', principal: { kind: 'user', id: user.userId } },
     })
-    expect(inspected.families).toEqual([expect.objectContaining({ status: 'revoked' })])
+    expect(inspected.families).toEqual([])
+    expect(inspected.credentials).toEqual([])
+  })
+
+  it('keeps the old refresh credential active when rotation signing fails', async () => {
+    class FailingOnceProvider extends JwtAuthenticationProvider {
+      private signs = 0
+
+      protected override sign(jwt: SignJWT, key: Uint8Array): Promise<string> {
+        this.signs += 1
+        if (this.signs === 3) return Promise.reject(new Error('sign failed'))
+        return super.sign(jwt, key)
+      }
+    }
+    const { ctx, user } = await setup(FailingOnceProvider)
+    const issued = await issue(ctx, user.userId)
+    const refresh = credential(issued, 'refresh')
+    const failure = await rejection(ctx.auth.credentials.refresh(method, {
+      requestId,
+      signal,
+      refreshToken: refresh.value,
+    }))
+    expect(failure).toMatchObject({ code: 'authentication-unavailable' })
+    expect(failure).not.toHaveProperty('cause')
+    await expect(ctx.auth.credentials.refresh(method, { requestId, signal, refreshToken: refresh.value }))
+      .resolves.toHaveProperty('credentials')
   })
 
   it('surfaces Provider outages without exposing their diagnostics', async () => {
@@ -210,50 +265,44 @@ describe('JWT authentication lifecycle', () => {
     const issued = await issue(ctx, user.userId)
     const access = credential(issued, 'access')
     vi.spyOn(ctx.authTokens, 'inspect').mockRejectedValueOnce(new Error('database detail'))
-    await expect(ctx.auth.authenticate(attempt(access.value))).rejects.toMatchObject({
+    const tokenFailure = await rejection(ctx.auth.authenticate(attempt(access.value)))
+    expect(tokenFailure).toMatchObject({
       code: 'authentication-unavailable',
       message: 'auth-jwt: authentication service is unavailable',
     })
+    expect(tokenFailure).not.toHaveProperty('cause')
     vi.spyOn(ctx.users, 'requireActive').mockRejectedValueOnce(
       new UserDirectoryError('provider-unavailable', 'user storage detail'),
     )
     await expect(issue(ctx, user.userId)).rejects.toMatchObject({ code: 'authentication-unavailable' })
   })
 
-  it('preserves authentication failures and compensates inconsistent rotation results', async () => {
+  it('preserves normalized failures and rejects inconsistent rotation candidates before commit', async () => {
     const { ctx, user } = await setup()
     const issued = await issue(ctx, user.userId)
     const refresh = credential(issued, 'refresh')
-    vi.spyOn(ctx.authTokens, 'rotate').mockRejectedValueOnce(
-      new AuthenticationError('unauthenticated', 'trusted normalized failure'),
+    vi.spyOn(ctx.authTokens, 'rotateWithPreparation').mockRejectedValueOnce(
+      new AuthenticationError('unauthenticated', 'trusted normalized failure', { cause: new Error('private') }),
     )
-    await expect(ctx.auth.credentials.refresh(method, { requestId, signal, refreshToken: refresh.value }))
-      .rejects.toThrow('trusted normalized failure')
+    const normalized = await rejection(ctx.auth.credentials.refresh(method, {
+      requestId,
+      signal,
+      refreshToken: refresh.value,
+    }))
+    expect(normalized).toMatchObject({ message: 'trusted normalized failure' })
+    expect(normalized).not.toHaveProperty('cause')
 
-    const original = ctx.authTokens.rotate.bind(ctx.authTokens)
-    vi.spyOn(ctx.authTokens, 'rotate').mockImplementationOnce(async (request) => {
-      const result = await original(request)
-      return { ...result, family: { ...result.family, tokenFamilyId: 'family-other' as typeof result.family.tokenFamilyId } }
+    const original = ctx.authTokens.rotateWithPreparation.bind(ctx.authTokens)
+    vi.spyOn(ctx.authTokens, 'rotateWithPreparation').mockImplementationOnce((request, prepare) => {
+      return original(request, candidate => prepare({
+        ...candidate,
+        family: { ...candidate.family, tokenFamilyId: 'family-other' as typeof candidate.family.tokenFamilyId },
+      }))
     })
     await expect(ctx.auth.credentials.refresh(method, { requestId, signal, refreshToken: refresh.value }))
       .rejects.toMatchObject({ code: 'authentication-unavailable' })
-    const state = await ctx.authTokens.inspect({
-      requestId,
-      signal,
-      target: { kind: 'principal', principal: { kind: 'user', id: user.userId } },
-    })
-    expect(state.families[0]).toMatchObject({ status: 'revoked' })
-  })
-
-  it('reports compensation failure as an unavailable authentication service', async () => {
-    class FailingProvider extends JwtAuthenticationProvider {
-      protected override sign(): Promise<string> {
-        return Promise.reject(new Error('sign failed'))
-      }
-    }
-    const { ctx, user } = await setup(FailingProvider)
-    vi.spyOn(ctx.authTokens, 'revoke').mockRejectedValueOnce(new Error('revoke failed'))
-    await expect(issue(ctx, user.userId)).rejects.toMatchObject({ code: 'authentication-unavailable' })
+    await expect(ctx.auth.credentials.refresh(method, { requestId, signal, refreshToken: refresh.value }))
+      .resolves.toHaveProperty('credentials')
   })
 
   it('supports service-account and local principals without user-directory lookup', async () => {
@@ -304,6 +353,42 @@ describe('JWT authentication lifecycle', () => {
     }
   })
 
+  it('rejects signed refresh JWTs whose fixed claims violate the refresh profile', async () => {
+    const { ctx } = await setup()
+    const now = Math.floor(Date.now() / 1_000)
+    for (const payload of [
+      { iss: 'https://other.example' },
+      { aud: 'other-host' },
+      { aud: ['dsh-host'] },
+      { iat: now + 0.5, nbf: now + 0.5 },
+      { iat: now, nbf: now + 1 },
+      { exp: now },
+      { exp: now + 3_601 },
+      { jti: undefined },
+      { jti: 1 },
+      { sid: undefined },
+      { sid: 1 },
+      { rft: undefined },
+      { rft: 1 },
+    ]) {
+      await expect(ctx.auth.credentials.refresh(method, {
+        requestId,
+        signal,
+        refreshToken: await forgeRefresh(payload),
+      })).rejects.toMatchObject({ code: 'unauthenticated' })
+    }
+    await expect(ctx.auth.credentials.refresh(method, {
+      requestId,
+      signal,
+      refreshToken: await forgeRefresh({}, { typ: 'access' }),
+    })).rejects.toMatchObject({ code: 'unauthenticated' })
+    await expect(ctx.auth.credentials.refresh(method, {
+      requestId,
+      signal,
+      refreshToken: await forgeRefresh({}, { kid: 'unknown-key' }),
+    })).rejects.toMatchObject({ code: 'unauthenticated' })
+  })
+
   it('rejects a token whose protected key id is not in the configured verification keyring', async () => {
     const { ctx } = await setup()
     const now = Math.floor(Date.now() / 1_000)
@@ -320,16 +405,20 @@ describe('JWT authentication lifecycle', () => {
     await expect(ctx.auth.authenticate(attempt(token))).rejects.toMatchObject({ code: 'unauthenticated' })
   })
 
-  it('revokes a family when its remaining lifetime cannot encode a valid refresh JWT', async () => {
+  it('does not create a family when its remaining lifetime cannot encode a valid refresh JWT', async () => {
     vi.useFakeTimers()
     try {
       vi.setSystemTime(new Date('2026-01-01T00:00:00.100Z'))
-      const { ctx, user } = await setup(JwtAuthenticationProvider, config({ refreshTtlSeconds: 1 }))
-      const original = ctx.authTokens.issueFamily.bind(ctx.authTokens)
-      vi.spyOn(ctx.authTokens, 'issueFamily').mockImplementationOnce(async (request) => {
-        const committed = await original(request)
-        vi.setSystemTime(new Date('2026-01-01T00:00:01.200Z'))
-        return committed
+      const { ctx, user } = await setup(JwtAuthenticationProvider, config({
+        accessTtlSeconds: 1,
+        refreshTtlSeconds: 1,
+      }))
+      const original = ctx.authTokens.issueFamilyWithPreparation.bind(ctx.authTokens)
+      vi.spyOn(ctx.authTokens, 'issueFamilyWithPreparation').mockImplementationOnce((request, prepare) => {
+        return original(request, (candidate) => {
+          vi.setSystemTime(new Date('2026-01-01T00:00:01.200Z'))
+          return prepare(candidate)
+        })
       })
       await expect(issue(ctx, user.userId)).rejects.toMatchObject({ code: 'authentication-unavailable' })
       const inspection = await ctx.authTokens.inspect({
@@ -337,7 +426,7 @@ describe('JWT authentication lifecycle', () => {
         signal,
         target: { kind: 'principal', principal: { kind: 'user', id: user.userId } },
       })
-      expect(inspection.families[0]).toMatchObject({ status: 'revoked' })
+      expect(inspection.families).toEqual([])
     } finally {
       vi.useRealTimers()
     }
@@ -359,6 +448,11 @@ describe('JWT configuration', () => {
     })
   })
 
+  it('allows equal access and refresh TTLs', () => {
+    expect(resolveSpec(config({ accessTtlSeconds: 600, refreshTtlSeconds: 600 })))
+      .toMatchObject({ accessTtlSeconds: 600, refreshTtlSeconds: 600 })
+  })
+
   it.each([
     [{ ...config(), issuer: '' }, 'issuer'],
     [{ ...config(), issuer: 'x'.repeat(513) }, 'issuer'],
@@ -368,6 +462,7 @@ describe('JWT configuration', () => {
     [{ ...config(), accessTtlSeconds: 1.5 }, 'access TTL'],
     [{ ...config(), refreshTtlSeconds: 31_536_001 }, 'refresh TTL'],
     [{ ...config(), refreshTtlSeconds: 0 }, 'refresh TTL'],
+    [{ ...config(), accessTtlSeconds: 601, refreshTtlSeconds: 600 }, 'greater than or equal'],
     [{ ...config(), clockToleranceSeconds: 301 }, 'clock tolerance'],
     [{ ...config(), clockToleranceSeconds: -1 }, 'clock tolerance'],
     [{ ...config(), clockToleranceSeconds: 1.5 }, 'clock tolerance'],

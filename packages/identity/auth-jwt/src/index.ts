@@ -141,21 +141,26 @@ export function resolveSpec(config: JwtAuthenticationConfig): JwtSpec {
   if (!KEY_ID_PATTERN.test(config.activeKeyId) || !keys.has(config.activeKeyId)) {
     invalidConfig('active key id must select one configured key')
   }
+  const accessTtlSeconds = boundedInteger(
+    config.accessTtlSeconds,
+    DEFAULT_ACCESS_TTL_SECONDS,
+    MAX_ACCESS_TTL_SECONDS,
+    'access TTL',
+  )
+  const refreshTtlSeconds = boundedInteger(
+    config.refreshTtlSeconds,
+    DEFAULT_REFRESH_TTL_SECONDS,
+    MAX_REFRESH_TTL_SECONDS,
+    'refresh TTL',
+  )
+  if (refreshTtlSeconds < accessTtlSeconds) {
+    invalidConfig('refresh TTL must be greater than or equal to access TTL')
+  }
   return Object.freeze({
     issuer: config.issuer,
     audience: config.audience,
-    accessTtlSeconds: boundedInteger(
-      config.accessTtlSeconds,
-      DEFAULT_ACCESS_TTL_SECONDS,
-      MAX_ACCESS_TTL_SECONDS,
-      'access TTL',
-    ),
-    refreshTtlSeconds: boundedInteger(
-      config.refreshTtlSeconds,
-      DEFAULT_REFRESH_TTL_SECONDS,
-      MAX_REFRESH_TTL_SECONDS,
-      'refresh TTL',
-    ),
+    accessTtlSeconds,
+    refreshTtlSeconds,
     clockToleranceSeconds: config.clockToleranceSeconds ?? 0,
     activeKey: keys.get(config.activeKeyId) as SigningKey,
     keys,
@@ -166,12 +171,8 @@ function unauthenticated(): AuthenticationError {
   return new AuthenticationError('unauthenticated', 'auth-jwt: credential was rejected')
 }
 
-function unavailable(cause?: unknown): AuthenticationError {
-  return new AuthenticationError(
-    'authentication-unavailable',
-    'auth-jwt: authentication service is unavailable',
-    cause === undefined ? undefined : { cause },
-  )
+function unavailable(): AuthenticationError {
+  return new AuthenticationError('authentication-unavailable', 'auth-jwt: authentication service is unavailable')
 }
 
 function samePrincipal(left: AuthenticatedPrincipal, right: AuthenticatedPrincipal): boolean {
@@ -224,7 +225,7 @@ export class JwtAuthenticationProvider implements AuthenticationProvider<'bearer
     }
   }
 
-  /** Sign a prepared JWT. Tests may override only to exercise compensation.
+  /** Sign a prepared JWT. Tests may override to exercise transactional preparation failure.
    * @param jwt - fully constructed token with fixed claims and protected header.
    * @param key - decoded active signing key.
    * @returns compact JWT serialization.
@@ -241,30 +242,31 @@ export class JwtAuthenticationProvider implements AuthenticationProvider<'bearer
     const key = this.activeKey()
     await this.assertUserActive(request.principal)
     const now = Date.now()
-    const committed = await this.tokenOperation(() => this.ctx.authTokens.issueFamily({
+    const committed = await this.tokenOperation(() => this.ctx.authTokens.issueFamilyWithPreparation({
       requestId: request.requestId,
       signal: request.signal,
       principal: request.principal,
       expiresAt: now + this.spec.refreshTtlSeconds * 1_000,
-    }))
-    return this.signCommitted(committed, key, request.requestId)
+    }, candidate => this.signPrepared(candidate, key)))
+    return committed.prepared
   }
 
   private async refresh(request: Parameters<NonNullable<CredentialLifecycleProvider['refresh']>>[0]): Promise<IssuedCredentialSet> {
     const parsed = await this.parse(request.refreshToken, REFRESH_TYPE)
     const key = this.activeKey()
     await this.assertUserActive(parsed.principal)
-    const committed = await this.tokenOperation(() => this.ctx.authTokens.rotate({
+    const committed = await this.tokenOperation(() => this.ctx.authTokens.rotateWithPreparation({
       requestId: request.requestId,
       signal: request.signal,
       refreshToken: parsed.refreshSecret as string,
+    }, (candidate) => {
+      if (candidate.family.tokenFamilyId !== parsed.tokenFamilyId
+        || !samePrincipal(candidate.family.principal, parsed.principal)) {
+        throw unavailable()
+      }
+      return this.signPrepared(candidate, key)
     }))
-    if (committed.family.tokenFamilyId !== parsed.tokenFamilyId
-      || !samePrincipal(committed.family.principal, parsed.principal)) {
-      await this.compensate(committed, request.requestId, parsed.tokenFamilyId)
-      throw unavailable()
-    }
-    return this.signCommitted(committed, key, request.requestId)
+    return committed.prepared
   }
 
   private async inspect(request: Parameters<NonNullable<CredentialLifecycleProvider['inspect']>>[0]): Promise<readonly AuthenticationCredentialInfo[]> {
@@ -282,54 +284,48 @@ export class JwtAuthenticationProvider implements AuthenticationProvider<'bearer
     await this.tokenOperation(() => this.ctx.authTokens.revoke(request))
   }
 
-  private async signCommitted(
-    committed: TokenFamilyIssueResult,
+  private async signPrepared(
+    candidate: TokenFamilyIssueResult,
     key: SigningKey,
-    requestId: Parameters<NonNullable<CredentialLifecycleProvider['issue']>>[0]['requestId'],
   ): Promise<IssuedCredentialSet> {
-    try {
-      const issuedAt = Math.floor(Date.now() / 1_000)
-      const accessExpiresAt = issuedAt + this.spec.accessTtlSeconds
-      const refreshExpiresAt = Math.floor(committed.refreshToken.expiresAt / 1_000)
-      if (refreshExpiresAt <= issuedAt) throw unavailable()
-      const accessId = credentialId(`access-${randomBytes(18).toString('base64url')}`)
-      const access = await this.sign(this.jwt(
-        ACCESS_TYPE,
-        committed.family.principal,
-        committed.family.tokenFamilyId,
-        accessId,
-        issuedAt,
-        accessExpiresAt,
-      ), key.secret)
-      const refresh = await this.sign(this.jwt(
-        REFRESH_TYPE,
-        committed.family.principal,
-        committed.family.tokenFamilyId,
-        committed.refreshToken.credentialId,
-        issuedAt,
-        refreshExpiresAt,
-        committed.refreshToken.value,
-      ), key.secret)
-      return Object.freeze({ credentials: Object.freeze([
-        Object.freeze({
-          kind: 'access' as const,
-          id: accessId,
-          value: access,
-          expiresAt: accessExpiresAt * 1_000,
-          tokenFamilyId: committed.family.tokenFamilyId,
-        }),
-        Object.freeze({
-          kind: 'refresh' as const,
-          id: committed.refreshToken.credentialId,
-          value: refresh,
-          expiresAt: committed.refreshToken.expiresAt,
-          tokenFamilyId: committed.family.tokenFamilyId,
-        }),
-      ]) })
-    } catch (cause) {
-      await this.compensate(committed, requestId)
-      throw unavailable(cause)
-    }
+    const issuedAt = Math.floor(Date.now() / 1_000)
+    const accessExpiresAt = issuedAt + this.spec.accessTtlSeconds
+    const refreshExpiresAt = Math.floor(candidate.refreshToken.expiresAt / 1_000)
+    if (refreshExpiresAt <= issuedAt) throw unavailable()
+    const accessId = credentialId(`access-${randomBytes(18).toString('base64url')}`)
+    const access = await this.sign(this.jwt(
+      ACCESS_TYPE,
+      candidate.family.principal,
+      candidate.family.tokenFamilyId,
+      accessId,
+      issuedAt,
+      accessExpiresAt,
+    ), key.secret)
+    const refresh = await this.sign(this.jwt(
+      REFRESH_TYPE,
+      candidate.family.principal,
+      candidate.family.tokenFamilyId,
+      candidate.refreshToken.credentialId,
+      issuedAt,
+      refreshExpiresAt,
+      candidate.refreshToken.value,
+    ), key.secret)
+    return Object.freeze({ credentials: Object.freeze([
+      Object.freeze({
+        kind: 'access' as const,
+        id: accessId,
+        value: access,
+        expiresAt: accessExpiresAt * 1_000,
+        tokenFamilyId: candidate.family.tokenFamilyId,
+      }),
+      Object.freeze({
+        kind: 'refresh' as const,
+        id: candidate.refreshToken.credentialId,
+        value: refresh,
+        expiresAt: candidate.refreshToken.expiresAt,
+        tokenFamilyId: candidate.family.tokenFamilyId,
+      }),
+    ]) })
   }
 
   private jwt(
@@ -392,7 +388,9 @@ export class JwtAuthenticationProvider implements AuthenticationProvider<'bearer
       })
       return parsed
     } catch (cause) {
-      if (cause instanceof AuthenticationError) throw cause
+      if (cause instanceof AuthenticationError) {
+        throw new AuthenticationError(cause.code, cause.message)
+      }
       throw unauthenticated()
     }
   }
@@ -419,24 +417,8 @@ export class JwtAuthenticationProvider implements AuthenticationProvider<'bearer
     try {
       await this.ctx.users.requireActive(principal.id)
     } catch (cause) {
-      if (cause instanceof UserDirectoryError && cause.code === 'provider-unavailable') throw unavailable(cause)
+      if (cause instanceof UserDirectoryError && cause.code === 'provider-unavailable') throw unavailable()
       throw unauthenticated()
-    }
-  }
-
-  private async compensate(
-    committed: TokenFamilyIssueResult,
-    requestId: Parameters<NonNullable<CredentialLifecycleProvider['issue']>>[0]['requestId'],
-    familyId = committed.family.tokenFamilyId,
-  ): Promise<void> {
-    try {
-      await this.ctx.authTokens.revoke({
-        requestId,
-        signal: new AbortController().signal,
-        target: { kind: 'token-family', tokenFamilyId: familyId },
-      })
-    } catch (cause) {
-      throw unavailable(cause)
     }
   }
 
@@ -444,9 +426,11 @@ export class JwtAuthenticationProvider implements AuthenticationProvider<'bearer
     try {
       return await operation()
     } catch (cause) {
-      if (cause instanceof AuthenticationError) throw cause
+      if (cause instanceof AuthenticationError) {
+        throw new AuthenticationError(cause.code, cause.message)
+      }
       if (cause instanceof AuthTokenError && cause.code !== 'provider-unavailable') throw unauthenticated()
-      throw unavailable(cause)
+      throw unavailable()
     }
   }
 }

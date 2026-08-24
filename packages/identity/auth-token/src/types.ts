@@ -106,6 +106,14 @@ export interface TokenFamilyIssueResult {
   readonly refreshToken: IssuedRefreshToken
 }
 
+/** Secret-bearing candidate transformed before its Provider transaction commits. */
+export type TokenFamilyPreparation<T> = (candidate: TokenFamilyIssueResult) => Promise<T>
+
+/** Committed family paired with an artifact prepared before durable mutation. */
+export interface PreparedTokenFamilyIssueResult<T> extends TokenFamilyIssueResult {
+  readonly prepared: T
+}
+
 /** Safe token-family metadata returned to Consumers. */
 export interface TokenFamilyInfo {
   readonly tokenFamilyId: TokenFamilyId

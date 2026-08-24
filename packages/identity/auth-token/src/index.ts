@@ -23,6 +23,7 @@ import type {
   AuthTokenRevokeRequest,
   CredentialId,
   IssuedRefreshToken,
+  PreparedTokenFamilyIssueResult,
   RefreshCredentialInfo,
   RefreshCredentialRecord,
   RefreshTokenDigest,
@@ -32,6 +33,7 @@ import type {
   TokenFamilyInfo,
   TokenFamilyIssueRequest,
   TokenFamilyIssueResult,
+  TokenFamilyPreparation,
   TokenFamilyMutationCommit,
   TokenFamilyRecord,
   TokenRevocationCommit,
@@ -276,6 +278,23 @@ export abstract class AuthTokenService extends Service {
    * @returns committed safe family metadata and the only copy of the refresh secret.
    */
   async issueFamily(request: TokenFamilyIssueRequest): Promise<TokenFamilyIssueResult> {
+    const { prepared: _prepared, ...result } = await this.issueFamilyWithPreparation(request, () =>
+      Promise.resolve(undefined),
+    )
+    return Object.freeze(result)
+  }
+
+  /**
+   * Prepare a Host artifact inside the Provider transaction before creating a family.
+   * The callback receives the only refresh secret and must not retain or log it.
+   * @param request - authenticated principal, absolute expiry, and operation lifecycle.
+   * @param prepare - callback that must finish before the Provider persists either record.
+   * @returns committed family, refresh secret, and the pre-commit artifact.
+   */
+  async issueFamilyWithPreparation<T>(
+    request: TokenFamilyIssueRequest,
+    prepare: TokenFamilyPreparation<T>,
+  ): Promise<PreparedTokenFamilyIssueResult<T>> {
     this.operation(request)
     const now = this.now()
     const expiresAt = requestTime(request.expiresAt, now)
@@ -302,15 +321,21 @@ export abstract class AuthTokenService extends Service {
         expiresAt,
       }),
     })
-    const committed = await this.provider(() => this.createFamilyRecord(input))
+    let preparation: { readonly value: T } | undefined
+    const prepareInsideTransaction = async (): Promise<void> => {
+      if (preparation !== undefined) throw unavailable('Provider invoked family preparation more than once')
+      preparation = Object.freeze({ value: await prepare(this.issueResult(input.family, input.credential, secret)) })
+    }
+    const committed = await this.provider(() => this.createFamilyRecord(input, prepareInsideTransaction))
     const family = familySnapshot(committed.family)
     const credential = credentialSnapshot(committed.credential)
     if (!isDeepStrictEqual(family, input.family) || !isDeepStrictEqual(credential, input.credential)) {
       throw unavailable('Provider created an inconsistent token family')
     }
+    if (preparation === undefined) throw unavailable('Provider committed a token family without preparation')
     const result = this.issueResult(family, credential, secret)
     this.emitChange(this.event('issued', request.requestId, family, credential.credentialId))
-    return result
+    return Object.freeze({ ...result, prepared: preparation.value })
   }
 
   /**
@@ -320,6 +345,23 @@ export abstract class AuthTokenService extends Service {
    * @returns committed family metadata and a replacement refresh secret.
    */
   async rotate(request: RefreshTokenRotateRequest): Promise<TokenFamilyIssueResult> {
+    const { prepared: _prepared, ...result } = await this.rotateWithPreparation(request, () =>
+      Promise.resolve(undefined),
+    )
+    return Object.freeze(result)
+  }
+
+  /**
+   * Prepare a Host artifact after the Provider locks the current Credential and
+   * before it atomically consumes that Credential and inserts its replacement.
+   * @param request - current refresh secret and operation lifecycle.
+   * @param prepare - callback receiving the replacement secret before mutation.
+   * @returns committed family, replacement refresh secret, and pre-commit artifact.
+   */
+  async rotateWithPreparation<T>(
+    request: RefreshTokenRotateRequest,
+    prepare: TokenFamilyPreparation<T>,
+  ): Promise<PreparedTokenFamilyIssueResult<T>> {
     this.operation(request)
     if (typeof request.refreshToken !== 'string'
       || !request.refreshToken.startsWith(REFRESH_TOKEN_PREFIX)
@@ -334,7 +376,26 @@ export abstract class AuthTokenService extends Service {
       replacementDigest: this.digest(replacementSecret),
       time: now,
     })
-    const commit = await this.provider(() => this.rotateFamilyRecord(input))
+    let preparation: { readonly value: T; readonly commit: RefreshTokenRotationCommit } | undefined
+    const prepareInsideTransaction = async (candidate: RefreshTokenRotationCommit): Promise<void> => {
+      if (candidate.kind !== 'rotated') throw unavailable('Provider prepared a non-rotation commit')
+      if (preparation !== undefined) throw unavailable('Provider invoked rotation preparation more than once')
+      const previousFamily = familySnapshot(candidate.previousFamily)
+      const currentFamily = familySnapshot(candidate.currentFamily)
+      const consumedCredential = credentialSnapshot(candidate.consumedCredential)
+      const replacementCredential = credentialSnapshot(candidate.replacementCredential)
+      this.assertRotationCommit(previousFamily, currentFamily, consumedCredential, replacementCredential, input)
+      const canonical = Object.freeze({
+        kind: 'rotated' as const,
+        previousFamily,
+        currentFamily,
+        consumedCredential,
+        replacementCredential,
+      })
+      const result = this.issueResult(currentFamily, replacementCredential, replacementSecret)
+      preparation = Object.freeze({ value: await prepare(result), commit: canonical })
+    }
+    const commit = await this.provider(() => this.rotateFamilyRecord(input, prepareInsideTransaction))
     if (commit.kind === 'reused') {
       const previous = familySnapshot(commit.previousFamily)
       const current = familySnapshot(commit.currentFamily)
@@ -348,9 +409,19 @@ export abstract class AuthTokenService extends Service {
     const consumedCredential = credentialSnapshot(commit.consumedCredential)
     const replacementCredential = credentialSnapshot(commit.replacementCredential)
     this.assertRotationCommit(previousFamily, currentFamily, consumedCredential, replacementCredential, input)
+    const canonical = Object.freeze({
+      kind: 'rotated' as const,
+      previousFamily,
+      currentFamily,
+      consumedCredential,
+      replacementCredential,
+    })
+    if (preparation === undefined || !isDeepStrictEqual(preparation.commit, canonical)) {
+      throw unavailable('Provider committed a rotation without its matching preparation')
+    }
     const result = this.issueResult(currentFamily, replacementCredential, replacementSecret)
     this.emitChange(this.event('rotated', request.requestId, currentFamily, replacementCredential.credentialId))
-    return result
+    return Object.freeze({ ...result, prepared: preparation.value })
   }
 
   /**
@@ -405,14 +476,20 @@ export abstract class AuthTokenService extends Service {
   }
 
   /** Persist one exact initial family and credential atomically. */
-  protected abstract createFamilyRecord(input: TokenFamilyCreateInput): Promise<TokenFamilyCreateInput>
+  protected abstract createFamilyRecord(
+    input: TokenFamilyCreateInput,
+    prepare: () => Promise<void>,
+  ): Promise<TokenFamilyCreateInput>
   /** Consume one digest and replace it, or revoke its family on reuse, atomically. */
-  protected abstract rotateFamilyRecord(input: Readonly<{
-    digest: RefreshTokenDigest
-    replacementCredentialId: CredentialId
-    replacementDigest: RefreshTokenDigest
-    time: number
-  }>): Promise<RefreshTokenRotationCommit>
+  protected abstract rotateFamilyRecord(
+    input: Readonly<{
+      digest: RefreshTokenDigest
+      replacementCredentialId: CredentialId
+      replacementDigest: RefreshTokenDigest
+      time: number
+    }>,
+    prepare: (candidate: RefreshTokenRotationCommit) => Promise<void>,
+  ): Promise<RefreshTokenRotationCommit>
   /** Read complete safe-inspection source records for one target. */
   protected abstract inspectRecords(target: AuthTokenInspectRequest['target']): Promise<Readonly<{
     families: readonly TokenFamilyRecord[]
