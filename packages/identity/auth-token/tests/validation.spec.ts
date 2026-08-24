@@ -175,8 +175,7 @@ class PreparationViolationAuthTokens extends MemoryAuthTokens {
     if (this.issueMode === 'skip') return super.createFamilyRecord(input, async () => undefined)
     if (this.issueMode === 'double') {
       return super.createFamilyRecord(input, async () => {
-        await prepare()
-        await prepare()
+        await Promise.all([prepare(), prepare()])
       })
     }
     return super.createFamilyRecord(input, prepare)
@@ -193,8 +192,7 @@ class PreparationViolationAuthTokens extends MemoryAuthTokens {
       ? async (): Promise<void> => undefined
       : this.rotateMode === 'double'
         ? async (candidate: RefreshTokenRotationCommit): Promise<void> => {
-          await prepare(candidate)
-          await prepare(candidate)
+          await Promise.all([prepare(candidate), prepare(candidate)])
         }
         : prepare
     const commit = await super.rotateFamilyRecord(input, callback)

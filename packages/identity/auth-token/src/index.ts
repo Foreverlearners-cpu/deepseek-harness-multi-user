@@ -322,8 +322,10 @@ export abstract class AuthTokenService extends Service {
       }),
     })
     let preparation: { readonly value: T } | undefined
+    let preparationStarted = false
     const prepareInsideTransaction = async (): Promise<void> => {
-      if (preparation !== undefined) throw unavailable('Provider invoked family preparation more than once')
+      if (preparationStarted) throw unavailable('Provider invoked family preparation more than once')
+      preparationStarted = true
       preparation = Object.freeze({ value: await prepare(this.issueResult(input.family, input.credential, secret)) })
     }
     const committed = await this.provider(() => this.createFamilyRecord(input, prepareInsideTransaction))
@@ -377,9 +379,11 @@ export abstract class AuthTokenService extends Service {
       time: now,
     })
     let preparation: { readonly value: T; readonly commit: RefreshTokenRotationCommit } | undefined
+    let preparationStarted = false
     const prepareInsideTransaction = async (candidate: RefreshTokenRotationCommit): Promise<void> => {
       if (candidate.kind !== 'rotated') throw unavailable('Provider prepared a non-rotation commit')
-      if (preparation !== undefined) throw unavailable('Provider invoked rotation preparation more than once')
+      if (preparationStarted) throw unavailable('Provider invoked rotation preparation more than once')
+      preparationStarted = true
       const previousFamily = familySnapshot(candidate.previousFamily)
       const currentFamily = familySnapshot(candidate.currentFamily)
       const consumedCredential = credentialSnapshot(candidate.consumedCredential)
