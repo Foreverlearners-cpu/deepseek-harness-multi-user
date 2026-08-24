@@ -91,6 +91,7 @@ class CorruptMemoryAuthTokens extends MemoryAuthTokens {
   corruptReuse = false
   expireRotationFamily = false
   expireRotationCredential = false
+  alterReplacementExpiry = false
   expireReuseFamily = false
   expireReuseCredential = false
   corruptRevocation = false
@@ -107,6 +108,15 @@ class CorruptMemoryAuthTokens extends MemoryAuthTokens {
     }
     if (commit.kind === 'rotated' && this.expireRotationCredential) {
       return { ...commit, consumedCredential: { ...commit.consumedCredential, expiresAt: input.time } }
+    }
+    if (commit.kind === 'rotated' && this.alterReplacementExpiry) {
+      return {
+        ...commit,
+        replacementCredential: {
+          ...commit.replacementCredential,
+          expiresAt: commit.replacementCredential.expiresAt - 1,
+        },
+      }
     }
     if (commit.kind === 'reused' && this.expireReuseFamily) {
       return {
@@ -422,6 +432,7 @@ describe('auth-token Provider validation', () => {
   it.each([
     'expireRotationFamily',
     'expireRotationCredential',
+    'alterReplacementExpiry',
   ] as const)('rejects expired rotation commit field %s', async (flag) => {
     const service = await memory(CorruptMemoryAuthTokens)
     const issued = await service.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
@@ -431,7 +442,6 @@ describe('auth-token Provider validation', () => {
       requestId,
       signal,
       refreshToken: issued.refreshToken.value,
-      expiresAt: 1_900,
     })).rejects.toMatchObject({ code: 'provider-unavailable' })
   })
 
@@ -442,14 +452,13 @@ describe('auth-token Provider validation', () => {
     const service = await memory(CorruptMemoryAuthTokens)
     const issued = await service.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
     service.setTime(1_100)
-    await service.rotate({ requestId, signal, refreshToken: issued.refreshToken.value, expiresAt: 1_900 })
+    await service.rotate({ requestId, signal, refreshToken: issued.refreshToken.value })
     service.setTime(1_200)
     service[flag] = true
     await expect(service.rotate({
       requestId,
       signal,
       refreshToken: issued.refreshToken.value,
-      expiresAt: 1_800,
     })).rejects.toMatchObject({ code: 'provider-unavailable' })
   })
 
@@ -462,20 +471,18 @@ describe('auth-token Provider validation', () => {
       requestId,
       signal,
       refreshToken: first.refreshToken.value,
-      expiresAt: 1_900,
     })).rejects.toMatchObject({ code: 'provider-unavailable' })
 
     const reuseService = await memory(CorruptMemoryAuthTokens)
     const reusable = await reuseService.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
     reuseService.setTime(1_100)
-    await reuseService.rotate({ requestId, signal, refreshToken: reusable.refreshToken.value, expiresAt: 1_900 })
+    await reuseService.rotate({ requestId, signal, refreshToken: reusable.refreshToken.value })
     reuseService.setTime(1_200)
     reuseService.corruptReuse = true
     await expect(reuseService.rotate({
       requestId,
       signal,
       refreshToken: reusable.refreshToken.value,
-      expiresAt: 1_800,
     })).rejects.toMatchObject({ code: 'provider-unavailable' })
 
     const revokeService = await memory(CorruptMemoryAuthTokens)

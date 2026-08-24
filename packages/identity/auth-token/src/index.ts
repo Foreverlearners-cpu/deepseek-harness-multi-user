@@ -316,7 +316,7 @@ export abstract class AuthTokenService extends Service {
   /**
    * Atomically consume one refresh token and replace it exactly once.
    * Reuse revokes the entire family before the method rejects.
-   * @param request - current refresh secret, replacement expiry, and operation lifecycle.
+   * @param request - current refresh secret and operation lifecycle.
    * @returns committed family metadata and a replacement refresh secret.
    */
   async rotate(request: RefreshTokenRotateRequest): Promise<TokenFamilyIssueResult> {
@@ -327,14 +327,12 @@ export abstract class AuthTokenService extends Service {
       throw new AuthTokenError('refresh-token-invalid', 'auth-token: refresh token is invalid')
     }
     const now = this.now()
-    const expiresAt = requestTime(request.expiresAt, now)
     const replacementSecret = this.generateRefreshSecret()
     const input = Object.freeze({
       digest: this.digest(request.refreshToken),
       replacementCredentialId: credentialId(this.generateId('refresh')),
       replacementDigest: this.digest(replacementSecret),
       time: now,
-      expiresAt,
     })
     const commit = await this.provider(() => this.rotateFamilyRecord(input))
     if (commit.kind === 'reused') {
@@ -414,7 +412,6 @@ export abstract class AuthTokenService extends Service {
     replacementCredentialId: CredentialId
     replacementDigest: RefreshTokenDigest
     time: number
-    expiresAt: number
   }>): Promise<RefreshTokenRotationCommit>
   /** Read complete safe-inspection source records for one target. */
   protected abstract inspectRecords(target: AuthTokenInspectRequest['target']): Promise<Readonly<{
@@ -486,7 +483,6 @@ export abstract class AuthTokenService extends Service {
       replacementCredentialId: CredentialId
       replacementDigest: RefreshTokenDigest
       time: number
-      expiresAt: number
     }>,
   ): void {
     const expectedFamily = { ...previousFamily, updatedAt: input.time, revision: previousFamily.revision + 1 }
@@ -496,10 +492,10 @@ export abstract class AuthTokenService extends Service {
       digest: input.replacementDigest,
       status: 'active',
       issuedAt: input.time,
-      expiresAt: input.expiresAt,
+      expiresAt: previousFamily.expiresAt,
     }
     if (previousFamily.status !== 'active' || previousFamily.expiresAt <= input.time
-      || previousFamily.expiresAt < input.expiresAt || consumedCredential.expiresAt <= input.time
+      || consumedCredential.expiresAt <= input.time
       || consumedCredential.status !== 'rotated' || consumedCredential.digest !== input.digest
       || consumedCredential.tokenFamilyId !== previousFamily.tokenFamilyId
       || consumedCredential.rotatedAt !== input.time || consumedCredential.replacedBy !== input.replacementCredentialId

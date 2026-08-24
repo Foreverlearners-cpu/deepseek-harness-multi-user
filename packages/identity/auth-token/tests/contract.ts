@@ -66,9 +66,11 @@ export function runAuthTokenContract(
         requestId,
         signal,
         refreshToken: first.refreshToken.value,
-        expiresAt: 1_900,
       })
-      expect(second).toMatchObject({ family: { revision: 2, status: 'active' } })
+      expect(second).toMatchObject({
+        family: { revision: 2, status: 'active', expiresAt: 2_000 },
+        refreshToken: { expiresAt: 2_000 },
+      })
       expect(second.refreshToken.value).not.toBe(first.refreshToken.value)
 
       harness.setTime(1_200)
@@ -76,7 +78,6 @@ export function runAuthTokenContract(
         requestId,
         signal,
         refreshToken: first.refreshToken.value,
-        expiresAt: 1_800,
       })).rejects.toMatchObject({ code: 'refresh-token-reused' })
       const inspected = await authTokens.inspect({
         requestId,
@@ -93,7 +94,6 @@ export function runAuthTokenContract(
         requestId,
         signal,
         refreshToken: second.refreshToken.value,
-        expiresAt: 1_700,
       })).rejects.toMatchObject({ code: 'token-family-revoked' })
       expect(events.map(value => value.kind)).toEqual(['issued', 'rotated', 'reuse-detected'])
     })
@@ -104,8 +104,8 @@ export function runAuthTokenContract(
       const issued = await authTokens.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
       harness.setTime(1_100)
       const results = await Promise.allSettled([
-        authTokens.rotate({ requestId, signal, refreshToken: issued.refreshToken.value, expiresAt: 1_900 }),
-        authTokens.rotate({ requestId, signal, refreshToken: issued.refreshToken.value, expiresAt: 1_900 }),
+        authTokens.rotate({ requestId, signal, refreshToken: issued.refreshToken.value }),
+        authTokens.rotate({ requestId, signal, refreshToken: issued.refreshToken.value }),
       ])
       expect(results.filter(value => value.status === 'fulfilled')).toHaveLength(1)
       const rejections = results.filter(value => value.status === 'rejected')
@@ -127,7 +127,6 @@ export function runAuthTokenContract(
         requestId,
         signal,
         refreshToken: 'dsh_rt_unknown',
-        expiresAt: 1_900,
       })).rejects.toMatchObject({ code: 'refresh-token-invalid' })
       const issued = await authTokens.issueFamily({ requestId, signal, principal, expiresAt: 1_010 })
       harness.setTime(1_010)
@@ -135,7 +134,6 @@ export function runAuthTokenContract(
         requestId,
         signal,
         refreshToken: issued.refreshToken.value,
-        expiresAt: 1_020,
       })).rejects.toMatchObject({ code: 'refresh-token-expired' })
       const inspected = await authTokens.inspect({
         requestId,

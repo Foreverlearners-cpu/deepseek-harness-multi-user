@@ -28,7 +28,7 @@ Refresh-token input is limited to 4 KiB of UTF-8 data before hashing or Provider
 
 `TokenFamilyRecord` has an `active` or `revoked` status, absolute expiry, and monotonic revision. Revision starts at 1 and increments once for each committed rotation or first revocation. Repeat revocation is idempotent. Revision orders audit and cache changes; public revocation does not require an expected revision because urgent invalidation must survive concurrent rotation.
 
-`RefreshCredentialRecord` has an `active`, `rotated`, or `revoked` status plus issue, expiry, rotation, replacement, and revocation facts. Family expiry is an absolute upper bound established at issue; replacements may shorten but never extend it.
+`RefreshCredentialRecord` has an `active`, `rotated`, or `revoked` status plus issue, expiry, rotation, replacement, and revocation facts. Family expiry is established at issue. Each replacement inherits that exact expiry from the family record read inside the Provider transaction; the opaque refresh value neither reveals nor lets its caller select durable family state.
 
 ## Atomic rotation and reuse
 
@@ -52,7 +52,7 @@ Inspection targets a refresh Credential, family, or principal and removes digest
 
 **Persist encrypted refresh secrets.** Rejected because verification needs equality, not recovery. A digest of a high-entropy value limits disclosure and removes encryption-key lifecycle.
 
-**Extend family lifetime on rotation.** Rejected because a stolen lineage could renew indefinitely. The family retains an absolute expiry selected at issue.
+**Let a rotation caller choose replacement expiry.** Rejected because an opaque refresh value does not reveal the family expiry, so the caller cannot select a valid bound without an extra lookup key. Caller-selected expiry could also shorten a family accidentally or enable sliding renewal. The Provider copies the fixed family expiry while it holds the rotation lock.
 
 **Require expected revision for revocation.** Rejected because concurrent rotation must not prevent administrative or compromise-driven invalidation.
 

@@ -28,7 +28,7 @@ Refresh-token 输入在散列或执行 Provider 工作前限制为最多 4 KiB U
 
 `TokenFamilyRecord` 具有 `active` 或 `revoked` 状态、绝对过期时间和单调 revision。Revision 从 1 开始，每次轮换或首次撤销提交后增加一次。重复撤销保持幂等。Revision 用于排序审计与缓存变化；公开撤销不要求 expected revision，因为紧急失效必须能跨越并发轮换。
 
-`RefreshCredentialRecord` 具有 `active`、`rotated` 或 `revoked` 状态，以及签发、过期、轮换、替代和撤销事实。Family 过期时间是签发时确定的绝对上限；替代项可以缩短，但不能延长。
+`RefreshCredentialRecord` 具有 `active`、`rotated` 或 `revoked` 状态，以及签发、过期、轮换、替代和撤销事实。Family 过期时间在签发时确定。每个替代项都从 Provider 事务内读取的 family 记录继承完全相同的过期时间；不透明 refresh 值既不披露持久 family 状态，也不允许调用方选择该状态。
 
 ## 原子轮换与复用
 
@@ -52,7 +52,7 @@ Provider 在一个事务中锁定 digest，检查 family 和 Credential 的过�
 
 **持久化加密 refresh secret。** 拒绝，因为验证只需要比较，不需要恢复。高熵值的 digest 限制泄露并移除加密密钥生命周期。
 
-**轮换时延长 family 生命周期。** 拒绝，因为被盗 lineage 可能无限续期。Family 保留签发时选择的绝对过期时间。
+**让轮换调用方选择替代项过期时间。** 拒绝，因为不透明 refresh 值不披露 family 过期时间，调用方无法在没有额外查询 key 的情况下选择有效边界。调用方选择的过期时间还可能意外缩短 family，或允许滑动续期。Provider 在持有轮换锁时复制固定的 family 过期时间。
 
 **撤销要求 expected revision。** 拒绝，因为并发轮换不能阻止管理员或泄露处理触发的失效。
 

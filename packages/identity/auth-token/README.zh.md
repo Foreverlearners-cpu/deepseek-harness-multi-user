@@ -21,7 +21,7 @@
 
 Family 的 revision 从 1 开始，每次成功轮换或首次撤销后严格增加 1。对已撤销 family 的幂等撤销不会改变 revision。Revision 用于排序已提交的 family 变化，不是由调用者选择的乐观锁。
 
-`TokenFamilyRecord.expiresAt` 是签发时确定的 family 绝对生命周期。每个替代 refresh Credential 必须在未来过期，并且不能晚于 family。轮换绝不会延长 family 生命周期。Provider 在同一事务中比较过期时间并消费当前 digest。
+`TokenFamilyRecord.expiresAt` 是签发时确定的 family 绝对生命周期。每个替代 refresh Credential 都从加锁读取的 family 记录继承完全相同的过期时间；不透明 refresh secret 不披露该值，调用方也不能选择该值。因此轮换既不会延长也不会意外缩短 family 生命周期。Provider 在同一事务中检查过期时间并消费当前 digest。
 
 Refresh Credential 的状态为 `active`、`rotated` 或 `revoked`。成功轮换会原子地把已消费 Credential 改为 `rotated`、创建一个 `active` 替代项，并增加 family revision。同一个 secret 的两个并发轮换不能同时成功。
 

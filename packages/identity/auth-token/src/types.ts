@@ -77,10 +77,9 @@ export interface TokenFamilyIssueRequest extends AuthTokenOperationRequest {
   readonly expiresAt: number
 }
 
-/** Request to rotate one refresh token atomically. */
+/** Request to rotate one refresh token atomically within its fixed family lifetime. */
 export interface RefreshTokenRotateRequest extends AuthTokenOperationRequest {
   readonly refreshToken: string
-  readonly expiresAt: number
 }
 
 /** Request to inspect safe token-family state. */
@@ -144,13 +143,12 @@ export interface TokenFamilyCreateInput {
   readonly credential: RefreshCredentialRecord
 }
 
-/** Provider input for one atomic refresh-token consume-and-replace operation. */
+/** Provider input for one atomic consume-and-replace operation; storage supplies family expiry. */
 export interface RefreshTokenRotationInput {
   readonly digest: RefreshTokenDigest
   readonly replacementCredentialId: CredentialId
   readonly replacementDigest: RefreshTokenDigest
   readonly time: number
-  readonly expiresAt: number
 }
 
 /** Successful Provider rotation commit. */
