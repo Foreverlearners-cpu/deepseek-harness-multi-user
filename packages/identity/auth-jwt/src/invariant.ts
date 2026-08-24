@@ -1,18 +1,18 @@
-/** Package-owned invariant companion for `@deepseek-ai/dsh-auth-password`. */
+/** Package-owned invariant companion for `@deepseek-ai/dsh-auth-jwt`. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
-const PACKAGE_NAME = '@deepseek-ai/dsh-auth-password'
+const PACKAGE_NAME = '@deepseek-ai/dsh-auth-jwt'
 
 /** Cordis companion plugin name. */
-export const name = 'auth-password-invariant'
+export const name = 'auth-jwt-invariant'
 /** Service required before the companion can reserve package ownership. */
 export const inject = ['invariants']
 
 /**
- * No runtime invariant: `dsh-auth` owns Provider registration and
- * result events, while `dsh-user-credential` owns verification work.
+ * No runtime invariant: `dsh-auth` owns Provider provenance and
+ * `dsh-auth-token` owns family state and its post-commit relation checks.
  */
 const install: InvariantInstaller = () => {}
 

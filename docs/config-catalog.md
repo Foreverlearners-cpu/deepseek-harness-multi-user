@@ -340,6 +340,42 @@ export interface Config {
 
 Source: [`packages/attachment/attachment-local/src/index.ts:24`](../packages/attachment/attachment-local/src/index.ts)
 
+<a id="deepseek-aidsh-auth-jwt"></a>
+
+## `@deepseek-ai/dsh-auth-jwt`
+
+Requires: `auth` · `authTokens` · `users`
+
+```ts config-catalog
+/** JWT issuer, audience, lifetimes, and rotation keyring. */
+export interface JwtAuthenticationConfig {
+  /** Exact issuer claim required on both Token types. */
+  readonly issuer: string
+  /** Exact single audience claim required on both Token types. */
+  readonly audience: string
+  /** Access lifetime in seconds; defaults to 900. */
+  readonly accessTtlSeconds?: number
+  /** Fixed refresh-family lifetime in seconds; defaults to 2,592,000. */
+  readonly refreshTtlSeconds?: number
+  /** JWT clock tolerance in seconds; defaults to zero. */
+  readonly clockToleranceSeconds?: number
+  /** Configured key id used to sign newly issued Token pairs. */
+  readonly activeKeyId: string
+  /** Verification keyring containing the active and retained rotation keys. */
+  readonly keys: readonly JwtSigningKeyConfig[]
+}
+
+/** One symmetric JWT signing and verification key. */
+export interface JwtSigningKeyConfig {
+  /** Stable protected-header key id. */
+  readonly keyId: string
+  /** Base64url-encoded secret containing 32-128 random bytes. */
+  readonly secret: string
+}
+```
+
+Source: [`packages/identity/auth-jwt/src/types.ts:18`](../packages/identity/auth-jwt/src/types.ts)
+
 <a id="deepseek-aidsh-bash-local"></a>
 
 ## `@deepseek-ai/dsh-bash-local`

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-24-signed-access-refresh-jwt.md
+2026-08-24-signed-access-refresh-jwt.md: 1559932e57726dd5549cb5522643737d600bb8f9
+2026-08-24-signed-access-refresh-jwt.zh.md: 3c9f5ea92b76a8899d8a745244d0c43672e64532

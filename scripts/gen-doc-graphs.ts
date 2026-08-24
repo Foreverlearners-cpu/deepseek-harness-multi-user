@@ -209,7 +209,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'auth',
     title: 'Host authentication runtime',
     mode: 'seam',
-    implementations: [],
+    implementations: ['auth-password', 'auth-jwt'],
     consumers: [],
     note: 'Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations.',
   },
@@ -219,7 +219,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Opaque refresh-token family seam',
     mode: 'seam',
     implementations: [],
-    consumers: [],
+    consumers: ['auth-jwt'],
     note: 'Generates opaque refresh secrets, gives Providers only digests, and defines atomic rotation, reuse-triggered family revocation, safe inspection, and targeted revocation.',
   },
   {
