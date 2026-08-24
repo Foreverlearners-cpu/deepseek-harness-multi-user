@@ -292,6 +292,16 @@
         "tests/**/*.ts"
       ]
     },
+    "packages/identity/user-credential-mysql": {
+      "entry": [
+        "tests/**/*.spec.ts",
+        "tests/**/*.e2e.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ]
+    },
     "packages/core/tools": {
       "entry": [
         "tests/**/*.spec.ts"

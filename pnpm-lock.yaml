@@ -5100,6 +5100,24 @@ importers:
         specifier: workspace:^
         version: link:../user
 
+  packages/identity/user-credential-mysql:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      '@deepseek-ai/dsh-user-credential':
+        specifier: workspace:^
+        version: link:../user-credential
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@22.20.0)
+
   packages/identity/user-mysql:
     devDependencies:
       '@deepseek-ai/cordis':

@@ -4,6 +4,8 @@
 
 用户 Credential 子系统是 [`@deepseek-ai/dsh-user-credential`](../../packages/identity/user-credential/README.md)，它是把登录标识查询和密码验证映射到稳定 `UserId` 的 Host-only Service Definition。具体 Provider 提供 `ctx.userCredentials`；资料生命周期、authenticated-call 来源、授权、传输和存储保持独立所有权。
 
+[`@deepseek-ai/dsh-user-credential-mysql`](../../packages/identity/user-credential-mysql/README.md) 是持久 MySQL Provider。它使用独立的 `ctx.mysql` 连接服务，并拥有 Credential 表和 schema version、归一化标识唯一性、带版本 scrypt verifier、dummy 验证和行事务。
+
 ## 标识语义
 
 一个标识是可扩展的 `(kind, value)` 对。Provider 拥有 kind-specific 归一化和规范化 pair 的全局唯一性。添加、删除与解析会在执行约束的操作内部归一化。受信任的元数据读取会暴露规范化值，事件绝不暴露这些值。

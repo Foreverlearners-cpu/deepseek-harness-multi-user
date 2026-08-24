@@ -4,6 +4,8 @@ English | [中文](user-credentials.zh.md)
 
 The user-credentials subsystem is [`@deepseek-ai/dsh-user-credential`](../../packages/identity/user-credential/README.md), a Host-only Service Definition for login identifier lookup and password verification mapped to stable `UserId` values. A concrete Provider supplies `ctx.userCredentials`; profile lifecycle, authenticated-call provenance, authorization, transport, and storage retain separate owners.
 
+[`@deepseek-ai/dsh-user-credential-mysql`](../../packages/identity/user-credential-mysql/README.md) is the durable MySQL Provider. It owns the credential tables and schema version, normalized-identifier uniqueness, versioned scrypt verifiers, dummy verification, and row transactions while using the separate `ctx.mysql` connection service.
+
 ## Identifier semantics
 
 An identifier is an extensible `(kind, value)` pair. The Provider owns kind-specific normalization and global uniqueness of the normalized pair. Add, remove, and resolve normalize inside the enforcing operation. Trusted metadata reads expose normalized values; events never expose them.
