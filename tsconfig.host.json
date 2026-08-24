@@ -167,6 +167,7 @@
     { "path": "./packages/identity/auth-jwt" },
     { "path": "./packages/identity/auth-token" },
     { "path": "./packages/identity/auth-password" },
+    { "path": "./packages/identity/auth-token-mysql" },
     { "path": "./packages/identity/user" },
     { "path": "./packages/identity/user-mysql" },
     { "path": "./packages/identity/user-credential" },
