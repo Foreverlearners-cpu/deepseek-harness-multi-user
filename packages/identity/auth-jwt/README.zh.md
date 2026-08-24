@@ -6,7 +6,7 @@
 
 ## 配置
 
-`issuer` 和 `audience` 是精确匹配的 JWT claim。`accessTtlSeconds` 默认 900，最大 3,600；`refreshTtlSeconds` 默认 2,592,000，最大 31,536,000。`clockToleranceSeconds` 默认零，最大 300。
+`issuer` 和 `audience` 是精确匹配的 JWT claim。`accessTtlSeconds` 默认 900，最大 3,600；`refreshTtlSeconds` 默认 2,592,000，最大 31,536,000，且不得短于 access 生命周期。`clockToleranceSeconds` 默认零，最大 300。
 
 `keys` 包含一到十六个 HS256 key。每项具有受保护头使用的 `keyId`，以及编码 32-128 个随机字节的规范 base64url `secret`。`activeKeyId` 选择签名 key。验证接受所有已配置 key，因此部署轮换 key 时先添加新 key 并把它设为 active，保留旧 key 直到旧 Token 过期，然后再移除旧 key。
 
@@ -29,7 +29,7 @@
 
 Refresh JWT 携带 `ctx.authTokens` 生成的高熵不透明 refresh secret，以及 family 和 Credential id。持久化 Provider 只存储 secret digest。刷新先验证已签名的 `typ=refresh` 封装，再把内部 secret 交给 `ctx.authTokens.rotate()`。一次成功轮换会消费该值；重放旧 refresh JWT 会原子撤销 family，因此已签名 JWT 不能绕过服务端状态。
 
-签发和刷新都会在提交 family 状态前解析 active 签名 key。如果提交后任一 JWT 签名操作失败，Provider 会使用新的 cancellation signal 同步撤销该 family，然后返回 `authentication-unavailable`。
+签发和刷新都会在变更 family 状态前解析 active 签名 key。两个 JWT 都通过 `ctx.authTokens` 的事务 preparation callback，在持久化 Provider 持有 mutation lock 时完成签名。只有两次签名都成功后才会提交 family 创建或轮换；签名或候选一致性检查失败时不会产生新 family，也不会消费旧 refresh Credential。
 
 ## 检查与撤销
 
