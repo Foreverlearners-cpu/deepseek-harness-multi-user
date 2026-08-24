@@ -31,21 +31,21 @@ An empty `topics` list keeps transport operations disabled and does not create a
 
 ## Consuming
 
-`subscribe({ id, groupId, topics, mode, handle })` creates one Consumer for an authorized group and non-empty authorized topic set. `mode` is `committed`, `earliest`, or `latest`. Records are delivered sequentially to the awaited handler and committed only after that handler succeeds. A handler failure leaves the record uncommitted, rejects `subscription.done`, and closes the Consumer.
+`subscribe({ id, groupId, topics, fallbackMode, handle })` creates one Consumer for an authorized group and non-empty authorized topic set. Existing committed offsets always take precedence. For a partition without a committed offset, `fallbackMode` selects `earliest`, `latest`, or `fail`. The call returns only after the stream reports its first offset initialization, so records published after return cannot be skipped by a still-pending initial `latest` lookup. Records are delivered sequentially to the awaited handler and committed only after that handler succeeds.
 
-The subscription belongs to the exact Cordis effect that called `subscribe()`. Disposing that plugin or calling `subscription.close()` stops fetching, awaits the active handler, leaves the group, and closes the Consumer. Subscription ids must be unique within the service. Handlers still own durable-effect ordering, deduplication, schema validation, retry policy, and poison-event handling.
+The subscription belongs to the exact Cordis effect that called `subscribe()`. Disposing that plugin or calling `subscription.close()` stops fetching, awaits the active handler, leaves the group, closes the Consumer, and propagates shutdown failures. `subscription.done` resolves only after caller-initiated close and rejects after a handler failure, client failure, or unexpected stream end; callers must supervise it and decide whether to restart or stop their plugin. Subscription ids must be unique within the service. Handlers still own durable-effect ordering, deduplication, schema validation, retry policy, and poison-event handling.
 
 ## Access boundary and lifecycle
 
 `ctx.kafka` is available only to trusted Host plugins. The dynamic Cordis sandbox rejects property access, `get`, `provide`, and membership probes for `kafka`; runtime model API catalogs omit it. This is an application boundary, not a substitute for broker ACLs. Production credentials must independently restrict the configured topics and consumer groups.
 
-Disposal stops new health, publish, and subscription admission; waits for admitted health and publish operations and active handlers; then closes Admin, Producer, and Consumers once. The client has no independent forced-close deadline, so deployments retain an outer process-shutdown bound.
+Disposal stops new health, publish, and subscription admission. Publish draining, active-handler waiting, and Admin, Producer, and Consumer close attempts are bounded by `requestTimeoutMs`; timed-out dependency operations may continue internally, so deployments still retain an outer process-shutdown bound.
 
 ## Errors and verification
 
 `KafkaError.code` is `authentication`, `configuration`, `protocol`, `shutdown`, `timeout`, `unavailable`, or `unknown`. Messages contain only the binding and stable category. The dependency is pinned to `@platformatic/kafka@1.34.0`, compatible with this repository's Node range and Kafka `3.5` through `4.2`.
 
-Focused unit tests cover configuration, startup cleanup, health, failure classification, binary publish, authorization, commit ordering, handler failure, effect ownership, and shutdown draining. The environment-gated e2e test currently verifies real-broker startup and health:
+Focused unit tests cover configuration, startup cleanup, health, failure classification, binary publish, authorization, offset readiness and fallback selection, commit ordering, handler and stream failure, effect ownership, and shutdown draining. The environment-gated e2e test currently verifies real-broker startup and health:
 
 ```sh
 DSH_KAFKA_BROKERS=127.0.0.1:9092 pnpm exec vitest run --config vitest.e2e.config.ts packages/multi/kafka/tests/kafka.e2e.ts
