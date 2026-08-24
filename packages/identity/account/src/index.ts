@@ -7,16 +7,19 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import {
   AuthenticationError,
   authenticationMethod,
+  authenticationRequestId,
   type AuthenticatedCall,
   type IssuedCredentialSet,
 } from '@deepseek-ai/dsh-auth'
 import type {} from '@deepseek-ai/dsh-auth-password/types'
 import type { UserId, UserRecord } from '@deepseek-ai/dsh-user/types'
 import { UserCredentialError } from '@deepseek-ai/dsh-user-credential'
-import type { UserCredentialRecord } from '@deepseek-ai/dsh-user-credential/types'
+import type { LoginIdentifier, UserCredentialRecord } from '@deepseek-ai/dsh-user-credential/types'
 import { UserDirectoryError } from '@deepseek-ai/dsh-user'
 import type {
   AccountChangeEvent,
+  AccountAdminAction,
+  AccountAdminAuthorizer,
   AccountErrorCode,
   AccountLoginRequest,
   AccountPasswordChangeRequest,
@@ -30,11 +33,84 @@ import type {
   AdminAccountUpdateRequest,
   AdminPasswordResetRequest,
   AdminSessionRevokeRequest,
+  RegistrationOperationAdvanceRequest,
+  RegistrationOperationProvider,
+  RegistrationOperationRecord,
 } from './types.ts'
 
 export type * from './types.ts'
 
 const JWT_METHOD = authenticationMethod('jwt')
+const REGISTRATION_STAGES = new Set<RegistrationOperationRecord['stage']>([
+  'begun',
+  'user-created',
+  'identifier-added',
+  'password-set',
+  'completed',
+  'failed',
+])
+
+/** Registry that admits one durable registration operation Provider. */
+export class RegistrationOperationProviderRegistry {
+  private provider: RegistrationOperationProvider | undefined
+
+  /** Register the sole Provider.
+   * @param provider - durable idempotency implementation.
+   * @returns idempotent registration disposer.
+   */
+  register(provider: RegistrationOperationProvider): () => void {
+    if (this.provider !== undefined) throw new AccountError('conflict', 'account: registration operation Provider already exists')
+    this.provider = provider
+    let disposed = false
+    return () => {
+      if (disposed) return
+      disposed = true
+      if (this.provider === provider) this.provider = undefined
+    }
+  }
+
+  /** Require the current Provider.
+   * @returns active durable Provider.
+   */
+  require(): RegistrationOperationProvider {
+    if (this.provider === undefined) throw new AccountError('unavailable', 'account: registration operation Provider is unavailable')
+    return this.provider
+  }
+}
+
+/** Registry that admits one administrator authorization Provider. */
+export class AccountAdminAuthorizerRegistry {
+  private provider: AccountAdminAuthorizer | undefined
+
+  /** Register the sole Provider.
+   * @param provider - administrator policy implementation.
+   * @returns idempotent registration disposer.
+   */
+  register(provider: AccountAdminAuthorizer): () => void {
+    if (this.provider !== undefined) throw new AccountError('conflict', 'account: administrator authorizer already exists')
+    this.provider = provider
+    let disposed = false
+    return () => {
+      if (disposed) return
+      disposed = true
+      if (this.provider === provider) this.provider = undefined
+    }
+  }
+
+  /** Authorize one action or fail closed.
+   * @param actor - current authenticated actor.
+   * @param action - exact administrator capability.
+   * @param target - optional target user.
+   */
+  async authorize(actor: AuthenticatedCall, action: AccountAdminAction, target?: UserId): Promise<void> {
+    if (this.provider === undefined) throw new AccountError('forbidden', 'account: administrator authorization was denied')
+    try {
+      await this.provider.authorize({ actor, action, ...(target === undefined ? {} : { target }) })
+    } catch {
+      throw new AccountError('forbidden', 'account: administrator authorization was denied')
+    }
+  }
+}
 
 /** Stable account failure with optional non-secret partial-commit state. */
 export class AccountError extends Error {
@@ -60,36 +136,84 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Active Host-only account orchestration service. */
     accounts: AccountService
+    /** Explicit administrator account capability. */
+    accountAdministration: AccountAdministrationService
   }
 }
 
 /** Coordinates users, credentials, authentication, and JWT lifecycle operations. */
 export class AccountService extends Service {
+  /** Durable registration operation Provider registry. */
+  readonly registrationOperations = new RegistrationOperationProviderRegistry()
   /** @param ctx - Host context carrying all account dependencies. */
-  constructor(ctx: Context) {
-    super(ctx, 'accounts')
+  constructor(ctx: Context, serviceName = 'accounts') {
+    super(ctx, serviceName)
   }
 
-  /** Register an active account and issue its first JWT pair.
+  /** Idempotently register one active account.
    * @param request - profile, identifier, secret, and operation lifecycle.
-   * @returns committed user plus newly issued credentials.
+   * @returns the same committed user for every completed retry.
    */
-  async register(request: AccountRegistrationInput): Promise<AccountSessionResult> {
+  async register(request: AccountRegistrationInput): Promise<UserRecord> {
     this.operation(request)
-    const user = await this.createAccount(request)
+    const provider = this.registrationOperations.require()
+    const identifier = await this.normalizeIdentifier(request.identifier)
+    let operation: RegistrationOperationRecord
     try {
-      const credentials = await this.issue(user.userId, request)
-      this.emit('registered', user.userId, request.requestId)
-      return Object.freeze({ user, credentials })
-    } catch {
-      throw new AccountError('unavailable', 'account: credentials could not be issued', {
-        userId: user.userId,
-        operation: 'credential-issue',
-        userStatus: user.status,
-        credentialsConfigured: true,
-        compensationComplete: true,
-      })
+      operation = this.registrationRecord(await provider.begin(request.requestId), request.requestId)
+    } catch (cause) {
+      throw this.map(cause)
     }
+    if (operation.stage === 'failed') throw this.persistedRegistrationFailure(operation)
+    if (operation.stage === 'completed') return this.completedRegistration(operation)
+
+    let user: UserRecord
+    if (operation.stage === 'begun') {
+      try {
+        user = await this.ctx.users.create({
+          ...(request.displayName === undefined ? {} : { displayName: request.displayName }),
+          ...(request.extensions === undefined ? {} : { extensions: request.extensions }),
+        })
+      } catch (cause) {
+        throw this.map(cause)
+      }
+      try {
+        operation = this.registrationRecord(await provider.advance({
+          requestId: request.requestId,
+          expectedRevision: operation.revision,
+          expectedStage: 'begun',
+          stage: 'user-created',
+          userId: user.userId,
+        }), request.requestId)
+      } catch {
+        const disabled = await this.compensateUser(user)
+        const recovery = this.recovery(user, false, disabled)
+        await this.persistFailure(provider, operation, user.userId, recovery)
+        throw new AccountError('registration-incomplete', 'account: registration did not complete', recovery)
+      }
+    } else {
+      user = await this.registrationUser(operation)
+    }
+
+    if (operation.stage === 'user-created') {
+      operation = await this.ensureIdentifier(provider, operation, user, identifier)
+    }
+    if (operation.stage === 'identifier-added') {
+      operation = await this.ensurePassword(provider, operation, user, identifier, request.password)
+    }
+    if (operation.stage === 'password-set') {
+      try {
+        operation = this.registrationRecord(
+          await provider.complete(request.requestId, operation.revision, user),
+          request.requestId,
+        )
+      } catch (cause) {
+        throw this.map(cause)
+      }
+    }
+    if (operation.stage !== 'completed') throw new AccountError('unavailable', 'account: registration operation is inconsistent')
+    this.emit('registered', user.userId, request.requestId)
+    return user
   }
 
   /** Authenticate a password, require an active user, and issue a JWT pair.
@@ -98,7 +222,12 @@ export class AccountService extends Service {
    */
   async login(request: AccountLoginRequest): Promise<AccountSessionResult> {
     this.operation(request)
+    let before: UserCredentialRecord | undefined
+    let resolvedUserId: UserId | undefined
     try {
+      const identifier = await this.ctx.userCredentials.normalize(request.identifier)
+      resolvedUserId = await this.ctx.userCredentials.resolve(identifier)
+      before = resolvedUserId === undefined ? undefined : await this.ctx.userCredentials.get(resolvedUserId)
       const call = await this.ctx.auth.authenticate({
         requestId: request.requestId,
         channel: request.channel,
@@ -106,9 +235,24 @@ export class AccountService extends Service {
         signal: request.signal,
       })
       this.ctx.auth.assertCurrent(call)
-      if (call.principal.kind !== 'user') throw new AccountError('unauthenticated', 'account: credentials were rejected')
+      if (call.principal.kind !== 'user' || resolvedUserId !== call.principal.id
+        || before === undefined || !before.passwordEnabled) {
+        throw new AccountError('unauthenticated', 'account: credentials were rejected')
+      }
       const user = await this.ctx.users.requireActive(call.principal.id)
       const credentials = await this.issue(user.userId, request)
+      let after: UserCredentialRecord | undefined
+      try {
+        after = await this.ctx.userCredentials.get(user.userId)
+      } catch (cause) {
+        await this.revokeIssued(credentials, user.userId, request)
+        throw cause
+      }
+      if (after === undefined || after.userId !== before.userId
+        || after.revision !== before.revision || !after.passwordEnabled) {
+        await this.revokeIssued(credentials, user.userId, request)
+        throw new AccountError('unauthenticated', 'account: credentials changed during login')
+      }
       this.emit('logged-in', user.userId, request.requestId)
       return Object.freeze({ user, credentials })
     } catch (cause) {
@@ -133,6 +277,7 @@ export class AccountService extends Service {
    * @param call - exact current authenticated call.
    */
   async logout(call: AuthenticatedCall): Promise<void> {
+    this.operation(call)
     const actor = await this.currentUser(call)
     try {
       await this.revokeUser(actor.userId, call.requestId, call.signal)
@@ -147,12 +292,13 @@ export class AccountService extends Service {
    * @returns committed user record.
    */
   async updateProfile(request: AccountProfileUpdateRequest): Promise<UserRecord> {
+    this.operation(request.call)
     const actor = await this.currentUser(request.call)
     try {
       const user = await this.ctx.users.update({
         userId: actor.userId,
         expectedRevision: request.expectedRevision,
-        patch: request.patch,
+        patch: { displayName: request.displayName },
         context: { actorUserId: actor.userId },
       })
       this.emit('profile-updated', user.userId, request.call.requestId, actor.userId)
@@ -200,10 +346,10 @@ export class AccountService extends Service {
    * @param request - authorized actor and new account values.
    * @returns committed account record without issued credentials.
    */
-  async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord> {
+  protected async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord> {
     this.operation(request)
     const actor = await this.currentUser(request.actor)
-    const user = await this.createAccount(request, actor.userId)
+    const user = await this.ctx.accounts.register(request)
     this.emit('admin-created', user.userId, request.requestId, actor.userId)
     return user
   }
@@ -212,7 +358,8 @@ export class AccountService extends Service {
    * @param request - authorized actor, target, revision, and patch.
    * @returns committed target record.
    */
-  async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord> {
+  protected async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord> {
+    this.operation(request.actor)
     const actor = await this.currentUser(request.actor)
     try {
       const user = await this.ctx.users.update({
@@ -232,7 +379,7 @@ export class AccountService extends Service {
    * @param request - authorized actor, target revision, reason, and lifecycle.
    * @returns committed disabled record.
    */
-  async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord> {
+  protected async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord> {
     this.operation(request)
     const actor = await this.currentUser(request.actor)
     let user: UserRecord
@@ -264,7 +411,7 @@ export class AccountService extends Service {
    * @param request - authorized actor, target revision, and reason.
    * @returns committed active record.
    */
-  async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord> {
+  protected async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord> {
     this.operation(request)
     const actor = await this.currentUser(request.actor)
     try {
@@ -284,7 +431,7 @@ export class AccountService extends Service {
    * @param request - authorized actor, target credential revision, and new secret.
    * @returns committed non-secret credential metadata.
    */
-  async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord> {
+  protected async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord> {
     this.operation(request)
     const actor = await this.currentUser(request.actor)
     let credential
@@ -317,7 +464,7 @@ export class AccountService extends Service {
   /** Revoke a target user's JWT sessions after caller authorization.
    * @param request - authorized actor, target, reason, and lifecycle.
    */
-  async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void> {
+  protected async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void> {
     this.operation(request)
     const actor = await this.currentUser(request.actor)
     try {
@@ -328,69 +475,184 @@ export class AccountService extends Service {
     }
   }
 
-  private async createAccount(request: AccountRegistrationInput, actorUserId?: UserId): Promise<UserRecord> {
-    let user: UserRecord
+  private async normalizeIdentifier(identifier: AccountRegistrationInput['identifier']): Promise<LoginIdentifier> {
     try {
-      user = await this.ctx.users.create({
-        ...(request.displayName === undefined ? {} : { displayName: request.displayName }),
-        ...(request.extensions === undefined ? {} : { extensions: request.extensions }),
-        ...(actorUserId === undefined ? {} : { context: { actorUserId } }),
-      })
+      return await this.ctx.userCredentials.normalize(identifier)
     } catch (cause) {
       throw this.map(cause)
     }
-    const context = actorUserId === undefined ? undefined : { actorUserId }
-    try {
-      await this.ctx.userCredentials.addIdentifier({
-        userId: user.userId,
-        expectedRevision: 0,
-        ...request.identifier,
-        ...(context === undefined ? {} : { context }),
-      })
-    } catch {
-      const disabled = await this.compensateUser(user)
-      throw this.registrationFailure(user, false, disabled)
-    }
-    try {
-      await this.ctx.userCredentials.setPassword({
-        userId: user.userId,
-        expectedRevision: 1,
-        password: request.password,
-        ...(context === undefined ? {} : { context }),
-      })
-    } catch {
-      const identifierRemoved = await this.compensateIdentifier(user.userId, request.identifier, context)
-      const disabled = await this.compensateUser(user)
-      throw this.registrationFailure(user, !identifierRemoved, identifierRemoved && disabled)
-    }
-    return user
   }
 
-  private async compensateIdentifier(userId: UserId, identifier: AccountRegistrationInput['identifier'], context: { actorUserId: UserId } | undefined): Promise<boolean> {
+  private registrationRecord(value: RegistrationOperationRecord, requestId: AccountRegistrationInput['requestId']): RegistrationOperationRecord {
+    const needsUser = value.stage !== 'begun'
+    if (!REGISTRATION_STAGES.has(value.stage)
+      || value.requestId !== requestId || !Number.isSafeInteger(value.revision) || value.revision < 1
+      || (needsUser && value.userId === undefined)
+      || (value.stage === 'completed' && value.result?.userId !== value.userId)
+      || (value.stage === 'failed' && value.recovery?.userId !== value.userId)) {
+      throw new AccountError('unavailable', 'account: registration operation Provider returned inconsistent state')
+    }
+    return Object.freeze({ ...value })
+  }
+
+  private persistedRegistrationFailure(operation: RegistrationOperationRecord): AccountError {
+    return new AccountError('registration-incomplete', 'account: registration did not complete', operation.recovery)
+  }
+
+  private completedRegistration(operation: RegistrationOperationRecord): UserRecord {
+    return Object.freeze({ ...operation.result as UserRecord })
+  }
+
+  private async registrationUser(operation: RegistrationOperationRecord): Promise<UserRecord> {
     try {
-      await this.ctx.userCredentials.removeIdentifier({
+      const user = await this.ctx.users.get(operation.userId as UserId)
+      if (user === undefined) throw new AccountError('unavailable', 'account: registration user is unavailable')
+      return user
+    } catch (cause) {
+      throw this.map(cause)
+    }
+  }
+
+  private async ensureIdentifier(
+    provider: RegistrationOperationProvider,
+    operation: RegistrationOperationRecord,
+    user: UserRecord,
+    identifier: LoginIdentifier,
+  ): Promise<RegistrationOperationRecord> {
+    let credential = await this.readCredential(user.userId)
+    if (!this.hasIdentifier(credential, identifier)) {
+      try {
+        credential = await this.ctx.userCredentials.addIdentifier({
+          userId: user.userId,
+          expectedRevision: credential?.revision ?? 0,
+          ...identifier,
+        })
+      } catch {
+        try {
+          credential = await this.readCredential(user.userId)
+        } catch {
+          await this.failRegistration(provider, operation, user, identifier)
+        }
+        if (!this.hasIdentifier(credential, identifier)) {
+          await this.failRegistration(provider, operation, user, identifier)
+        }
+      }
+    }
+    return this.advanceRegistration(provider, operation, 'identifier-added', user.userId)
+  }
+
+  private async ensurePassword(
+    provider: RegistrationOperationProvider,
+    operation: RegistrationOperationRecord,
+    user: UserRecord,
+    identifier: LoginIdentifier,
+    password: string,
+  ): Promise<RegistrationOperationRecord> {
+    let credential = await this.readCredential(user.userId)
+    if (credential === undefined) {
+      return this.failRegistration(provider, operation, user, identifier)
+    }
+    if (!this.hasIdentifier(credential, identifier)) {
+      return this.failRegistration(provider, operation, user, identifier)
+    }
+    if (!credential.passwordEnabled) {
+      try {
+        credential = await this.ctx.userCredentials.setPassword({
+          userId: user.userId,
+          expectedRevision: credential.revision,
+          password,
+        })
+      } catch {
+        try {
+          credential = await this.readCredential(user.userId)
+        } catch {
+          await this.failRegistration(provider, operation, user, identifier)
+        }
+        if (credential === undefined || !credential.passwordEnabled) {
+          await this.failRegistration(provider, operation, user, identifier)
+        }
+      }
+    }
+    return this.advanceRegistration(provider, operation, 'password-set', user.userId)
+  }
+
+  private async advanceRegistration(
+    provider: RegistrationOperationProvider,
+    operation: RegistrationOperationRecord,
+    stage: RegistrationOperationAdvanceRequest['stage'],
+    userId: UserId,
+  ): Promise<RegistrationOperationRecord> {
+    try {
+      return this.registrationRecord(await provider.advance({
+        requestId: operation.requestId,
+        expectedRevision: operation.revision,
+        expectedStage: operation.stage,
+        stage,
         userId,
-        expectedRevision: 1,
-        ...identifier,
-        ...(context === undefined ? {} : { context }),
-      })
-      return true
-    } catch {
-      return false
+      }), operation.requestId)
+    } catch (cause) {
+      throw this.map(cause)
     }
   }
 
-  private async compensateUser(user: UserRecord): Promise<boolean> {
+  private async failRegistration(
+    provider: RegistrationOperationProvider,
+    operation: RegistrationOperationRecord,
+    user: UserRecord,
+    identifier: LoginIdentifier,
+  ): Promise<never> {
+    let credentialsConfigured = true
     try {
-      await this.ctx.users.disable({ userId: user.userId, expectedRevision: user.revision })
-      return true
+      credentialsConfigured = await this.cleanupCredentials(user.userId, identifier)
     } catch {
-      return false
+      // Unknown credential state is reported conservatively as still configured.
+    }
+    const disabled = await this.compensateUser(user)
+    const recovery = this.recovery(user, credentialsConfigured, disabled && !credentialsConfigured)
+    await this.persistFailure(provider, operation, user.userId, recovery)
+    throw new AccountError('registration-incomplete', 'account: registration did not complete', recovery)
+  }
+
+  private async cleanupCredentials(userId: UserId, identifier: LoginIdentifier): Promise<boolean> {
+    let credential = await this.readCredential(userId)
+    if (credential?.passwordEnabled === true) {
+      try {
+        credential = await this.ctx.userCredentials.disablePassword({
+          userId,
+          expectedRevision: credential.revision,
+        })
+      } catch {
+        credential = await this.readCredential(userId)
+      }
+    }
+    if (credential !== undefined && this.hasIdentifier(credential, identifier)) {
+      try {
+        credential = await this.ctx.userCredentials.removeIdentifier({
+          userId,
+          expectedRevision: credential.revision,
+          ...identifier,
+        })
+      } catch {
+        credential = await this.readCredential(userId)
+      }
+    }
+    return credential?.passwordEnabled === true || this.hasIdentifier(credential, identifier)
+  }
+
+  private async readCredential(userId: UserId): Promise<UserCredentialRecord | undefined> {
+    try {
+      return await this.ctx.userCredentials.get(userId)
+    } catch (cause) {
+      throw this.map(cause)
     }
   }
 
-  private registrationFailure(user: UserRecord, credentialsConfigured: boolean, compensationComplete: boolean): AccountError {
-    return new AccountError('registration-incomplete', 'account: registration did not complete', {
+  private hasIdentifier(credential: UserCredentialRecord | undefined, identifier: LoginIdentifier): boolean {
+    return credential?.identifiers.some(value => value.kind === identifier.kind && value.value === identifier.value) ?? false
+  }
+
+  private recovery(user: UserRecord, credentialsConfigured: boolean, compensationComplete: boolean): AccountRecoveryState {
+    return Object.freeze({
       userId: user.userId,
       operation: 'registration',
       userStatus: compensationComplete ? 'disabled' : user.status,
@@ -399,11 +661,40 @@ export class AccountService extends Service {
     })
   }
 
-  private context(actorUserId: UserId, reason: string | undefined): { actorUserId: UserId; reason?: string } {
+  private async persistFailure(
+    provider: RegistrationOperationProvider,
+    operation: RegistrationOperationRecord,
+    userId: UserId,
+    recovery: AccountRecoveryState,
+  ): Promise<void> {
+    try {
+      await provider.advance({
+        requestId: operation.requestId,
+        expectedRevision: operation.revision,
+        expectedStage: operation.stage,
+        stage: 'failed',
+        userId,
+        recovery,
+      })
+    } catch {
+      // Registration recovery remains safe even when its progress Provider is unavailable.
+    }
+  }
+
+  protected async compensateUser(user: UserRecord): Promise<boolean> {
+    try {
+      await this.ctx.users.disable({ userId: user.userId, expectedRevision: user.revision })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  protected context(actorUserId: UserId, reason: string | undefined): { actorUserId: UserId; reason?: string } {
     return { actorUserId, ...(reason === undefined ? {} : { reason }) }
   }
 
-  private async currentUser(call: AuthenticatedCall): Promise<UserRecord> {
+  protected async currentUser(call: AuthenticatedCall): Promise<UserRecord> {
     try {
       const current = this.ctx.auth.assertCurrent(call)
       if (current.principal.kind !== 'user') throw new AccountError('unauthenticated', 'account: a current user call is required')
@@ -413,7 +704,7 @@ export class AccountService extends Service {
     }
   }
 
-  private issue(userId: UserId, request: { requestId: AccountRegistrationInput['requestId']; signal: AbortSignal }): Promise<IssuedCredentialSet> {
+  protected issue(userId: UserId, request: { requestId: AccountRegistrationInput['requestId']; signal: AbortSignal }): Promise<IssuedCredentialSet> {
     return this.ctx.auth.credentials.issue(JWT_METHOD, {
       requestId: request.requestId,
       signal: request.signal,
@@ -421,7 +712,22 @@ export class AccountService extends Service {
     })
   }
 
-  private revokeUser(userId: UserId, requestId: AccountRegistrationInput['requestId'], signal: AbortSignal): Promise<void> {
+  private revokeIssued(
+    credentials: IssuedCredentialSet,
+    userId: UserId,
+    request: { requestId: AccountRegistrationInput['requestId']; signal: AbortSignal },
+  ): Promise<void> {
+    const family = credentials.credentials.find(value => value.kind === 'refresh')?.tokenFamilyId
+    return this.ctx.auth.credentials.revoke(JWT_METHOD, {
+      requestId: request.requestId,
+      signal: request.signal,
+      target: family === undefined
+        ? { kind: 'principal', principal: { kind: 'user', id: userId } }
+        : { kind: 'token-family', tokenFamilyId: family },
+    })
+  }
+
+  protected revokeUser(userId: UserId, requestId: AccountRegistrationInput['requestId'], signal: AbortSignal): Promise<void> {
     return this.ctx.auth.credentials.revoke(JWT_METHOD, {
       requestId,
       signal,
@@ -429,14 +735,20 @@ export class AccountService extends Service {
     })
   }
 
-  private operation(request: { requestId: unknown; signal: unknown }): void {
-    if (typeof request.requestId !== 'string' || !(request.signal instanceof AbortSignal)) {
+  protected operation(request: { requestId: unknown; signal: unknown }): void {
+    if (typeof request.requestId !== 'string') {
       throw new AccountError('invalid-input', 'account: operation lifecycle is invalid')
     }
+    try {
+      authenticationRequestId(request.requestId)
+    } catch {
+      throw new AccountError('invalid-input', 'account: operation lifecycle is invalid')
+    }
+    if (!(request.signal instanceof AbortSignal)) throw new AccountError('invalid-input', 'account: operation lifecycle is invalid')
     if (request.signal.aborted) throw new AccountError('unauthenticated', 'account: operation was cancelled')
   }
 
-  private map(cause: unknown): AccountError {
+  protected map(cause: unknown): AccountError {
     if (cause instanceof AccountError) return cause
     if (cause instanceof AuthenticationError) {
       return new AccountError(
@@ -469,7 +781,7 @@ export class AccountService extends Service {
     return new AccountError('unavailable', 'account: account service is unavailable')
   }
 
-  private emit(kind: AccountChangeEvent['kind'], userId: UserId, requestId: AccountChangeEvent['requestId'], actorUserId?: UserId): void {
+  protected emit(kind: AccountChangeEvent['kind'], userId: UserId, requestId: AccountChangeEvent['requestId'], actorUserId?: UserId): void {
     const event: AccountChangeEvent = Object.freeze({
       kind,
       userId,
@@ -487,6 +799,76 @@ export class AccountService extends Service {
         this.ctx.logger.warn(error)
       }
     }
+  }
+}
+
+/** Explicit administrator capability guarded by one fail-closed authorizer. */
+export class AccountAdministrationService extends AccountService {
+  /** Sole administrator authorization Provider registry. */
+  readonly authorizers = new AccountAdminAuthorizerRegistry()
+
+  /** @param ctx - Host context carrying account and authentication services. */
+  constructor(ctx: Context) {
+    super(ctx, 'accountAdministration')
+  }
+
+  /** Create an account after explicit administrator authorization.
+   * @param request - actor and registration input.
+   * @returns committed account record.
+   */
+  override async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord> {
+    await this.authorize(request.actor, 'create')
+    return super.adminCreate(request)
+  }
+
+  /** Update a target after explicit administrator authorization.
+   * @param request - actor, target, revision, and patch.
+   * @returns committed target record.
+   */
+  override async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord> {
+    await this.authorize(request.actor, 'update', request.userId)
+    return super.adminUpdate(request)
+  }
+
+  /** Disable a target after explicit administrator authorization.
+   * @param request - actor, target, revision, and lifecycle.
+   * @returns committed disabled target.
+   */
+  override async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord> {
+    await this.authorize(request.actor, 'disable', request.userId)
+    return super.adminDisable(request)
+  }
+
+  /** Enable a target after explicit administrator authorization.
+   * @param request - actor, target, revision, and lifecycle.
+   * @returns committed active target.
+   */
+  override async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord> {
+    await this.authorize(request.actor, 'enable', request.userId)
+    return super.adminEnable(request)
+  }
+
+  /** Reset a target password after explicit administrator authorization.
+   * @param request - actor, target, revision, and new password.
+   * @returns committed credential metadata.
+   */
+  override async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord> {
+    await this.authorize(request.actor, 'reset-password', request.userId)
+    return super.adminResetPassword(request)
+  }
+
+  /** Revoke target sessions after explicit administrator authorization.
+   * @param request - actor, target, and lifecycle.
+   */
+  override async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void> {
+    await this.authorize(request.actor, 'revoke-sessions', request.userId)
+    return super.adminRevokeSessions(request)
+  }
+
+  private async authorize(call: AuthenticatedCall, action: AccountAdminAction, target?: UserId): Promise<void> {
+    this.operation(call)
+    await this.currentUser(call)
+    await this.authorizers.authorize(call, action, target)
   }
 }
 
