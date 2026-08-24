@@ -1,6 +1,6 @@
 # Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write packages/multi/README.md
-README.md: 29487bd368aa63140e7a58926dbd1f9744b33070
-README.zh.md: 6a2f09449bf3de3664540dfe9da407688bc94f9b
+#   pnpm run verify-translation-pairing --write packages/multi/kafka-events/README.md
+README.md: 0b7ff60bf3af45354e70a2af4e0bd446e40084a0
+README.zh.md: 31012d6da3f7cb8c37a0318d024770f61d85d205
