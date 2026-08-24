@@ -85,6 +85,7 @@
       "@deepseek-ai/dsh-auth/types": ["./packages/identity/auth/src/types.ts"],
       "@deepseek-ai/dsh-user/types": ["./packages/identity/user/src/types.ts"],
       "@deepseek-ai/dsh-user-credential/types": ["./packages/identity/user-credential/src/types.ts"],
+      "@deepseek-ai/dsh-user-credential/testing": ["./packages/identity/user-credential/src/testing.ts"],
       "@deepseek-ai/dsh-settings/types": ["./packages/settings/settings/src/types.ts"],
       "@deepseek-ai/dsh-api-remotes/types": ["./packages/api/remotes/src/types.ts"],
       "@deepseek-ai/dsh-api-remotes/invariant": ["./packages/api/remotes/src/invariant.ts"],

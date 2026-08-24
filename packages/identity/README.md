@@ -9,3 +9,6 @@ Identity values and authentication contracts shared across product domains. Anon
 | [`anonymous-user-id/`](anonymous-user-id/README.md) | Persists one anonymous Harness-home correlation id for telemetry, feedback, and DeepSeek requests | — |
 | [`auth/`](auth/README.md) | Selects authentication Providers, mints current request identity, and routes optional credential lifecycle operations | `auth` |
 | [`user/`](user/README.md) | Defines stable human users, profile records, lifecycle state, and Provider-independent management operations | `users` |
+| [`user-mysql/`](user-mysql/README.md) | Persists the human user directory in MySQL | `users` |
+| [`user-credential/`](user-credential/README.md) | Defines login identifiers, password verification, and credential lifecycle operations | `userCredentials` |
+| [`user-credential-mysql/`](user-credential-mysql/README.md) | Persists login identifiers and scrypt password verifiers in MySQL | `userCredentials` |
