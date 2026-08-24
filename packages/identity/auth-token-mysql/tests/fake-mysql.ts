@@ -29,6 +29,18 @@ function copies<T>(rows: Map<string, T>): Map<string, T> {
   return new Map([...rows].map(([id, row]) => [id, structuredClone(row)]))
 }
 
+class AsyncLock {
+  private tail = Promise.resolve()
+
+  async acquire(): Promise<() => void> {
+    const previous = this.tail
+    let release!: () => void
+    this.tail = new Promise((resolve) => { release = resolve })
+    await previous
+    return release
+  }
+}
+
 /** Stateful serialized MySQL test service for Provider-owned statements. */
 export class FakeMysql {
   readonly families = new Map<string, FakeFamilyRow>()
@@ -37,6 +49,11 @@ export class FakeMysql {
   schemaVersion: number | undefined
   familyTableExists = false
   credentialTableExists = false
+  schemaLockResult: number | null = 1
+  schemaUnlockResult: number | null = 1
+  afterSchemaLock: (() => Promise<void>) | undefined
+  afterSharedFamilyRead: (() => Promise<void>) | undefined
+  concurrentConnections = false
   failNext: Error | undefined
   rollbackFailure: Error | undefined
   zeroNextUpdate = false
@@ -48,8 +65,10 @@ export class FakeMysql {
   private transactionFamilies: Map<string, FakeFamilyRow> | undefined
   private transactionCredentials: Map<string, FakeCredentialRow> | undefined
   private tail: Promise<void> = Promise.resolve()
+  private readonly schemaLock = new AsyncLock()
 
   readonly connection = <T>(callback: (connection: MysqlConnection) => T | Promise<T>): Promise<T> => {
+    if (this.concurrentConnections) return Promise.resolve(callback(this.driver()))
     const result = this.tail.then(() => {
       if (this.rejectNextConnection !== undefined) {
         const failure = this.rejectNextConnection
@@ -75,6 +94,7 @@ export class FakeMysql {
   }
 
   private driver(): MysqlConnection {
+    let releaseSchemaLock: (() => void) | undefined
     const query = async (sql: string, parameters: unknown[] = []): Promise<unknown> => {
       if (this.failNext !== undefined) {
         const failure = this.failNext
@@ -83,6 +103,18 @@ export class FakeMysql {
       }
       const normalized = sql.replaceAll(/\s+/g, ' ').trim()
       this.queries.push(normalized)
+      if (normalized.startsWith('SELECT GET_LOCK(')) {
+        if (this.schemaLockResult !== 1) return [[{ acquired: this.schemaLockResult }], []]
+        releaseSchemaLock = await this.schemaLock.acquire()
+        await this.afterSchemaLock?.()
+        return [[{ acquired: this.schemaLockResult }], []]
+      }
+      if (normalized.startsWith('SELECT RELEASE_LOCK(')) {
+        if (releaseSchemaLock === undefined) return [[{ released: 0 }], []]
+        releaseSchemaLock()
+        releaseSchemaLock = undefined
+        return [[{ released: this.schemaUnlockResult }], []]
+      }
       if (normalized.startsWith('CREATE TABLE IF NOT EXISTS dsh_auth_token_schema')) return [{ affectedRows: 0 }, []]
       if (normalized.startsWith('SELECT version FROM dsh_auth_token_schema')) {
         return [this.schemaVersion === undefined ? [] : [{ version: this.schemaVersion }], []]
@@ -181,7 +213,9 @@ export class FakeMysql {
         rows = rows.filter(row => row.principal_kind === parameters[0] && row.principal_id === parameters[1])
       }
       rows.sort((left, right) => left.token_family_id.localeCompare(right.token_family_id))
-      return [structuredClone(rows), []]
+      const result = [structuredClone(rows), []]
+      if (sql.endsWith('FOR SHARE')) return this.afterSharedFamilyRead?.().then(() => result) ?? result
+      return result
     }
     if (sql.startsWith('SELECT') && sql.includes('FROM dsh_auth_refresh_credentials')) {
       let rows = [...credentials.values()]

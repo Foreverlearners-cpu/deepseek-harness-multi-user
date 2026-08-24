@@ -6,7 +6,7 @@ MySQL Service Provider for the provider-neutral [`dsh-auth-token`](../auth-token
 
 ## Composition
 
-Mount one `dsh-mysql` service before this plugin. Activation creates or verifies `dsh_auth_token_schema`, `dsh_auth_token_families`, and `dsh_auth_refresh_credentials`. An unversioned owned table, incomplete versioned schema, or version other than `AUTH_TOKEN_MYSQL_SCHEMA_VERSION` rejects activation.
+Mount one `dsh-mysql` service before this plugin. Activation acquires a database-scoped MySQL advisory lock, then creates or verifies `dsh_auth_token_schema`, `dsh_auth_token_families`, and `dsh_auth_refresh_credentials` before releasing the lock. An unavailable lock, unversioned owned table, incomplete versioned schema, or version other than `AUTH_TOKEN_MYSQL_SCHEMA_VERSION` rejects activation.
 
 ```yaml
 - name: mysql
@@ -46,7 +46,7 @@ Mount exactly one `ctx.authTokens` Provider. This package has no configuration b
 
 Family creation writes the family and first credential in one transaction. Rotation identifies the immutable family relation, locks the family before the submitted credential, consumes an active digest exactly once, and gives the replacement the locked family's absolute expiry. A concurrent or later reuse locks the same rows, revokes the family and every active credential in that transaction, then returns `refresh-token-reused`. Credential, family, and principal revocation uses the same lock order and is idempotent.
 
-Credential inspection and revocation bind their result to the requested credential before returning it to the base service. Unknown credentials and families produce empty inspection or revocation results. Unknown refresh secrets produce `refresh-token-invalid`; expiry and revoked-family states retain their `dsh-auth-token` codes. Connection, SQL, malformed-row, schema, and transaction failures become `provider-unavailable` without SQL, digest, bearer secret, or driver diagnostics.
+Inspection holds shared family locks in one transaction while reading the selected families and credentials, so the result cannot combine family metadata from before a concurrent mutation with credentials from after it. Credential inspection and revocation bind their result to the requested credential before returning it to the base service. Unknown credentials and families produce empty inspection or revocation results. Every stored id, enum, digest, timestamp relation, and status-specific nullable field is validated before use. Unknown refresh secrets produce `refresh-token-invalid`; expiry and revoked-family states retain their `dsh-auth-token` codes. Connection, SQL, malformed-row, schema, and transaction failures become `provider-unavailable` without SQL, digest, bearer secret, or driver diagnostics.
 
 ## Model Experience
 

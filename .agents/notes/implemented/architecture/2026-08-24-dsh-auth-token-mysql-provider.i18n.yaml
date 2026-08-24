@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-24-dsh-auth-token-mysql-provider.md
-2026-08-24-dsh-auth-token-mysql-provider.md: c3357b23cd5deb5650744985e1458cc46b2ddb8d
-2026-08-24-dsh-auth-token-mysql-provider.zh.md: d0e46ffa496dc7d15583bcb53a45b7708399b94d
+2026-08-24-dsh-auth-token-mysql-provider.md: 69685f793f35b966d389a326b4b2574d8ec0154a
+2026-08-24-dsh-auth-token-mysql-provider.zh.md: 675d8c1455140be629bc5d29dd34d0edc7a0aabc

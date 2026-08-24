@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { createHash } from 'node:crypto'
 import { authenticationRequestId, credentialId, tokenFamilyId, userId } from '@deepseek-ai/dsh-auth'
 import AuthTokenMysql, { AUTH_TOKEN_MYSQL_SCHEMA_VERSION } from '../src/index.ts'
-import { FakeMysql } from './fake-mysql.ts'
+import { FakeMysql, type FakeCredentialRow, type FakeFamilyRow } from './fake-mysql.ts'
 
 class FixedAuthTokenMysql extends AuthTokenMysql {
   private sequence = 0
@@ -17,6 +17,12 @@ const contexts: Context[] = []
 const signal = new AbortController().signal
 const requestId = authenticationRequestId('request-1')
 const principal = { kind: 'user' as const, id: userId('user-1') }
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((settle) => { resolve = settle })
+  return { promise, resolve }
+}
 
 afterEach(async () => Promise.all(contexts.splice(0).map(async ctx => ctx.fiber.dispose())))
 
@@ -41,6 +47,46 @@ describe('AuthTokenMysql', () => {
     existing.familyTableExists = true
     existing.credentialTableExists = true
     await expect(setup(existing)).resolves.toMatchObject({ mysql: existing })
+  })
+
+  it('serializes concurrent schema initialization and rechecks state inside the advisory lock', async () => {
+    const mysql = new FakeMysql()
+    mysql.concurrentConnections = true
+    const entered = deferred()
+    const release = deferred()
+    let first = true
+    mysql.afterSchemaLock = async () => {
+      if (!first) return
+      first = false
+      entered.resolve()
+      await release.promise
+    }
+    const firstSetup = setup(mysql)
+    await entered.promise
+    let secondSettled = false
+    const secondSetup = setup(mysql).finally(() => { secondSettled = true })
+    await Promise.resolve()
+    expect(secondSettled).toBe(false)
+    release.resolve()
+    await expect(Promise.all([firstSetup, secondSetup])).resolves.toHaveLength(2)
+    expect(mysql.queries.filter(query => query.startsWith('CREATE TABLE dsh_auth_token_families'))).toHaveLength(1)
+    expect(mysql.queries.filter(query => query.startsWith('CREATE TABLE dsh_auth_refresh_credentials'))).toHaveLength(1)
+    expect(mysql.queries.filter(query => query.startsWith('SELECT RELEASE_LOCK('))).toHaveLength(2)
+  })
+
+  it('fails safe when the schema advisory lock cannot be acquired or released', async () => {
+    const unavailable = new FakeMysql()
+    unavailable.schemaLockResult = 0
+    await expect(setup(unavailable)).rejects.toMatchObject({ code: 'provider-unavailable' })
+
+    const releaseFailure = new FakeMysql()
+    releaseFailure.schemaUnlockResult = null
+    await expect(setup(releaseFailure)).rejects.toMatchObject({ code: 'provider-unavailable' })
+
+    const combined = new FakeMysql()
+    combined.schemaVersion = 2
+    combined.schemaUnlockResult = 0
+    await expect(setup(combined)).rejects.toMatchObject({ code: 'provider-unavailable' })
   })
 
   it('rejects incompatible, unversioned, and incomplete schema state without driver details', async () => {
@@ -154,6 +200,103 @@ describe('AuthTokenMysql', () => {
     await expect(authTokens.inspect({
       requestId, signal, target: { kind: 'token-family', tokenFamilyId: tokenFamilyId('local-family') },
     })).resolves.toMatchObject({ families: [{ principal: { kind: 'local', id: 'local-1' } }] })
+  })
+
+  it('returns family and credentials from one shared-lock snapshot', async () => {
+    const { mysql, authTokens } = await setup()
+    const issued = await authTokens.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
+    const entered = deferred()
+    const release = deferred()
+    mysql.afterSharedFamilyRead = async () => {
+      mysql.afterSharedFamilyRead = undefined
+      entered.resolve()
+      await release.promise
+    }
+    const inspection = authTokens.inspect({
+      requestId, signal, target: { kind: 'token-family', tokenFamilyId: issued.family.tokenFamilyId },
+    })
+    await entered.promise
+    authTokens.clock = 1_100
+    let rotationSettled = false
+    const rotation = authTokens.rotate({ requestId, signal, refreshToken: issued.refreshToken.value })
+      .finally(() => { rotationSettled = true })
+    await Promise.resolve()
+    expect(rotationSettled).toBe(false)
+    release.resolve()
+    await expect(inspection).resolves.toMatchObject({
+      families: [{ revision: 1 }],
+      credentials: [{ status: 'active' }],
+    })
+    await expect(rotation).resolves.toMatchObject({ family: { revision: 2 } })
+  })
+
+  it('rejects malformed family and credential rows as provider-unavailable', async () => {
+    const familyMutations: Array<(row: FakeFamilyRow) => void> = [
+      (row) => { row.principal_kind = 'invalid' as never },
+      (row) => { row.status = 'invalid' as never },
+      (row) => { row.updated_at = 999 },
+      (row) => { row.expires_at = 1_000 },
+      (row) => { row.revision = 0 },
+      (row) => { row.revoked_at = 1_100 },
+      (row) => { row.revocation_reason = 'requested' },
+      (row) => { row.status = 'revoked'; row.revoked_at = null; row.revocation_reason = 'requested' },
+      (row) => { row.status = 'revoked'; row.revoked_at = 999; row.revocation_reason = 'requested' },
+      (row) => { row.status = 'revoked'; row.revoked_at = 1_100; row.revocation_reason = 'invalid' as never },
+    ]
+    for (const mutate of familyMutations) {
+      const { mysql, authTokens } = await setup()
+      const issued = await authTokens.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
+      mutate(mysql.families.get(issued.family.tokenFamilyId)!)
+      await expect(authTokens.inspect({
+        requestId, signal, target: { kind: 'token-family', tokenFamilyId: issued.family.tokenFamilyId },
+      })).rejects.toMatchObject({ code: 'provider-unavailable' })
+    }
+
+    const malformedFamily = await setup()
+    const familyIssue = await malformedFamily.authTokens.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
+    malformedFamily.mysql.families.get(familyIssue.family.tokenFamilyId)!.token_family_id = ''
+    await expect(malformedFamily.authTokens.inspect({
+      requestId, signal, target: { kind: 'principal', principal },
+    })).rejects.toMatchObject({ code: 'provider-unavailable' })
+
+    const malformedPrincipal = await setup()
+    const principalIssue = await malformedPrincipal.authTokens.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
+    malformedPrincipal.mysql.families.get(principalIssue.family.tokenFamilyId)!.principal_id = ''
+    await expect(malformedPrincipal.authTokens.inspect({
+      requestId, signal, target: { kind: 'token-family', tokenFamilyId: principalIssue.family.tokenFamilyId },
+    })).rejects.toMatchObject({ code: 'provider-unavailable' })
+
+    const credentialMutations: Array<(row: FakeCredentialRow) => void> = [
+      (row) => { row.token_family_id = '' },
+      (row) => { row.digest = 'not-a-digest' },
+      (row) => { row.status = 'invalid' as never },
+      (row) => { row.expires_at = 1_000 },
+      (row) => { row.rotated_at = 1_100 },
+      (row) => { row.status = 'rotated'; row.rotated_at = null; row.replaced_by = 'replacement' },
+      (row) => { row.status = 'rotated'; row.rotated_at = 999; row.replaced_by = 'replacement' },
+      (row) => { row.status = 'rotated'; row.rotated_at = 1_100; row.replaced_by = '' },
+      (row) => { row.status = 'rotated'; row.rotated_at = 1_100; row.replaced_by = 'replacement'; row.revoked_at = 1_100 },
+      (row) => { row.status = 'revoked'; row.revoked_at = null },
+      (row) => { row.status = 'revoked'; row.revoked_at = 999 },
+      (row) => { row.status = 'revoked'; row.revoked_at = 1_100; row.replaced_by = 'replacement' },
+    ]
+    for (const mutate of credentialMutations) {
+      const { mysql, authTokens } = await setup()
+      const issued = await authTokens.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
+      mutate(mysql.credentials.get(issued.refreshToken.credentialId)!)
+      await expect(authTokens.inspect({
+        requestId, signal, target: { kind: 'credential', credentialId: issued.refreshToken.credentialId },
+      })).rejects.toMatchObject({ code: 'provider-unavailable' })
+    }
+
+    const malformedCredential = await setup()
+    const credentialIssue = await malformedCredential.authTokens.issueFamily({
+      requestId, signal, principal, expiresAt: 2_000,
+    })
+    malformedCredential.mysql.credentials.get(credentialIssue.refreshToken.credentialId)!.credential_id = ''
+    await expect(malformedCredential.authTokens.inspect({
+      requestId, signal, target: { kind: 'token-family', tokenFamilyId: credentialIssue.family.tokenFamilyId },
+    })).rejects.toMatchObject({ code: 'provider-unavailable' })
   })
 
   it('rejects locked credential relation changes and impossible update counts atomically', async () => {

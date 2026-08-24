@@ -17,7 +17,6 @@ import AuthTokenService, {
   type AuthTokenInspectRequest,
   type CredentialId,
   type RefreshCredentialRecord,
-  type RefreshCredentialStatus,
   type RefreshTokenDigest,
   type RefreshTokenRotationCommit,
   type RefreshTokenRotationInput,
@@ -25,10 +24,8 @@ import AuthTokenService, {
   type TokenFamilyId,
   type TokenFamilyMutationCommit,
   type TokenFamilyRecord,
-  type TokenFamilyStatus,
   type TokenRevocationCommit,
   type TokenRevocationInput,
-  type TokenRevocationReason,
 } from '@deepseek-ai/dsh-auth-token'
 import type { MysqlConnection } from '@deepseek-ai/dsh-mysql'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
@@ -38,22 +35,22 @@ export { AUTH_TOKEN_MYSQL_SCHEMA_VERSION } from './schema.ts'
 
 interface FamilyRow extends RowDataPacket {
   token_family_id: string
-  principal_kind: AuthenticatedPrincipal['kind']
+  principal_kind: string
   principal_id: string
-  status: TokenFamilyStatus
+  status: string
   created_at: number | string
   updated_at: number | string
   expires_at: number | string
   revision: number | string
   revoked_at: number | string | null
-  revocation_reason: TokenRevocationReason | null
+  revocation_reason: string | null
 }
 
 interface CredentialRow extends RowDataPacket {
   credential_id: string
   token_family_id: string
   digest: string
-  status: RefreshCredentialStatus
+  status: string
   issued_at: number | string
   expires_at: number | string
   rotated_at: number | string | null
@@ -67,6 +64,7 @@ const FAMILY_COLUMNS = `token_family_id, principal_kind, principal_id, status, c
   updated_at, expires_at, revision, revoked_at, revocation_reason`
 const CREDENTIAL_COLUMNS = `credential_id, token_family_id, digest, status, issued_at,
   expires_at, rotated_at, replaced_by, revoked_at`
+const DIGEST_PATTERN = /^[a-f0-9]{64}$/
 
 function safeInteger(value: number | string, field: string): number {
   const numeric = typeof value === 'number' ? value : Number(value)
@@ -78,46 +76,77 @@ function nullableInteger(value: number | string | null, field: string): number |
   return value === null ? undefined : safeInteger(value, field)
 }
 
-function principal(kind: AuthenticatedPrincipal['kind'], id: string): AuthenticatedPrincipal {
+function principal(kind: string, id: string): AuthenticatedPrincipal {
   switch (kind) {
     case 'user': return { kind, id: userId(id) }
     case 'service-account': return { kind, id: serviceAccountId(id) }
     case 'local': return { kind, id: localPrincipalId(id) }
+    default: throw unavailable('invalid stored principal kind')
   }
 }
 
 function familyRecord(row: FamilyRow): TokenFamilyRecord {
+  if (row.status !== 'active' && row.status !== 'revoked') throw unavailable('invalid stored family status')
   const common = {
     tokenFamilyId: tokenFamilyId(row.token_family_id),
     principal: principal(row.principal_kind, row.principal_id),
-    status: row.status,
     createdAt: safeInteger(row.created_at, 'family created_at'),
     updatedAt: safeInteger(row.updated_at, 'family updated_at'),
     expiresAt: safeInteger(row.expires_at, 'family expires_at'),
     revision: safeInteger(row.revision, 'family revision'),
   }
   const revokedAt = nullableInteger(row.revoked_at, 'family revoked_at')
-  return {
-    ...common,
-    ...(revokedAt === undefined ? {} : { revokedAt }),
-    ...(row.revocation_reason === null ? {} : { revocationReason: row.revocation_reason }),
+  if (common.updatedAt < common.createdAt || common.expiresAt <= common.createdAt || common.revision < 1) {
+    throw unavailable('invalid stored token family chronology')
   }
+  if (row.status === 'active') {
+    if (revokedAt !== undefined || row.revocation_reason !== null) {
+      throw unavailable('invalid stored active token family')
+    }
+    return { ...common, status: 'active' }
+  }
+  if (revokedAt === undefined || revokedAt < common.updatedAt
+    || (row.revocation_reason !== 'requested' && row.revocation_reason !== 'refresh-token-reuse')) {
+    throw unavailable('invalid stored revoked token family')
+  }
+  return { ...common, status: 'revoked', revokedAt, revocationReason: row.revocation_reason }
 }
 
 function credentialRecord(row: CredentialRow): RefreshCredentialRecord {
+  if (!DIGEST_PATTERN.test(row.digest)) throw unavailable('invalid stored refresh digest')
+  if (row.status !== 'active' && row.status !== 'rotated' && row.status !== 'revoked') {
+    throw unavailable('invalid stored refresh credential status')
+  }
+  const credential = credentialId(row.credential_id)
+  const family = tokenFamilyId(row.token_family_id)
+  const issuedAt = safeInteger(row.issued_at, 'credential issued_at')
+  const expiresAt = safeInteger(row.expires_at, 'credential expires_at')
+  if (expiresAt <= issuedAt) throw unavailable('invalid stored refresh credential chronology')
   const rotatedAt = nullableInteger(row.rotated_at, 'credential rotated_at')
   const revokedAt = nullableInteger(row.revoked_at, 'credential revoked_at')
-  return {
-    credentialId: credentialId(row.credential_id),
-    tokenFamilyId: tokenFamilyId(row.token_family_id),
+  const common = {
+    credentialId: credential,
+    tokenFamilyId: family,
     digest: row.digest as RefreshTokenDigest,
-    status: row.status,
-    issuedAt: safeInteger(row.issued_at, 'credential issued_at'),
-    expiresAt: safeInteger(row.expires_at, 'credential expires_at'),
-    ...(rotatedAt === undefined ? {} : { rotatedAt }),
-    ...(row.replaced_by === null ? {} : { replacedBy: credentialId(row.replaced_by) }),
-    ...(revokedAt === undefined ? {} : { revokedAt }),
+    issuedAt,
+    expiresAt,
   }
+  if (row.status === 'active') {
+    if (rotatedAt !== undefined || row.replaced_by !== null || revokedAt !== undefined) {
+      throw unavailable('invalid stored active refresh credential')
+    }
+    return { ...common, status: 'active' }
+  }
+  if (row.status === 'rotated') {
+    if (rotatedAt === undefined || rotatedAt < issuedAt || row.replaced_by === null || revokedAt !== undefined) {
+      throw unavailable('invalid stored rotated refresh credential')
+    }
+    return { ...common, status: 'rotated', rotatedAt, replacedBy: credentialId(row.replaced_by) }
+  }
+  if (revokedAt === undefined || revokedAt < issuedAt || rotatedAt !== undefined || row.replaced_by !== null) {
+    throw unavailable('invalid stored revoked refresh credential')
+  }
+  return { ...common, status: 'revoked', revokedAt }
 }
 
 function unavailable(message: string): AuthTokenError {
@@ -189,7 +218,7 @@ export class AuthTokenMysql extends AuthTokenService {
     return this.storage(connection => transaction(connection, async () => {
       const initial = await this.credentialByDigest(connection, input.digest)
       if (initial === undefined) throw expected('refresh-token-invalid', 'refresh token is invalid')
-      const previousFamily = await this.familyById(connection, initial.tokenFamilyId, true)
+      const previousFamily = await this.familyById(connection, initial.tokenFamilyId)
       if (previousFamily === undefined) throw unavailable('credential family is missing')
       const credential = await this.credentialById(connection, initial.credentialId, true)
       if (credential === undefined || credential.digest !== input.digest
@@ -260,11 +289,11 @@ export class AuthTokenMysql extends AuthTokenService {
     families: readonly TokenFamilyRecord[]
     credentials: readonly RefreshCredentialRecord[]
   }>> {
-    return this.storage(async (connection) => {
-      const families = await this.familiesForTarget(connection, target, false)
+    return this.storage(connection => transaction(connection, async () => {
+      const families = await this.familiesForTarget(connection, target, 'share')
       const credentials = await this.credentialsForFamilies(connection, families.map(value => value.tokenFamilyId))
       return { families, credentials }
-    })
+    }))
   }
 
   protected revokeRecords(input: TokenRevocationInput): Promise<TokenRevocationCommit> {
@@ -278,11 +307,11 @@ export class AuthTokenMysql extends AuthTokenService {
       } else if (input.target.kind === 'token-family') {
         familyIds = [input.target.tokenFamilyId]
       } else {
-        familyIds = (await this.familiesForTarget(connection, input.target, true)).map(value => value.tokenFamilyId)
+        familyIds = (await this.familiesForTarget(connection, input.target)).map(value => value.tokenFamilyId)
       }
       const commits: TokenFamilyMutationCommit[] = []
       for (const familyId of familyIds) {
-        const previous = await this.familyById(connection, familyId, true)
+        const previous = await this.familyById(connection, familyId)
         if (previous === undefined) continue
         if (input.target.kind === 'credential') {
           const credential = await this.credentialById(connection, input.target.credentialId, true)
@@ -320,9 +349,14 @@ export class AuthTokenMysql extends AuthTokenService {
     }
   }
 
-  private async familyById(connection: MysqlConnection, id: TokenFamilyId, lock: boolean): Promise<TokenFamilyRecord | undefined> {
+  private async familyById(
+    connection: MysqlConnection,
+    id: TokenFamilyId,
+    mode: 'share' | 'update' = 'update',
+  ): Promise<TokenFamilyRecord | undefined> {
+    const suffix = mode === 'share' ? ' FOR SHARE' : ' FOR UPDATE'
     const [rows] = await connection.execute<FamilyRow[]>(
-      `SELECT ${FAMILY_COLUMNS} FROM dsh_auth_token_families WHERE token_family_id = ?${lock ? ' FOR UPDATE' : ''}`,
+      `SELECT ${FAMILY_COLUMNS} FROM dsh_auth_token_families WHERE token_family_id = ?${suffix}`,
       [id],
     )
     return rows[0] === undefined ? undefined : familyRecord(rows[0])
@@ -347,20 +381,21 @@ export class AuthTokenMysql extends AuthTokenService {
   private async familiesForTarget(
     connection: MysqlConnection,
     target: CredentialInspectTarget,
-    lock: boolean,
+    mode: 'share' | 'update' = 'update',
   ): Promise<TokenFamilyRecord[]> {
     if (target.kind === 'credential') {
       const credential = await this.credentialById(connection, target.credentialId, false)
       if (credential === undefined) return []
-      const family = await this.familyById(connection, credential.tokenFamilyId, lock)
+      const family = await this.familyById(connection, credential.tokenFamilyId, mode)
       return family === undefined ? [] : [family]
     }
     const clause = target.kind === 'token-family'
       ? { sql: 'token_family_id = ?', parameters: [target.tokenFamilyId] }
       : { sql: 'principal_kind = ? AND principal_id = ?', parameters: [target.principal.kind, target.principal.id] }
+    const suffix = mode === 'share' ? ' FOR SHARE' : ' FOR UPDATE'
     const [rows] = await connection.execute<FamilyRow[]>(
       `SELECT ${FAMILY_COLUMNS} FROM dsh_auth_token_families WHERE ${clause.sql}
-       ORDER BY token_family_id ASC${lock ? ' FOR UPDATE' : ''}`,
+       ORDER BY token_family_id ASC${suffix}`,
       clause.parameters,
     )
     return rows.map(familyRecord)

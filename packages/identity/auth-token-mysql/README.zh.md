@@ -6,7 +6,7 @@
 
 ## 组合
 
-先挂载一个 `dsh-mysql` 服务，再挂载本插件。激活时会创建或验证 `dsh_auth_token_schema`、`dsh_auth_token_families` 和 `dsh_auth_refresh_credentials`。存在未记录版本的自有表、版本化 schema 不完整或版本不等于 `AUTH_TOKEN_MYSQL_SCHEMA_VERSION` 时，激活会失败。
+先挂载一个 `dsh-mysql` 服务，再挂载本插件。激活时会取得 database 范围的 MySQL advisory lock，然后创建或验证 `dsh_auth_token_schema`、`dsh_auth_token_families` 和 `dsh_auth_refresh_credentials`，最后释放锁。无法取得锁、存在未记录版本的自有表、版本化 schema 不完整或版本不等于 `AUTH_TOKEN_MYSQL_SCHEMA_VERSION` 时，激活会失败。
 
 ```yaml
 - name: mysql
@@ -46,7 +46,7 @@ export async function beginSession(ctx: Context): Promise<string> {
 
 创建 family 时在一个事务中写入 family 与首个 credential。轮换先定位不可变的 family 关系，再依次锁定 family 和提交的 credential，只消费一次 active digest，并让 replacement 沿用已锁定 family 的绝对过期时间。并发或后续重用会锁定相同记录，在同一事务中吊销 family 及其所有 active credential，然后返回 `refresh-token-reused`。按 credential、family 或 principal 吊销时采用相同的锁顺序，并且操作具有幂等性。
 
-按 credential 检查和吊销时，返回 base service 前会将结果绑定到请求指定的 credential。未知 credential 和 family 产生空的检查或吊销结果。未知 refresh secret 返回 `refresh-token-invalid`；过期状态和 family 已吊销状态保留 `dsh-auth-token` 错误码。连接、SQL、异常数据库行、schema 和事务故障统一变成 `provider-unavailable`，不会暴露 SQL、digest、bearer secret 或 driver diagnostics。
+检查操作在一个事务中持有 shared family lock 并读取选中的 family 与 credential，因此结果不会把并发修改前的 family metadata 和修改后的 credential 组合起来。按 credential 检查和吊销时，返回 base service 前会将结果绑定到请求指定的 credential。未知 credential 和 family 产生空的检查或吊销结果。使用持久数据前会验证每个 id、enum、digest、时间关系和特定状态专属的 nullable 字段。未知 refresh secret 返回 `refresh-token-invalid`；过期状态和 family 已吊销状态保留 `dsh-auth-token` 错误码。连接、SQL、异常数据库行、schema 和事务故障统一变成 `provider-unavailable`，不会暴露 SQL、digest、bearer secret 或 driver diagnostics。
 
 ## 模型体验
 

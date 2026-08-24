@@ -18,9 +18,9 @@ Schema version 1 保存 principal kind 和 id、family 生命周期状态、绝�
 
 针对同一个 active digest 的两次轮换会在 family 锁上串行执行。第一个事务将提交的 credential 标记为 rotated，插入沿用已锁定 family 绝对过期时间的 replacement，并推进 family revision。第二个事务发现 rotated credential 后吊销 family 及其所有 active credential，再次推进 revision，提交，并返回 `dsh-auth-token` 要求的重用结果。过期状态和 family 已吊销状态也在相同锁内完成检查，不发生修改。
 
-检查操作只加载按 credential、family 或精确 principal 目标选出的 family，然后加载这些 family id 对应的 credential。按 credential 吊销时，先锁定其 family，再重新读取并锁定指定 credential，并将该记录作为 `matchedCredential` 返回，使 `dsh-auth-token` 能在发出事件前证明目标关系。Provider 错误不会包含 driver diagnostics、SQL、digest 或 bearer secret。
+检查操作会开启事务，只为按 credential、family 或精确 principal 目标选出的 family 取得 shared lock，然后加载这些 family id 对应的 credential。这些锁让两次读取相对于轮换和吊销保持同一个一致性快照。按 credential 吊销时，先锁定其 family，再重新读取并锁定指定 credential，并将该记录作为 `matchedCredential` 返回，使 `dsh-auth-token` 能在发出事件前证明目标关系。数据库行解码会拒绝未知 principal kind、生命周期状态、吊销原因、格式错误的 id 或 digest、不可能的时间关系，以及与状态不一致的字段。Provider 错误不会包含 driver diagnostics、SQL、digest 或 bearer secret。
 
-Schema 激活会拒绝不兼容版本、任何未记录版本的自有表，以及有版本记录但缺少任一自有表的状态。MySQL DDL 独立提交，因此建表与写入版本之间的故障可能留下未记录版本的状态；下次激活会快速失败，不猜测表所有权，也不补全只观察到一部分的 schema。
+Schema 激活会取得名称中包含所选 database digest 的 MySQL advisory lock，在锁内重新读取所有 schema 状态，并在 `finally` 中释放锁。它会拒绝无法取得的锁所有权、不兼容版本、任何未记录版本的自有表，以及有版本记录但缺少任一自有表的状态。释放失败会使激活失败，同时发生初始化和释放失败时会在内部保留两个原因。MySQL DDL 独立提交，因此建表与写入版本之间的故障可能留下未记录版本的状态；下次激活会快速失败，不猜测表所有权，也不补全只观察到一部分的 schema。
 
 ## 考虑过的替代方案
 
@@ -38,4 +38,4 @@ Schema 激活会拒绝不兼容版本、任何未记录版本的自有表，以�
 
 该 Provider 为多个 Host 进程提供一个持久的 refresh token 轮换与吊销串行点，同时让 bearer secret 保持短暂存在。重用检测会保留已消费 digest，直到后续 retention policy 删除 family。按 principal 吊销时会依照 id 顺序锁定所有选中的 family，持锁数量可能多于单 family 操作。Schema version 不匹配或未记录版本的部分 DDL 会导致启动失败，因为目前不存在已发布的持久兼容承诺。
 
-无密钥测试针对串行的有状态 MySQL 测试服务运行共享 Provider suite，并固定 schema 所有权、精确目标绑定、回滚行为、错误脱敏、持久数据行验证、并发轮换、重用和幂等吊销。由 `DSH_MYSQL_TEST_URL` 控制的测试会创建真实 schema、验证只保存 digest、让两次轮换并发竞争、观察 family 吊销，并执行按 principal 吊销。
+无密钥测试针对有状态 MySQL 测试服务运行共享 Provider suite，并固定串行 schema 初始化、精确目标绑定、shared-lock 检查快照、回滚行为、错误脱敏、恶意持久数据行验证、并发轮换、重用和幂等吊销。由 `DSH_MYSQL_TEST_URL` 控制的测试会创建真实 schema、验证只保存 digest、让两次轮换并发竞争、观察 family 吊销，并执行按 principal 吊销。
