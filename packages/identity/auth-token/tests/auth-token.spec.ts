@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { authenticationRequestId, userId } from '@deepseek-ai/dsh-auth'
 import { describe, expect, it, vi } from 'vitest'
-import { AuthTokenError } from '../src/index.ts'
+import { AuthTokenError, MAX_REFRESH_TOKEN_BYTES } from '../src/index.ts'
 import { runAuthTokenContract } from './contract.ts'
 import { MemoryAuthTokens } from './memory.ts'
 
@@ -32,6 +32,12 @@ describe('auth-token validation and containment', () => {
       refreshToken: 'wrong',
       expiresAt: 2_000,
     })).rejects.toMatchObject({ code: 'refresh-token-invalid' })
+    await expect(authTokens.rotate({
+      requestId,
+      signal: new AbortController().signal,
+      refreshToken: `dsh_rt_${'界'.repeat(MAX_REFRESH_TOKEN_BYTES)}`,
+      expiresAt: 2_000,
+    })).rejects.toMatchObject({ code: 'refresh-token-invalid' })
   })
 
   it('contains listener failures and still notifies later listeners', async () => {
@@ -47,6 +53,19 @@ describe('auth-token validation and containment', () => {
       expiresAt: 2_000,
     })
     expect(observed).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('never loses a committed refresh secret when an invariant listener throws', async () => {
+    const { ctx, authTokens } = await setup()
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
+    ctx.on('auth-token/changed', () => { throw Object.assign(new Error('invariant'), { code: 'INVARIANT' }) })
+    await expect(authTokens.issueFamily({
+      requestId,
+      signal: new AbortController().signal,
+      principal,
+      expiresAt: 2_000,
+    })).resolves.toHaveProperty('refreshToken.value')
     expect(warn).toHaveBeenCalled()
   })
 

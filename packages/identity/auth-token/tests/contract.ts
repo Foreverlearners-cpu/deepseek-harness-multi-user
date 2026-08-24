@@ -98,6 +98,28 @@ export function runAuthTokenContract(
       expect(events.map(value => value.kind)).toEqual(['issued', 'rotated', 'reuse-detected'])
     })
 
+    it('allows only one of two concurrent rotations to succeed', async () => {
+      const harness = await create()
+      const { authTokens } = harness
+      const issued = await authTokens.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
+      harness.setTime(1_100)
+      const results = await Promise.allSettled([
+        authTokens.rotate({ requestId, signal, refreshToken: issued.refreshToken.value, expiresAt: 1_900 }),
+        authTokens.rotate({ requestId, signal, refreshToken: issued.refreshToken.value, expiresAt: 1_900 }),
+      ])
+      expect(results.filter(value => value.status === 'fulfilled')).toHaveLength(1)
+      const rejections = results.filter(value => value.status === 'rejected')
+      expect(rejections).toHaveLength(1)
+      const reason: unknown = rejections[0]?.reason
+      expect(reason).toMatchObject({ code: 'refresh-token-reused' })
+      const inspection = await authTokens.inspect({
+        requestId,
+        signal,
+        target: { kind: 'token-family', tokenFamilyId: issued.family.tokenFamilyId },
+      })
+      expect(inspection.families[0]).toMatchObject({ status: 'revoked', revision: 3 })
+    })
+
     it('rejects unknown and expired refresh credentials without changing their family', async () => {
       const harness = await create()
       const { authTokens } = harness

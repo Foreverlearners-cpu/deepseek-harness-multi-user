@@ -16,9 +16,13 @@ Refresh secret 是 bearer Credential。持久化明文或非原子的消费替�
 
 公开操作为 `issueFamily`、`rotate`、`inspect` 和 `revoke`。JWT Provider 独立拥有 access-token 签名与验证，并可通过 `dsh-auth` 的 Credential 生命周期能力公开这些操作。后续 MySQL Provider 拥有 schema、事务、锁、索引、migration 和事务 outbox。
 
+JWT 组合具有明确的失败边界。JWT Provider 在 refresh-family 签发或轮换提交前解析并验证签名密钥，并准备好所有可能失败的签名依赖。提交后的签名必须是不会失败的内存操作。无法保证这一点的 Provider 必须在暴露签名失败前同步撤销刚提交的 family 作为补偿；本包自身不执行 JWT 签名或这层编排。
+
 ## Secret 处理
 
 基类使用至少 32 个随机字节生成每个 refresh secret。明文只作为短期输入或返回值存在。Provider hook 只接收固定 SHA-256 digest；持久记录、检查、事件、错误和诊断都无法表示明文。SHA-256 适用于这里，因为 Token 至少有 256 bit 均匀熵，并非用户选择的密码。Provider 建立 digest 唯一索引，也不记录 digest。
+
+Refresh-token 输入在散列或执行 Provider 工作前限制为最多 4 KiB UTF-8 数据。
 
 ## 状态、revision 与过期
 
@@ -36,9 +40,9 @@ Provider 在一个事务中锁定 digest，检查 family 和 Credential 的过�
 
 ## 检查、撤销与事件
 
-检查以 refresh Credential、family 或 principal 为目标，并从结果中移除 digest。以 Credential 为目标的撤销会撤销其 family，因为保留 sibling refresh Credential 会违反 family 泄露语义。Principal 撤销在一个 Provider 事务中修改所有 active family。
+检查以 refresh Credential、family 或 principal 为目标，并从结果中移除 digest。返回记录必须能证明绑定到该目标。以 Credential 为目标的撤销会撤销其 family，因为保留 sibling refresh Credential 会违反 family 泄露语义；其 commit 还包含匹配的 Credential，作为 Credential 与 family 关系的证明。Principal 撤销在一个 Provider 事务中修改所有 active family。
 
-`auth-token/changed` 只在签发、轮换、显式撤销或复用撤销提交后发出。它携带稳定 id、principal、revision、status、time 和 reason，不包含 secret、digest、access token、claim 或 Provider 诊断。监听器失败在提交后被隔离；持久审计需要 Provider 拥有的事务 outbox。
+`auth-token/changed` 只在签发、轮换、显式撤销或复用撤销提交后发出。它携带稳定 id、principal、revision、status、time 和 reason，不包含 secret、digest、access token、claim 或 Provider 诊断。所有监听器失败（包括 invariant 失败）都会在提交后被记录并隔离；持久审计需要 Provider 拥有的事务 outbox。
 
 ## 考虑过的替代方案
 
@@ -58,6 +62,9 @@ Provider 在一个事务中锁定 digest，检查 family 和 Credential 的过�
 - 轮换保持原子；并发使用只能有一个成功。
 - 复用在返回稳定失败前原子撤销 family。
 - Provider commit 会校验 family revision 与绝对过期语义。
+- 检查和撤销结果绑定到其请求目标。
+- 提交后的监听器失败绝不会让生命周期操作失败。
+- JWT 组合在提交前准备签名，或通过同步撤销已提交 family 进行补偿。
 - 检查和事件排除 secret、digest、access token、claim 与诊断。
 - 撤销支持 Credential、family 和 principal 目标，并保持幂等。
 - 共享套件覆盖签发、轮换、复用、过期、检查、脱敏和撤销。

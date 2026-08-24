@@ -25,6 +25,8 @@ Family 的 revision 从 1 开始，每次成功轮换或首次撤销后严格增
 
 Refresh Credential 的状态为 `active`、`rotated` 或 `revoked`。成功轮换会原子地把已消费 Credential 改为 `rotated`、创建一个 `active` 替代项，并增加 family revision。同一个 secret 的两个并发轮换不能同时成功。
 
+`rotate` 最多接受 4 KiB 的 UTF-8 refresh-token 输入。这个上限可以限制恶意散列和查询工作，同时不会约束本服务生成的 secret。
+
 ## 复用检测
 
 提交属于 `rotated` Credential 的 digest 就是复用。Provider 以 `refresh-token-reuse` 原因原子撤销整个 active family；服务发出已提交的 `reuse-detected` 事件，然后以 `refresh-token-reused` 拒绝。此后使用该 family 的任何 Credential 都以 `token-family-revoked` 失败。
@@ -37,13 +39,19 @@ Provider 继承 `AuthTokenService`，实现 `createFamilyRecord`、`rotateFamily
 
 `rotateFamilyRecord` 在一个事务中锁定或条件更新匹配的 Credential 与 family。它返回经过验证的 `rotated` commit（含已消费记录与替代记录），或者返回含 family 撤销的 `reused` commit。`revokeRecords` 在一个事务中修改所有选中的 active family 及其 active Credential，并对已经撤销的 family 保持幂等。
 
+Provider 结果必须绑定到请求目标。`inspectRecords` 只能返回由所请求 family、principal 或 Credential 选中的 family。按 Credential 撤销时，`revokeRecords` 必须返回 `matchedCredential`，作为所请求 Credential 属于唯一返回 family 的可验证证明；family 和 principal 目标不能返回该证明。
+
 `tests/contract.ts` 中的共享套件是 Provider 规范测试。每个 Provider 把 `runAuthTokenContract()` 绑定到空存储实例，并补充后端专属的事务、持久性、digest 唯一索引和 migration 测试。
+
+## 与 Access Token 组合
+
+本包不签名 JWT。JWT Provider 必须先解析并验证可用的签名密钥，并在提交 `issueFamily` 或 `rotate` 前准备好所有可能失败的签名依赖。Refresh-family 提交后，access-token 序列化和签名必须是预期不会失败的内存操作。如果 Provider 无法保证这个边界，就必须在暴露签名失败前同步撤销刚提交的 family 作为补偿。
 
 ## 事件
 
 `auth-token/changed` 只在签发、轮换、撤销或复用撤销提交后发出。它包含 request、family、principal、revision、status、time，以及可选的 Credential／reason 元数据。它绝不包含 refresh secret、digest、access token、JWT claim 或 Provider 诊断。
 
-监听器失败会被隔离，因此不能回滚已经提交的安全变化，也不能阻止后续监听器。该事件只存在于进程内；持久审计投递需要持久化 Provider 在状态变化旁写入事务 outbox。
+所有监听器失败（包括归类为 invariant 的失败）都会被记录并隔离，因此不能让已经提交的 API 调用失败，也不能阻止后续监听器。该事件只存在于进程内；持久审计投递需要持久化 Provider 在状态变化旁写入事务 outbox。
 
 ## 失败语义
 

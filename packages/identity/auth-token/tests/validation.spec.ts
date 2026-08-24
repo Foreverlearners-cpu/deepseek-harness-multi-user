@@ -58,6 +58,11 @@ class BrokenAuthTokens extends AuthTokenService {
   inspectionResult: unknown = { families: [], credentials: [] }
   revocationResult: unknown = { families: [] }
   failure: Error | undefined
+  fixedTime: number | undefined
+
+  protected override now(): number {
+    return this.fixedTime ?? super.now()
+  }
 
   protected createFamilyRecord(input: TokenFamilyCreateInput): Promise<TokenFamilyCreateInput> {
     if (this.failure !== undefined) return Promise.reject(this.failure)
@@ -84,11 +89,35 @@ class BrokenAuthTokens extends AuthTokenService {
 class CorruptMemoryAuthTokens extends MemoryAuthTokens {
   corruptRotation = false
   corruptReuse = false
+  expireRotationFamily = false
+  expireRotationCredential = false
+  expireReuseFamily = false
+  expireReuseCredential = false
   corruptRevocation = false
   duplicateRevocation = false
 
   protected override async rotateFamilyRecord(input: RefreshTokenRotationInput): Promise<RefreshTokenRotationCommit> {
     const commit = await super.rotateFamilyRecord(input)
+    if (commit.kind === 'rotated' && this.expireRotationFamily) {
+      return {
+        ...commit,
+        previousFamily: { ...commit.previousFamily, expiresAt: input.time },
+        currentFamily: { ...commit.currentFamily, expiresAt: input.time },
+      }
+    }
+    if (commit.kind === 'rotated' && this.expireRotationCredential) {
+      return { ...commit, consumedCredential: { ...commit.consumedCredential, expiresAt: input.time } }
+    }
+    if (commit.kind === 'reused' && this.expireReuseFamily) {
+      return {
+        ...commit,
+        previousFamily: { ...commit.previousFamily, expiresAt: input.time },
+        currentFamily: { ...commit.currentFamily, expiresAt: input.time },
+      }
+    }
+    if (commit.kind === 'reused' && this.expireReuseCredential) {
+      return { ...commit, reusedCredential: { ...commit.reusedCredential, expiresAt: input.time } }
+    }
     if (commit.kind === 'rotated' && this.corruptRotation) {
       return { ...commit, currentFamily: { ...commit.currentFamily, revision: commit.currentFamily.revision + 1 } }
     }
@@ -117,6 +146,20 @@ async function broken(): Promise<BrokenAuthTokens> {
   const ctx = new Context()
   await ctx.plugin(BrokenAuthTokens)
   return ctx.authTokens as BrokenAuthTokens
+}
+
+function revokedCommit(record: TokenFamilyRecord, time: number): TokenRevocationCommit['families'][number] {
+  return {
+    previous: record,
+    current: {
+      ...record,
+      status: 'revoked',
+      updatedAt: time,
+      revision: record.revision + 1,
+      revokedAt: time,
+      revocationReason: 'requested',
+    },
+  }
 }
 
 async function memory<T extends MemoryAuthTokens>(Provider: new (ctx: Context) => T): Promise<T> {
@@ -209,7 +252,11 @@ describe('auth-token Provider validation', () => {
       ],
       credentials: [],
     }
-    await expect(service.inspect({ requestId, signal, target })).resolves.toHaveProperty('families.length', 2)
+    await expect(service.inspect({
+      requestId,
+      signal,
+      target: { kind: 'principal', principal },
+    })).resolves.toHaveProperty('families.length', 2)
   })
 
   it.each([
@@ -262,6 +309,29 @@ describe('auth-token Provider validation', () => {
     await expect(service.inspect({ requestId, signal, target })).rejects.toMatchObject({ code: 'provider-unavailable' })
   })
 
+  it.each([
+    {
+      target: { kind: 'token-family' as const, tokenFamilyId: tokenFamilyId('family-1') },
+      families: [family({ tokenFamilyId: tokenFamilyId('family-2') })],
+      credentials: [],
+    },
+    {
+      target: { kind: 'principal' as const, principal },
+      families: [family({ principal: { kind: 'user', id: userId('user-2') } })],
+      credentials: [],
+    },
+    {
+      target: { kind: 'credential' as const, credentialId: credentialId('refresh-2') },
+      families: [family()],
+      credentials: [credential()],
+    },
+  ])('binds inspection result to request target %#', async ({ target: requestTarget, families, credentials }) => {
+    const service = await broken()
+    service.inspectionResult = { families, credentials }
+    await expect(service.inspect({ requestId, signal, target: requestTarget }))
+      .rejects.toMatchObject({ code: 'provider-unavailable' })
+  })
+
   it('rejects inconsistent initial commits and invalid operation carriers', async () => {
     const service = await broken()
     service.createTransform = input => ({ ...input, family: { ...input.family, revision: 2 } })
@@ -275,7 +345,7 @@ describe('auth-token Provider validation', () => {
       .rejects.toMatchObject({ code: 'invalid-input' })
   })
 
-  it('contains asynchronous listeners and rethrows invariant failures after fan-out', async () => {
+  it('contains every post-commit listener failure after fan-out', async () => {
     const ctx = new Context()
     await ctx.plugin(MemoryAuthTokens)
     const service = ctx.authTokens as MemoryAuthTokens
@@ -290,8 +360,97 @@ describe('auth-token Provider validation', () => {
     expect(warn).toHaveBeenCalled()
     ctx.on('auth-token/changed', () => { throw Object.assign(new Error('invariant'), { code: 'INVARIANT' }) })
     ctx.on('auth-token/changed', observed)
-    await expect(service.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })).rejects.toThrow('invariant')
+    await expect(service.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })).resolves.toHaveProperty('refreshToken.value')
     expect(observed).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ message: 'invariant' }))
+  })
+
+  it.each([
+    {
+      target: { kind: 'token-family' as const, tokenFamilyId: tokenFamilyId('family-1') },
+      commit: { families: [revokedCommit(family({ tokenFamilyId: tokenFamilyId('family-2') }), 10)] },
+    },
+    {
+      target: { kind: 'principal' as const, principal },
+      commit: {
+        families: [revokedCommit(family({ principal: { kind: 'user', id: userId('user-2') } }), 10)],
+      },
+    },
+    {
+      target: { kind: 'credential' as const, credentialId: credentialId('refresh-1') },
+      commit: { families: [revokedCommit(family(), 10)] },
+    },
+    {
+      target: { kind: 'credential' as const, credentialId: credentialId('refresh-1') },
+      commit: { families: [], matchedCredential: credential() },
+    },
+    {
+      target: { kind: 'credential' as const, credentialId: credentialId('refresh-2') },
+      commit: { families: [revokedCommit(family(), 10)], matchedCredential: credential() },
+    },
+    {
+      target: { kind: 'credential' as const, credentialId: credentialId('refresh-1') },
+      commit: {
+        families: [revokedCommit(family(), 10)],
+        matchedCredential: credential({ tokenFamilyId: tokenFamilyId('family-2') }),
+      },
+    },
+  ])('binds revocation commit to request target before emitting %#', async ({ target: requestTarget, commit }) => {
+    const ctx = new Context()
+    await ctx.plugin(BrokenAuthTokens)
+    const service = ctx.authTokens as BrokenAuthTokens
+    const observed = vi.fn()
+    ctx.on('auth-token/changed', observed)
+    service.fixedTime = 10
+    service.revocationResult = commit
+    await expect(service.revoke({ requestId, signal, target: requestTarget }))
+      .rejects.toMatchObject({ code: 'provider-unavailable' })
+    expect(observed).not.toHaveBeenCalled()
+  })
+
+  it('accepts an empty credential-target revocation result without an orphan proof', async () => {
+    const service = await broken()
+    service.fixedTime = 10
+    service.revocationResult = { families: [] }
+    await expect(service.revoke({
+      requestId,
+      signal,
+      target: { kind: 'credential', credentialId: credentialId('refresh-missing') },
+    })).resolves.toBeUndefined()
+  })
+
+  it.each([
+    'expireRotationFamily',
+    'expireRotationCredential',
+  ] as const)('rejects expired rotation commit field %s', async (flag) => {
+    const service = await memory(CorruptMemoryAuthTokens)
+    const issued = await service.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
+    service.setTime(1_100)
+    service[flag] = true
+    await expect(service.rotate({
+      requestId,
+      signal,
+      refreshToken: issued.refreshToken.value,
+      expiresAt: 1_900,
+    })).rejects.toMatchObject({ code: 'provider-unavailable' })
+  })
+
+  it.each([
+    'expireReuseFamily',
+    'expireReuseCredential',
+  ] as const)('rejects expired reuse commit field %s', async (flag) => {
+    const service = await memory(CorruptMemoryAuthTokens)
+    const issued = await service.issueFamily({ requestId, signal, principal, expiresAt: 2_000 })
+    service.setTime(1_100)
+    await service.rotate({ requestId, signal, refreshToken: issued.refreshToken.value, expiresAt: 1_900 })
+    service.setTime(1_200)
+    service[flag] = true
+    await expect(service.rotate({
+      requestId,
+      signal,
+      refreshToken: issued.refreshToken.value,
+      expiresAt: 1_800,
+    })).rejects.toMatchObject({ code: 'provider-unavailable' })
   })
 
   it('rejects inconsistent rotation, reuse, and revocation commits', async () => {

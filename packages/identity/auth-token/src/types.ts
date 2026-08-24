@@ -189,6 +189,8 @@ export interface TokenFamilyMutationCommit {
 /** Provider result for credential, family, or principal revocation. */
 export interface TokenRevocationCommit {
   readonly families: readonly TokenFamilyMutationCommit[]
+  /** Credential selected by a credential target, proving its family relation. */
+  readonly matchedCredential?: RefreshCredentialRecord
 }
 
 /** Sanitized committed token-family event. */

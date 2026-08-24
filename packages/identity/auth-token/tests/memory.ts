@@ -104,8 +104,9 @@ export class MemoryAuthTokens extends AuthTokenService {
   }
 
   protected revokeRecords(input: TokenRevocationInput): Promise<TokenRevocationCommit> {
-    return this.inspectRecords(input.target).then(({ families }) => ({
-      families: families.map((family) => {
+    const targetCredentialId = input.target.kind === 'credential' ? input.target.credentialId : undefined
+    return this.inspectRecords(input.target).then(({ families, credentials }) => {
+      const commits = families.map((family) => {
         if (family.status === 'revoked') return { previous: family, current: family }
         const current: TokenFamilyRecord = {
           ...family,
@@ -118,8 +119,15 @@ export class MemoryAuthTokens extends AuthTokenService {
         this.families.set(current.tokenFamilyId, current)
         this.revokeActiveCredentials(current.tokenFamilyId, input.time)
         return { previous: family, current }
-      }),
-    }))
+      })
+      const matched = targetCredentialId === undefined
+        ? undefined
+        : credentials.find(value => value.credentialId === targetCredentialId)
+      return {
+        families: commits,
+        ...(matched === undefined ? {} : { matchedCredential: matched }),
+      }
+    })
   }
 
   protected override now(): number {

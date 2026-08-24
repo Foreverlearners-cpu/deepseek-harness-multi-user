@@ -44,6 +44,8 @@ export type * from './types.ts'
 export const REFRESH_TOKEN_ENTROPY_BYTES = 32
 /** Prefix that distinguishes refresh tokens from unrelated bearer strings. */
 export const REFRESH_TOKEN_PREFIX = 'dsh_rt_'
+/** Maximum UTF-8 bytes accepted for one submitted refresh token. */
+export const MAX_REFRESH_TOKEN_BYTES = 4_096
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/
 
 /** Public token lifecycle failure with a stable transport-safe category. */
@@ -319,7 +321,9 @@ export abstract class AuthTokenService extends Service {
    */
   async rotate(request: RefreshTokenRotateRequest): Promise<TokenFamilyIssueResult> {
     this.operation(request)
-    if (typeof request.refreshToken !== 'string' || !request.refreshToken.startsWith(REFRESH_TOKEN_PREFIX)) {
+    if (typeof request.refreshToken !== 'string'
+      || !request.refreshToken.startsWith(REFRESH_TOKEN_PREFIX)
+      || Buffer.byteLength(request.refreshToken, 'utf8') > MAX_REFRESH_TOKEN_BYTES) {
       throw new AuthTokenError('refresh-token-invalid', 'auth-token: refresh token is invalid')
     }
     const now = this.now()
@@ -367,6 +371,7 @@ export abstract class AuthTokenService extends Service {
       || credentials.some(value => !familyIds.has(value.tokenFamilyId))) {
       throw unavailable('Provider returned an inconsistent inspection')
     }
+    this.assertTarget(request.target, families, credentials)
     return Object.freeze({
       families: Object.freeze(families.map(familyInfo)),
       credentials: Object.freeze(credentials.map(credentialInfo)),
@@ -382,14 +387,22 @@ export abstract class AuthTokenService extends Service {
     this.operation(request)
     const input: TokenRevocationInput = Object.freeze({ target: request.target, time: this.now(), reason: 'requested' })
     const commit = await this.provider(() => this.revokeRecords(input))
+    const matchedCredential = commit.matchedCredential === undefined
+      ? undefined
+      : credentialSnapshot(commit.matchedCredential)
     const seen = new Set<string>()
+    const families: TokenFamilyRecord[] = []
+    const changes: { previous: TokenFamilyRecord; current: TokenFamilyRecord }[] = []
     for (const candidate of commit.families) {
       const { previous, current } = this.revocationCommit(candidate, input)
       if (seen.has(current.tokenFamilyId)) throw unavailable('Provider returned duplicate revocation commits')
       seen.add(current.tokenFamilyId)
-      if (previous.status === 'active') {
-        this.emitChange(this.event('revoked', request.requestId, current))
-      }
+      families.push(current)
+      changes.push({ previous, current })
+    }
+    this.assertRevocationTarget(request.target, families, matchedCredential)
+    for (const { previous, current } of changes) {
+      if (previous.status === 'active') this.emitChange(this.event('revoked', request.requestId, current))
     }
   }
 
@@ -485,7 +498,8 @@ export abstract class AuthTokenService extends Service {
       issuedAt: input.time,
       expiresAt: input.expiresAt,
     }
-    if (previousFamily.status !== 'active' || previousFamily.expiresAt < input.expiresAt
+    if (previousFamily.status !== 'active' || previousFamily.expiresAt <= input.time
+      || previousFamily.expiresAt < input.expiresAt || consumedCredential.expiresAt <= input.time
       || consumedCredential.status !== 'rotated' || consumedCredential.digest !== input.digest
       || consumedCredential.tokenFamilyId !== previousFamily.tokenFamilyId
       || consumedCredential.rotatedAt !== input.time || consumedCredential.replacedBy !== input.replacementCredentialId
@@ -509,7 +523,8 @@ export abstract class AuthTokenService extends Service {
       revokedAt: input.time,
       revocationReason: 'refresh-token-reuse' as const,
     }
-    if (previous.status !== 'active' || credential.status !== 'rotated' || credential.digest !== input.digest
+    if (previous.status !== 'active' || previous.expiresAt <= input.time
+      || credential.status !== 'rotated' || credential.expiresAt <= input.time || credential.digest !== input.digest
       || credential.tokenFamilyId !== previous.tokenFamilyId || !isDeepStrictEqual(current, expected)) {
       throw unavailable('Provider returned an inconsistent reuse commit')
     }
@@ -533,6 +548,59 @@ export abstract class AuthTokenService extends Service {
       : previous
     if (!isDeepStrictEqual(current, expected)) throw unavailable('Provider returned an inconsistent revocation commit')
     return { previous, current }
+  }
+
+  private assertTarget(
+    target: AuthTokenInspectRequest['target'],
+    families: readonly TokenFamilyRecord[],
+    credentials: readonly RefreshCredentialRecord[],
+  ): void {
+    if (target.kind === 'token-family') {
+      if (families.length > 1 || families.some(value => value.tokenFamilyId !== target.tokenFamilyId)) {
+        throw unavailable('Provider inspection did not match its family target')
+      }
+      return
+    }
+    if (target.kind === 'principal') {
+      if (families.some(value => !isDeepStrictEqual(value.principal, target.principal))) {
+        throw unavailable('Provider inspection did not match its principal target')
+      }
+      return
+    }
+    if (families.length > 1
+      || credentials.filter(value => value.credentialId === target.credentialId).length !== families.length) {
+      throw unavailable('Provider inspection did not prove its credential target')
+    }
+  }
+
+  private assertRevocationTarget(
+    target: AuthTokenRevokeRequest['target'],
+    families: readonly TokenFamilyRecord[],
+    matchedCredential: RefreshCredentialRecord | undefined,
+  ): void {
+    if (target.kind === 'token-family') {
+      if (matchedCredential !== undefined || families.length > 1
+        || families.some(value => value.tokenFamilyId !== target.tokenFamilyId)) {
+        throw unavailable('Provider revocation did not match its family target')
+      }
+      return
+    }
+    if (target.kind === 'principal') {
+      if (matchedCredential !== undefined
+        || families.some(value => !isDeepStrictEqual(value.principal, target.principal))) {
+        throw unavailable('Provider revocation did not match its principal target')
+      }
+      return
+    }
+    if (families.length === 0) {
+      if (matchedCredential !== undefined) throw unavailable('Provider revocation returned an orphan credential proof')
+      return
+    }
+    const returnedFamily = families[0]
+    if (families.length !== 1 || matchedCredential?.credentialId !== target.credentialId
+      || matchedCredential.tokenFamilyId !== returnedFamily?.tokenFamilyId) {
+      throw unavailable('Provider revocation did not prove its credential target')
+    }
   }
 
   private event(
@@ -559,17 +627,14 @@ export abstract class AuthTokenService extends Service {
       this.ctx.logger.warn('auth-token: an auth-token/changed listener failed')
       this.ctx.logger.warn(error)
     }
-    let invariantFailure: unknown
     for (const listener of this.ctx.events.dispatch('emit', ['auth-token/changed', event])) {
       try {
         const returned: unknown = listener(event)
         if (isPromiseLike(returned)) void Promise.resolve(returned).catch(report)
       } catch (error) {
-        if ((error as { code?: unknown } | null)?.code === 'INVARIANT') invariantFailure ??= error
-        else report(error)
+        report(error)
       }
     }
-    if (invariantFailure !== undefined) throw invariantFailure as Error
   }
 }
 

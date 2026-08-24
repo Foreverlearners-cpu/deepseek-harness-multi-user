@@ -65,7 +65,7 @@ async inspect(request: AuthTokenInspectRequest): Promise<AuthTokenInspection>
 async revoke(request: AuthTokenRevokeRequest): Promise<void>
 ```
 
-Source: [`packages/identity/auth-token/src/index.ts:265`](../../packages/identity/auth-token/src/index.ts)
+Source: [`packages/identity/auth-token/src/index.ts:267`](../../packages/identity/auth-token/src/index.ts)
 
 <a id="auth-token-events"></a>
 
@@ -86,5 +86,5 @@ Committed token-family change without refresh secrets or digests.
 'auth-token/changed'(event: AuthTokenChangeEvent): void
 ```
 
-Source: [`packages/identity/auth-token/src/types.ts:214`](../../packages/identity/auth-token/src/types.ts)
+Source: [`packages/identity/auth-token/src/types.ts:216`](../../packages/identity/auth-token/src/types.ts)
 <!-- END GENERATED cordis-surface -->
