@@ -2022,6 +2022,73 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'userCredentials',
+    summary: 'Abstract credential service.',
+    description: 'Abstract credential service. Providers own normalization, uniqueness, verifier storage, dummy verification, and atomic revision checks.',
+    methods: [
+      {
+        signature: 'async normalize(input: LoginIdentifierInput): Promise<LoginIdentifier>',
+        description: 'Normalize one raw login identifier.',
+        parameters: [{ name: 'input', description: 'extensible kind and raw value.' }],
+        returns: 'immutable canonical identifier.',
+      },
+      {
+        signature: 'async get(userId: UserId): Promise<UserCredentialRecord | undefined>',
+        description: 'Read detached non-secret metadata for one user.',
+        parameters: [{ name: 'userId', description: 'stable target user id.' }],
+        returns: 'immutable metadata, or undefined when no aggregate exists.',
+      },
+      {
+        signature: 'async resolve(input: LoginIdentifierInput): Promise<UserId | undefined>',
+        description: 'Resolve a raw login identifier to its user, or undefined.',
+        parameters: [{ name: 'input', description: 'extensible kind and raw value.' }],
+        returns: 'stable user id, or undefined when no identifier matches.',
+      },
+      {
+        signature: 'list(userId: UserId): Promise<UserCredentialRecord | undefined>',
+        description: 'List login identifiers and password-state metadata for one user.',
+        parameters: [{ name: 'userId', description: 'stable target user id.' }],
+        returns: 'immutable metadata, or undefined when no aggregate exists.',
+      },
+      {
+        signature: 'async addIdentifier(request: AddLoginIdentifierRequest): Promise<UserCredentialRecord>',
+        description: 'Add one globally unique normalized login identifier.',
+        parameters: [{ name: 'request', description: 'target, revision, raw identifier, and audit context.' }],
+        returns: 'immutable committed metadata.',
+      },
+      {
+        signature: 'async removeIdentifier(request: RemoveLoginIdentifierRequest): Promise<UserCredentialRecord>',
+        description: 'Remove one normalized login identifier.',
+        parameters: [{ name: 'request', description: 'target, revision, raw identifier, and audit context.' }],
+        returns: 'immutable committed metadata.',
+      },
+      {
+        signature: 'async setPassword(request: SetPasswordRequest): Promise<UserCredentialRecord>',
+        description: 'Establish or administratively replace a password.',
+        parameters: [{ name: 'request', description: 'target, revision, new password, and audit context.' }],
+        returns: 'immutable committed metadata without password material.',
+      },
+      {
+        signature: 'async changePassword(request: ChangePasswordRequest): Promise<UserCredentialRecord>',
+        description: 'Atomically verify the current password and replace it.',
+        parameters: [{ name: 'request', description: 'target, revision, current and new passwords, and audit context.' }],
+        returns: 'immutable committed metadata without password material.',
+      },
+      {
+        signature: 'async disablePassword(request: DisablePasswordRequest): Promise<UserCredentialRecord>',
+        description: 'Disable password login without exposing or returning verifier material.',
+        parameters: [{ name: 'request', description: 'target, revision, and audit context.' }],
+        returns: 'immutable committed metadata with password login disabled.',
+      },
+      {
+        signature: 'async verifyPassword(request: VerifyPasswordRequest): Promise<boolean>',
+        description: 'Verify a password with an enumeration-resistant boolean result.',
+        parameters: [{ name: 'request', description: 'resolved target when present and candidate password.' }],
+        returns: 'true only for a matching enabled password; otherwise false.',
+      },
+    ],
+  },
+  {
     key: 'userQuestions',
     summary: '`ctx.userQuestions`: one active UI provider plus an `ask()` API.',
     description: '`ctx.userQuestions`: one active UI provider plus an `ask()` API.',
@@ -2647,6 +2714,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'exec', description: 'the execution object that traversed the pipeline.' }, { name: 'result', description: 'a deep-frozen snapshot of the final returned result.' }],
   },
   {
+    name: 'user-credential/changed',
+    mode: 'emit',
+    signature: '\'user-credential/changed\'(event: UserCredentialChangeEvent): void',
+    summary: 'Committed credential metadata change without identifiers or password material.',
+    description: 'Committed credential metadata change without identifiers or password material.',
+    parameters: [{ name: 'event', description: 'sanitized fact safe for trusted audit listeners.' }],
+  },
+  {
     name: 'user/changed',
     mode: 'emit',
     signature: '\'user/changed\'(event: UserChangeEvent): void',
@@ -2709,6 +2784,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AdapterRegistrationHandle',
     declaration: 'export interface AdapterRegistrationHandle {\n    (): void;\n    replace(providers: string[]): void;\n}',
+  },
+  {
+    name: 'AddLoginIdentifierRequest',
+    declaration: 'export interface AddLoginIdentifierRequest extends LoginIdentifierInput {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly context?: UserOperationContext;\n}',
   },
   {
     name: 'Agent',
@@ -2869,6 +2948,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CancelOptions',
     declaration: 'export interface CancelOptions {\n    keepInbox?: boolean | undefined;\n}',
+  },
+  {
+    name: 'ChangePasswordRequest',
+    declaration: 'export interface ChangePasswordRequest {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly currentPassword: string;\n    readonly newPassword: string;\n    readonly context?: UserOperationContext;\n}',
   },
   {
     name: 'ClientResponse',
@@ -3085,6 +3168,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'DirectoryRegistrationHandle',
     declaration: 'export interface DirectoryRegistrationHandle {\n    (): void;\n    replace(entries: readonly LlmConfigurableProvider[]): void;\n}',
+  },
+  {
+    name: 'DisablePasswordRequest',
+    declaration: 'export interface DisablePasswordRequest {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly context?: UserOperationContext;\n}',
   },
   {
     name: 'Domain',
@@ -3459,6 +3546,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type LocalPrincipalId = Branded<\'LocalPrincipalId\'>;',
   },
   {
+    name: 'LoginIdentifier',
+    declaration: 'export interface LoginIdentifier {\n    readonly kind: LoginIdentifierKind;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'LoginIdentifierInput',
+    declaration: 'export interface LoginIdentifierInput {\n    readonly kind: LoginIdentifierKind;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'LoginIdentifierKind',
+    declaration: 'export type LoginIdentifierKind = string;',
+  },
+  {
+    name: 'LoginIdentifierMetadata',
+    declaration: 'export interface LoginIdentifierMetadata extends LoginIdentifier {\n    readonly createdAt: number;\n}',
+  },
+  {
     name: 'LspHover',
     declaration: 'export interface LspHover {\n    readonly contents: string;\n    readonly range?: LspRange;\n}',
   },
@@ -3717,6 +3820,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RedactedSecret',
     declaration: 'export interface RedactedSecret {\n    path: string[];\n    set: boolean;\n}',
+  },
+  {
+    name: 'RemoveLoginIdentifierRequest',
+    declaration: 'export interface RemoveLoginIdentifierRequest extends AddLoginIdentifierRequest {\n}',
   },
   {
     name: 'ReplayEnvelope',
@@ -4101,6 +4208,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionTitleUserMessage',
     declaration: 'export interface SessionTitleUserMessage {\n    readonly seq: number;\n    readonly text: string;\n}',
+  },
+  {
+    name: 'SetPasswordRequest',
+    declaration: 'export interface SetPasswordRequest {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly password: string;\n    readonly context?: UserOperationContext;\n}',
   },
   {
     name: 'SettingsApplies',
@@ -4691,6 +4802,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface UserCreateInput {\n    readonly displayName?: string;\n    readonly extensions?: UserExtensions;\n    readonly context?: UserOperationContext;\n}',
   },
   {
+    name: 'UserCredentialChangeEvent',
+    declaration: 'export interface UserCredentialChangeEvent {\n    readonly kind: \'identifier-added\' | \'identifier-removed\' | \'password-set\' | \'password-changed\' | \'password-disabled\';\n    readonly userId: UserId;\n    readonly revision: number;\n    readonly time: number;\n    readonly actorUserId?: UserId;\n    readonly correlationId?: string;\n    readonly reason?: string;\n}',
+  },
+  {
+    name: 'UserCredentialRecord',
+    declaration: 'export interface UserCredentialRecord {\n    readonly userId: UserId;\n    readonly revision: number;\n    readonly identifiers: readonly LoginIdentifierMetadata[];\n    readonly passwordEnabled: boolean;\n    readonly updatedAt: number;\n    readonly passwordChangedAt?: number;\n}',
+  },
+  {
     name: 'UserExtensions',
     declaration: 'export type UserExtensions = Readonly<Record<string, UserExtensionValue>>;',
   },
@@ -4741,6 +4860,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'UserUpdateRequest',
     declaration: 'export interface UserUpdateRequest {\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly patch: UserProfilePatch;\n    readonly context?: UserOperationContext;\n}',
+  },
+  {
+    name: 'VerifyPasswordRequest',
+    declaration: 'export interface VerifyPasswordRequest {\n    readonly userId?: UserId;\n    readonly password: string;\n}',
   },
   {
     name: 'WebBootEntry',

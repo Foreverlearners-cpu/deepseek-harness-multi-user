@@ -63,6 +63,8 @@ flowchart LR
   svc_authTokens["ctx.authTokens<br/>Opaque refresh-token family seam"]
   pkg_user["user"]
   svc_users["ctx.users<br/>Human user directory seam"]
+  pkg_user_credential["user-credential"]
+  svc_userCredentials["ctx.userCredentials<br/>User login credential seam"]
   pkg_session_telemetry["session-telemetry"]
   svc_sessionTelemetry["ctx.sessionTelemetry<br/>Session telemetry seam"]
   pkg_session_telemetry_otel["session-telemetry-otel"]
@@ -307,6 +309,7 @@ flowchart LR
   pkg_tools --> svc_tools
   pkg_typert_registry --> svc_typert
   pkg_user --> svc_users
+  pkg_user_credential --> svc_userCredentials
   pkg_user_questions --> svc_userQuestions
   pkg_web --> svc_web
   pkg_web_fetch_http --> svc_web
@@ -450,6 +453,7 @@ flowchart LR
 | `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | - | - | - | 按证据类型选择唯一提供方，签发仅限进程内使用的已认证调用，并分派可选的凭证生命周期操作。 |
 | `ctx.authTokens` | `seam` | [`auth-token`](../packages/identity/auth-token) | - | - | - | 生成不透明 refresh secret，只向 Provider 提供 digest，并定义原子轮换、复用触发的 family 撤销、安全检查与定向撤销。 |
 | `ctx.users` | `seam` | [`user`](../packages/identity/user) | - | - | - | 定义稳定的人类用户记录、生命周期转换、乐观 revision、有界分页和脱敏提交事件；持久化与 Credential Provider 保持独立。 |
+| `ctx.userCredentials` | `seam` | [`user-credential`](../packages/identity/user-credential) | - | - | - | 定义登录标识归一化与查询、密码验证、聚合乐观 revision 和脱敏提交事件；verifier 存储保持为 Provider 私有状态。 |
 | `ctx.sessionTelemetry` | `seam` | [`session-telemetry`](../packages/session/session-telemetry) | [`session-telemetry-otel`](../packages/session/session-telemetry-otel) | - | - | 该 seam 捕获会话记录、进行脱敏并交给一个后端；没有其他组件消费该服务，其输出会离开当前进程。 |
 | `ctx.storage` | `seam` | [`storage`](../packages/storage/storage) | [`storage-json`](../packages/storage/storage-json), [`storage-sqlite`](../packages/storage/storage-sqlite) | [`storage-domain`](../packages/storage/storage-domain) | - | 各后端以不同名称并列注册；数据形态（领域优先）挂载到枢纽上，并将类型化操作转换为不透明的 KV 单元原语。 |
 | `ctx.storageDomain` | `core` | [`storage-domain`](../packages/storage/storage-domain) | - | [`workspace`](../packages/workspace/workspace), [`message-feedback`](../packages/feedback/message-feedback) | - | 等待所有已配置后端就绪，然后将领域形态发布为一个受生命周期约束的服务，用于类型化持久状态。 |

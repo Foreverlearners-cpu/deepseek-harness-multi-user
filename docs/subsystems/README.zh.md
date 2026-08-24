@@ -22,6 +22,7 @@
 | [authentication.md](authentication.md) | Host 认证 seam：按证据类型选择 Provider、已验证身份事实、进程内 `AuthenticatedCall` 来源校验，以及可选的凭证生命周期分派 |
 | [auth-token.md](auth-token.md) | 不透明 refresh-token family、仅存 digest、原子轮换、复用触发撤销、检查与定向撤销 |
 | [user-directory.md](user-directory.md) | 稳定的人类用户记录、生命周期状态、乐观 revision、Provider 操作和脱敏变更事件 |
+| [user-credentials.md](user-credentials.md) | 登录标识归一化与查询、密码验证、聚合 revision 和脱敏 Credential 事件 |
 | [session-query.md](session-query.md) | 逻辑记录、有界精确事件读取、关系追踪、语义筛选器/文档与全文检索结果页 |
 | [feedback.md](feedback.md) | 绑定生命周期的逐消息反馈记录、乐观版本、伴随记录持久化与 Host Remote 契约 |
 | [session-title.md](session-title.md) | 持久标题快照、被引用的来源消息 seq 与异步提供方约定 |

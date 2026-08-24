@@ -61,6 +61,8 @@ flowchart LR
   svc_authTokens["ctx.authTokens<br/>Opaque refresh-token family seam"]
   pkg_user["user"]
   svc_users["ctx.users<br/>Human user directory seam"]
+  pkg_user_credential["user-credential"]
+  svc_userCredentials["ctx.userCredentials<br/>User login credential seam"]
   pkg_session_telemetry["session-telemetry"]
   svc_sessionTelemetry["ctx.sessionTelemetry<br/>Session telemetry seam"]
   pkg_session_telemetry_otel["session-telemetry-otel"]
@@ -305,6 +307,7 @@ flowchart LR
   pkg_tools --> svc_tools
   pkg_typert_registry --> svc_typert
   pkg_user --> svc_users
+  pkg_user_credential --> svc_userCredentials
   pkg_user_questions --> svc_userQuestions
   pkg_web --> svc_web
   pkg_web_fetch_http --> svc_web
@@ -448,6 +451,7 @@ flowchart LR
 | `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | - | - | - | Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations. |
 | `ctx.authTokens` | `seam` | [`auth-token`](../packages/identity/auth-token) | - | - | - | Generates opaque refresh secrets, gives Providers only digests, and defines atomic rotation, reuse-triggered family revocation, safe inspection, and targeted revocation. |
 | `ctx.users` | `seam` | [`user`](../packages/identity/user) | - | - | - | Defines stable human user records, lifecycle transitions, optimistic revisions, bounded pages, and sanitized commit events; persistence and credential providers remain separate. |
+| `ctx.userCredentials` | `seam` | [`user-credential`](../packages/identity/user-credential) | - | - | - | Defines login identifier normalization and lookup, password verification, aggregate optimistic revisions, and sanitized commit events; verifier storage remains Provider-private. |
 | `ctx.sessionTelemetry` | `seam` | [`session-telemetry`](../packages/session/session-telemetry) | [`session-telemetry-otel`](../packages/session/session-telemetry-otel) | - | - | The seam captures, redacts, and hands session records to one backend; nothing else consumes the service — its output leaves the process. |
 | `ctx.storage` | `seam` | [`storage`](../packages/storage/storage) | [`storage-json`](../packages/storage/storage-json), [`storage-sqlite`](../packages/storage/storage-sqlite) | [`storage-domain`](../packages/storage/storage-domain) | - | Backends register side by side under names; data forms (domain first) mount on the hub and translate typed operations into opaque KV-unit primitives. |
 | `ctx.storageDomain` | `core` | [`storage-domain`](../packages/storage/storage-domain) | - | [`workspace`](../packages/workspace/workspace), [`message-feedback`](../packages/feedback/message-feedback) | - | Waits for every configured backend, then publishes the domain form as one lifecycle-bound service for typed durable state. |
