@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-23-typed-kafka-event-runners.md
-2026-08-23-typed-kafka-event-runners.md: 7f8d64f1d7e939870f1e6368f6c02b4f25e8dbc9
-2026-08-23-typed-kafka-event-runners.zh.md: 43631f2a498e81c9ae61599435486a049c88db9e
+2026-08-23-typed-kafka-event-runners.md: 353645a22fe24edd614a8e605e8c15677b54ecaa
+2026-08-23-typed-kafka-event-runners.zh.md: 0bc51d91196f6be0811713772cef51dd9706421b

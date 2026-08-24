@@ -6190,6 +6190,31 @@ importers:
         specifier: workspace:^
         version: link:../../core/tools
 
+  packages/session/session-cache-invalidation-redis:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-cdc-protocol':
+        specifier: workspace:^
+        version: link:../../multi/cdc-protocol
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-kafka':
+        specifier: workspace:^
+        version: link:../../multi/kafka
+      '@deepseek-ai/dsh-kafka-events':
+        specifier: workspace:^
+        version: link:../../multi/kafka-events
+      '@deepseek-ai/dsh-redis':
+        specifier: workspace:^
+        version: link:../../multi/redis
+
   packages/session/session-checkpoint-policy:
     devDependencies:
       '@deepseek-ai/cordis':

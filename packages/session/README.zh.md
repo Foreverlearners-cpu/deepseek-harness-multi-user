@@ -27,6 +27,10 @@
 | [`session-projection-cache/`](session-projection-cache/README.md) | 持久化并恢复投影检查点 | `ctx.sessionProjectionCache` |
 | [`session-stats/`](session-stats/README.md) | 提供全日志会话计数与墙钟时间（`sessionStats` 单元） | 注册到 `ctx.sessionProjections` |
 
+## Cache 失效
+
+[`session-cache-invalidation-redis/`](session-cache-invalidation-redis/README.md) 消费已校验的 session message CDC event，并使用权威 revision watermark 保护 tenant 隔离的 Redis cache。
+
 ## 标题
 
 从会话日志派生持久会话标题，并支持可选的模型驱动提供方。

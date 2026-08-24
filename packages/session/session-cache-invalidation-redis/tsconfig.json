@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "lib/types", "tsBuildInfoFile": "lib/types.tsbuildinfo" },
+  "include": ["src"],
+  "references": [
+    { "path": "../../runtime-diagnostics/invariants" },
+    { "path": "../../multi/cdc-protocol" },
+    { "path": "../../multi/kafka" },
+    { "path": "../../multi/kafka-events" },
+    { "path": "../../multi/redis" }
+  ]
+}

@@ -27,6 +27,10 @@ Serves current, log-derived per-session state to client carriers.
 | [`session-projection-cache/`](session-projection-cache/README.md) | Persists and restores projection checkpoints | `ctx.sessionProjectionCache` |
 | [`session-stats/`](session-stats/README.md) | Serves whole-log conversation counts and wall times (`sessionStats` unit) | registers on `ctx.sessionProjections` |
 
+## Cache invalidation
+
+[`session-cache-invalidation-redis/`](session-cache-invalidation-redis/README.md) consumes validated session-message CDC events and protects tenant-isolated Redis caches with authoritative revision watermarks.
+
 ## Titles
 
 Derives durable session titles from the session log, with an optional model-backed provider.
