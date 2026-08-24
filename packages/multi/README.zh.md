@@ -11,6 +11,10 @@
 | [`@deepseek-ai/dsh-redis`](redis/README.md) | `ctx.redis` | Redis client 生命周期与回调范围内的共享客户端操作 |
 | [`@deepseek-ai/dsh-kafka`](kafka/README.md) | `ctx.kafka` | Kafka broker 生命周期、metadata health、生产与订阅 |
 | [`@deepseek-ai/dsh-kafka-events`](kafka-events/README.md) | `ctx.kafkaEvents` | Kafka 之上的协议无关强类型事件生产者和消费者 |
+| [`@deepseek-ai/dsh-cdc-protocol`](cdc-protocol/README.md) | - | 传输无关的 CDC 类型与严格协议 codec |
+| [`@deepseek-ai/dsh-cdc`](cdc/README.md) | `ctx.cdc` | MySQL 行变更采集与至少一次 Kafka 发布 |
+| [`@deepseek-ai/dsh-cdc-redis`](cdc-redis/README.md) | - | 将 Kafka CDC 事件投影到 Redis |
+| [`@deepseek-ai/dsh-cdc-elasticsearch`](cdc-elasticsearch/README.md) | - | 将 Kafka CDC 事件投影到 Elasticsearch |
 
 [Elasticsearch 基础设施参考](../../docs/infrastructure/dsh-elasticsearch.md)说明当前所有权，并链接拟议的 projection、隔离与一致性设计。
 

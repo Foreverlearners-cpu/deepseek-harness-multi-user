@@ -64,6 +64,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   codeRuntime: 'code-runtime.md',
   commands: 'commands.md',
   compaction: 'compaction.md',
+  cdc: 'multi-user-infrastructure.md',
   cordisInspect: 'extensions.md',
   credentials: 'credentials.md',
   directoryPicker: 'workspace.md',
@@ -493,7 +494,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   KafkaSubscribeRequest: 'kafka.md',
   KafkaSubscription: 'kafka.md',
   KafkaSubscriptionId: 'kafka.md',
-  KafkaSubscriptionMode: 'kafka.md',
+  KafkaSubscriptionFallbackMode: 'kafka.md',
   KafkaTopic: 'kafka.md',
   WebRoute: 'web-server.md',
   StorageBackend: 'storage.md',
@@ -620,6 +621,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
 /** Host services documented for maintainers but hidden from model-authored dynamic packages. */
 export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
   'auth',
+  'cdc',
   'cordisInspect',
   'dynamicCordisRunner',
   'elasticsearch',

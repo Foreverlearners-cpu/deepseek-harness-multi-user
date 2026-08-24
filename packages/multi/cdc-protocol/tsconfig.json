@@ -1,0 +1,8 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "lib/types", "tsBuildInfoFile": "lib/types.tsbuildinfo" },
+  "include": ["src"],
+  "references": [
+    { "path": "../../runtime-diagnostics/invariants" }
+  ]
+}

@@ -389,6 +389,160 @@ export type Config = LocalConfig
 
 来源：[`packages/shell/bash-sandbox/src/index.ts:35`](../packages/shell/bash-sandbox/src/index.ts)
 
+<a id="deepseek-aidsh-cdc"></a>
+
+## `@deepseek-ai/dsh-cdc`
+
+需要：`kafka`
+
+```ts config-catalog
+/** MySQL CDC producer configuration. */
+export interface Config {
+  /** MySQL hostname. */
+  host: string
+  /** MySQL port. */
+  port?: number
+  /** Replication username. */
+  user: string
+  /** Replication password. */
+  password: string
+  /** Unique replication server id. */
+  serverId: number
+  /** MySQL connection timeout. */
+  connectTimeoutMs?: number
+  /** Atomic local checkpoint path. */
+  checkpointFile: string
+  /** Routed source tables. */
+  routes: CdcTableRoute[]
+  /** Maximum serialized event size. */
+  maxEventBytes?: number
+  /** Maximum decoded MySQL RowsEvent size accepted for queued processing. */
+  maxBinlogEventBytes?: number
+  /** Approximate retained binlog bytes that trigger reader backpressure. */
+  maxQueueBytes?: number
+  /** First delay after a recoverable MySQL or Kafka failure. */
+  retryInitialDelayMs?: number
+  /** Maximum retry delay after repeated recoverable failures. */
+  retryMaxDelayMs?: number
+  /** Retries per failure burst; `unlimited` keeps retrying until disposal. */
+  maxRetries?: number | 'unlimited'
+}
+
+/** One source table and its Kafka routing and identity policy. */
+export interface CdcTableRoute {
+  /** Source schema name. */
+  database: string
+  /** Source table name. */
+  table: string
+  /** Kafka destination topic. */
+  topic: string
+  /** Ordered source primary-key columns. */
+  primaryKey: string[]
+  /** Columns removed before publication. */
+  excludeColumns?: string[]
+}
+```
+
+来源：[`packages/multi/cdc/src/index.ts:63`](../packages/multi/cdc/src/index.ts)
+
+<a id="deepseek-aidsh-cdc-elasticsearch"></a>
+
+## `@deepseek-ai/dsh-cdc-elasticsearch`
+
+需要：`kafka` · `elasticsearch`
+
+```ts config-catalog
+/** Elasticsearch CDC consumer configuration. */
+export interface Config {
+  /** Unique subscription identity within the Kafka service. */
+  subscriptionId: string
+  /** Kafka consumer group. */
+  consumerGroup: string
+  /** Allowed CDC topics. */
+  topics: string[]
+  /** Start mode when a partition has no committed offset. */
+  fallbackMode?: KafkaSubscriptionFallbackMode
+  /** First delay after a failed subscription in milliseconds. */
+  retryInitialDelayMs?: number
+  /** Maximum subscription retry delay in milliseconds. */
+  retryMaxDelayMs?: number
+  /** Maximum consecutive resubscriptions, or `unlimited`; zero disables retries. */
+  maxRetries?: number | 'unlimited'
+  /** Elasticsearch index retaining projection ordering metadata. */
+  stateIndex?: string
+  /** Source table routes. */
+  routes: ElasticsearchCdcRoute[]
+}
+
+/** Elasticsearch destination for one source table. */
+export interface ElasticsearchCdcRoute {
+  /** Source schema name. */
+  database: string
+  /** Source table name. */
+  table: string
+  /** Kafka topic carrying this table. */
+  topic: string
+  /** Elasticsearch destination index. */
+  index: string
+  /** UPDATE columns that trigger this projection; empty means every update. */
+  watchedColumns?: string[]
+}
+```
+
+依赖：[`KafkaSubscriptionFallbackMode`](../packages/multi/kafka/src/index.ts)
+
+来源：[`packages/multi/cdc-elasticsearch/src/index.ts:45`](../packages/multi/cdc-elasticsearch/src/index.ts)
+
+<a id="deepseek-aidsh-cdc-redis"></a>
+
+## `@deepseek-ai/dsh-cdc-redis`
+
+需要：`kafka` · `redis`
+
+```ts config-catalog
+/** Redis CDC consumer configuration. */
+export interface Config {
+  /** Unique subscription identity within the Kafka service. */
+  subscriptionId: string
+  /** Kafka consumer group. */
+  consumerGroup: string
+  /** Allowed CDC topics. */
+  topics: string[]
+  /** Start mode when a partition has no committed offset. */
+  fallbackMode?: KafkaSubscriptionFallbackMode
+  /** Redis command deadline in milliseconds. */
+  commandTimeoutMs?: number
+  /** First delay after a failed subscription in milliseconds. */
+  retryInitialDelayMs?: number
+  /** Maximum subscription retry delay in milliseconds. */
+  retryMaxDelayMs?: number
+  /** Maximum consecutive resubscriptions, or `unlimited`; zero disables retries. */
+  maxRetries?: number | 'unlimited'
+  /** Source table routes. */
+  routes: RedisCdcRoute[]
+}
+
+/** Redis destination for one source table. */
+export interface RedisCdcRoute {
+  /** Source schema name. */
+  database: string
+  /** Source table name. */
+  table: string
+  /** Kafka topic carrying this table. */
+  topic: string
+  /** Prefix for generated Redis keys. */
+  keyPrefix: string
+  /** Optional expiry in seconds; zero means no expiry and the maximum is one year. */
+  ttlSeconds?: number
+  /** UPDATE columns that trigger this projection; empty means every update. */
+  watchedColumns?: string[]
+}
+```
+
+依赖：[`KafkaSubscriptionFallbackMode`](../packages/multi/kafka/src/index.ts)
+
+来源：[`packages/multi/cdc-redis/src/index.ts:81`](../packages/multi/cdc-redis/src/index.ts)
+
 <a id="deepseek-aidsh-client-connection"></a>
 
 ## `@deepseek-ai/dsh-client-connection`
@@ -893,7 +1047,7 @@ export interface Config {
   tls: boolean
   /** Optional username/password SASL authentication. */
   sasl?: KafkaSaslConfig
-  /** Per-operation timeout, including startup and health metadata requests. */
+  /** Deadline for requests, shutdown drains, and client close attempts. */
   requestTimeoutMs?: number
   /** TCP/TLS connection timeout. */
   connectionTimeoutMs?: number

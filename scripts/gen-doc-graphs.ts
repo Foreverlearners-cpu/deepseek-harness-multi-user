@@ -152,8 +152,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'kafka',
     title: 'Host Kafka connectivity',
     mode: 'core',
-    consumers: [],
+    consumers: ['cdc', 'cdc-redis', 'cdc-elasticsearch'],
     note: 'Owns one named Admin client, startup metadata verification, bounded health metadata, classified failures, and scoped shutdown; producer and consumer operations are deferred.',
+  },
+  {
+    key: 'cdc',
+    pkg: 'cdc',
+    title: 'MySQL row-change capture',
+    mode: 'core',
+    note: 'Captures configured MySQL row changes and publishes versioned events to Kafka; downstream projections consume the Kafka stream independently.',
   },
   {
     key: 'typert',
@@ -244,6 +251,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'elasticsearch',
     title: 'Elasticsearch search client',
     mode: 'core',
+    consumers: ['cdc-elasticsearch'],
     note: 'Owns one official Host client, validates target, authentication, and TLS policy, verifies startup with one bounded ping, and drains admitted operations; domain plugins own indexes, documents, tenant scoping, and rebuild policy.',
   },
   {
@@ -251,6 +259,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'redis',
     title: 'Redis command client',
     mode: 'core',
+    consumers: ['cdc-redis'],
     note: 'Owns one Host non-blocking client, disables offline queuing, and drains admitted callbacks; domain plugins own namespaces, TTLs, atomic commands, tenant scoping, and outage policy.',
   },
   {

@@ -74,12 +74,15 @@ vi.mock('@platformatic/kafka', async (importOriginal) => {
     }
 
     fail(error: Error): void {
+      if (this.ended) return
+      this.ended = true
       this.emit('error', error)
       for (const waiter of this.waiters.splice(0)) waiter.reject(error)
+      this.emit('close')
     }
 
     initializeOffsets(): void {
-      if (this.initialized) return
+      if (this.initialized || this.ended) return
       this.initialized = true
       this.emit('offsets', [])
     }
@@ -93,8 +96,8 @@ vi.mock('@platformatic/kafka', async (importOriginal) => {
     end(): void {
       if (this.ended) return
       this.ended = true
-      this.emit('close')
       for (const waiter of this.waiters.splice(0)) waiter.resolve({ done: true, value: undefined })
+      this.emit('close')
     }
   }
 
@@ -115,21 +118,23 @@ vi.mock('@platformatic/kafka', async (importOriginal) => {
       readonly state: (typeof clients.consumers)[number]
       constructor(options: unknown) {
         const stream = new MockStream()
+        const close = vi.fn<TestConsumerClose>((_force, callback) => {
+          stream.end()
+          if (callback !== undefined) {
+            callback(null)
+            return
+          }
+          return Promise.resolve()
+        })
         this.state = {
           options,
           stream,
-          close: vi.fn((force?: boolean, callback?: (error: Error | null) => void) => {
-            stream.end()
-            if (force === true) callback?.(null)
-            else return Promise.resolve()
-          }),
-          consume: vi.fn((_options: unknown, callback: (error: Error | null, value?: TestStream) => void) => {
-            callback(null, stream)
-          }),
+          close,
+          consume: vi.fn((_options, callback) => { callback(null, stream) }),
         }
         clients.consumers.push(this.state)
       }
-      consume = (options: unknown, callback: (error: Error | null, value?: TestStream) => void) => {
+      consume = (options: unknown, callback: (error: Error | null, stream?: TestStream) => void) => {
         this.state.consume(options, callback)
       }
       close = (force?: boolean, callback?: (error: Error | null) => void) => {
@@ -274,6 +279,85 @@ describe('KafkaService transport', () => {
     await fiber.dispose()
   })
 
+  it('waits for initial offsets and applies the fallback only after committed offsets', async () => {
+    clients.autoInitializeOffsets = false
+    const ctx = new Context()
+    const fiber = await ctx.plugin(KafkaService, config)
+    const settled = vi.fn()
+    const subscribing = ctx.kafka.subscribe({
+      id: KafkaSubscriptionId('projection'),
+      groupId: KafkaConsumerGroupId('session-projection'),
+      topics: [KafkaTopic('session-events')],
+      fallbackMode: 'fail',
+      handle: async () => {},
+    })
+    void subscribing.then(settled, settled)
+
+    await vi.waitFor(() => { expect(clients.consumers).toHaveLength(1) })
+    const consumer = clients.consumers[0]!
+    await vi.waitFor(() => { expect(consumer.consume).toHaveBeenCalledTimes(1) })
+    await Promise.resolve()
+    expect(settled).not.toHaveBeenCalled()
+    expect(consumer.consume).toHaveBeenCalledWith({
+      topics: ['session-events'],
+      mode: 'committed',
+      fallbackMode: 'fail',
+      autocommit: false,
+      highWaterMark: 8,
+    }, expect.any(Function))
+
+    consumer.stream.initializeOffsets()
+    const subscription = await subscribing
+    expect(settled).toHaveBeenCalledTimes(1)
+    await subscription.close()
+    await fiber.dispose()
+  })
+
+  it('rejects subscription startup when the stream fails before offsets initialize', async () => {
+    clients.autoInitializeOffsets = false
+    const ctx = new Context()
+    const fiber = await ctx.plugin(KafkaService, config)
+    const subscribing = ctx.kafka.subscribe({
+      id: KafkaSubscriptionId('projection'),
+      groupId: KafkaConsumerGroupId('session-projection'),
+      topics: [KafkaTopic('session-events')],
+      fallbackMode: 'latest',
+      handle: async () => {},
+    })
+
+    await vi.waitFor(() => { expect(clients.consumers).toHaveLength(1) })
+    const consumer = clients.consumers[0]!
+    consumer.stream.fail(new Error('private offset failure'))
+
+    await expect(subscribing).rejects.toMatchObject({ code: 'unknown' })
+    expect(consumer.close).toHaveBeenCalledTimes(1)
+    await fiber.dispose()
+  })
+
+  it('bounds stalled offset readiness and releases the subscription identity', async () => {
+    clients.autoInitializeOffsets = false
+    const ctx = new Context()
+    const fiber = await ctx.plugin(KafkaService, { ...config, requestTimeoutMs: 25 })
+    const request = {
+      id: KafkaSubscriptionId('projection'),
+      groupId: KafkaConsumerGroupId('session-projection'),
+      topics: [KafkaTopic('session-events')],
+      fallbackMode: 'latest' as const,
+      handle: async () => {},
+    }
+
+    await expect(ctx.kafka.subscribe(request)).rejects.toMatchObject({ code: 'timeout' })
+    const stalled = clients.consumers[0]!
+    expect(stalled.stream.close).toHaveBeenCalledTimes(1)
+    expect(stalled.close).toHaveBeenCalledTimes(1)
+
+    clients.autoInitializeOffsets = true
+    const replacement = await ctx.kafka.subscribe(request)
+    expect(clients.consumers).toHaveLength(2)
+    await replacement.close()
+    await fiber.dispose()
+  })
+
   it('owns a subscription through the exact calling plugin effect', async () => {
     const ctx = new Context()
     const kafkaFiber = await ctx.plugin(KafkaService, config)
@@ -299,6 +383,33 @@ describe('KafkaService transport', () => {
     await kafkaFiber.dispose()
   })
 
+  it('waits for the message stream to stop before closing its consumer', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(KafkaService, config)
+    const subscription = await ctx.kafka.subscribe({
+      id: KafkaSubscriptionId('projection'),
+      groupId: KafkaConsumerGroupId('session-projection'),
+      topics: [KafkaTopic('session-events')],
+      fallbackMode: 'latest',
+      handle: async () => {},
+    })
+    const consumer = clients.consumers[0]!
+    const streamClosed = Promise.withResolvers<undefined>()
+    consumer.stream.close.mockImplementationOnce(async () => {
+      await streamClosed.promise
+      consumer.stream.end()
+    })
+
+    const closing = subscription.close()
+    await vi.waitFor(() => { expect(consumer.stream.close).toHaveBeenCalledTimes(1) })
+    expect(consumer.close).not.toHaveBeenCalled()
+
+    streamClosed.resolve(undefined)
+    await closing
+    expect(consumer.close).toHaveBeenCalledTimes(1)
+    await fiber.dispose()
+  })
+
   it('rejects done when the stream ends without caller-initiated close', async () => {
     const ctx = new Context()
     const fiber = await ctx.plugin(KafkaService, config)
@@ -315,6 +426,152 @@ describe('KafkaService transport', () => {
     await expect(subscription.done).rejects.toMatchObject({ code: 'unavailable' })
     expect(consumer.close).toHaveBeenCalledTimes(1)
     await expect(subscription.close()).rejects.toMatchObject({ code: 'unavailable' })
+    await fiber.dispose()
+  })
+
+  it('force-closes after a graceful consumer close failure and still reports it', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(KafkaService, config)
+    const subscription = await ctx.kafka.subscribe({
+      id: KafkaSubscriptionId('projection'),
+      groupId: KafkaConsumerGroupId('session-projection'),
+      topics: [KafkaTopic('session-events')],
+      fallbackMode: 'latest',
+      handle: async () => {},
+    })
+    const consumer = clients.consumers[0]!
+    consumer.close.mockImplementationOnce(() => Promise.reject(new Error('private close failure')))
+
+    const closing = subscription.close()
+    await expect(subscription.done).rejects.toMatchObject({ code: 'shutdown' })
+    await expect(closing).rejects.toMatchObject({ code: 'shutdown' })
+    expect(consumer.close).toHaveBeenCalledTimes(2)
+    expect(consumer.close).toHaveBeenLastCalledWith(true, expect.any(Function))
+    await fiber.dispose()
+  })
+
+  it('upgrades an in-flight graceful close to a forced close after it fails', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(KafkaService, config)
+    const subscription = await ctx.kafka.subscribe({
+      id: KafkaSubscriptionId('projection'),
+      groupId: KafkaConsumerGroupId('session-projection'),
+      topics: [KafkaTopic('session-events')],
+      fallbackMode: 'latest',
+      handle: async () => {},
+    })
+    const consumer = clients.consumers[0]!
+    const graceful = Promise.withResolvers<undefined>()
+    consumer.close.mockImplementationOnce(() => graceful.promise)
+
+    consumer.stream.end()
+    await vi.waitFor(() => { expect(consumer.close).toHaveBeenCalledTimes(1) })
+    const closing = subscription.close()
+    graceful.reject(new Error('private delayed close failure'))
+
+    await expect(subscription.done).rejects.toMatchObject({ code: 'unavailable' })
+    await expect(closing).rejects.toMatchObject({ code: 'unavailable' })
+    expect(consumer.close).toHaveBeenCalledTimes(2)
+    expect(consumer.close).toHaveBeenLastCalledWith(true, expect.any(Function))
+    await fiber.dispose()
+  })
+
+  it('times out a stalled graceful close and force-closes the consumer', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(KafkaService, { ...config, requestTimeoutMs: 25 })
+    const subscription = await ctx.kafka.subscribe({
+      id: KafkaSubscriptionId('projection'),
+      groupId: KafkaConsumerGroupId('session-projection'),
+      topics: [KafkaTopic('session-events')],
+      fallbackMode: 'latest',
+      handle: async () => {},
+    })
+    const consumer = clients.consumers[0]!
+    consumer.close.mockImplementationOnce(() => new Promise<void>(() => {}))
+
+    const closing = subscription.close()
+
+    await expect(subscription.done).rejects.toMatchObject({ code: 'shutdown' })
+    await expect(closing).rejects.toMatchObject({ code: 'shutdown' })
+    expect(consumer.close).toHaveBeenCalledTimes(2)
+    expect(consumer.close).toHaveBeenLastCalledWith(true, expect.any(Function))
+    await fiber.dispose()
+  })
+
+  it('times out a stalled stream close before forcing the consumer closed', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(KafkaService, { ...config, requestTimeoutMs: 25 })
+    const subscription = await ctx.kafka.subscribe({
+      id: KafkaSubscriptionId('projection'),
+      groupId: KafkaConsumerGroupId('session-projection'),
+      topics: [KafkaTopic('session-events')],
+      fallbackMode: 'latest',
+      handle: async () => {},
+    })
+    const consumer = clients.consumers[0]!
+    consumer.stream.close.mockImplementationOnce(() => new Promise<void>(() => {}))
+
+    await expect(subscription.close()).rejects.toMatchObject({ code: 'shutdown' })
+    await expect(subscription.done).resolves.toBeUndefined()
+    expect(consumer.close).toHaveBeenCalledTimes(1)
+    expect(consumer.close).toHaveBeenCalledWith(true, expect.any(Function))
+    await fiber.dispose()
+  })
+
+  it('bounds an active handler during close and force-closes the consumer', async () => {
+    const started = Promise.withResolvers<undefined>()
+    const handled = Promise.withResolvers<undefined>()
+    const ctx = new Context()
+    const fiber = await ctx.plugin(KafkaService, { ...config, requestTimeoutMs: 25 })
+    const subscription = await ctx.kafka.subscribe({
+      id: KafkaSubscriptionId('projection'),
+      groupId: KafkaConsumerGroupId('session-projection'),
+      topics: [KafkaTopic('session-events')],
+      fallbackMode: 'latest',
+      handle: async () => {
+        started.resolve(undefined)
+        await handled.promise
+      },
+    })
+    const consumer = clients.consumers[0]!
+    consumer.stream.push({
+      topic: 'session-events',
+      partition: 0,
+      offset: 1n,
+      timestamp: 100n,
+      key: null,
+      value: Buffer.from('payload'),
+      headers: new Map(),
+      commit: vi.fn(async () => {}),
+    })
+    await started.promise
+
+    const closing = subscription.close()
+    await expect(closing).rejects.toMatchObject({ code: 'shutdown' })
+    expect(consumer.close).toHaveBeenLastCalledWith(true, expect.any(Function))
+
+    handled.resolve(undefined)
+    await expect(subscription.done).resolves.toBeUndefined()
+    await expect(fiber.dispose()).resolves.toBeUndefined()
+  })
+
+  it('force-closes once and reports a stream close failure', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(KafkaService, config)
+    const subscription = await ctx.kafka.subscribe({
+      id: KafkaSubscriptionId('projection'),
+      groupId: KafkaConsumerGroupId('session-projection'),
+      topics: [KafkaTopic('session-events')],
+      fallbackMode: 'latest',
+      handle: async () => {},
+    })
+    const consumer = clients.consumers[0]!
+    consumer.stream.close.mockRejectedValueOnce(new Error('private stream close failure'))
+
+    await expect(subscription.close()).rejects.toMatchObject({ code: 'shutdown' })
+    await expect(subscription.done).resolves.toBeUndefined()
+    expect(consumer.close).toHaveBeenCalledTimes(1)
+    expect(consumer.close).toHaveBeenCalledWith(true, expect.any(Function))
     await fiber.dispose()
   })
 
@@ -382,5 +639,26 @@ describe('KafkaService transport', () => {
 
     sent.resolve({ offsets: [{ topic: 'session-events', partition: 0, offset: 2n }] })
     await expect(publishing).rejects.toMatchObject({ code: 'shutdown' })
+  })
+  it('bounds a stalled admin close during service disposal', async () => {
+    const closed = Promise.withResolvers<undefined>()
+    clients.admin.close.mockReturnValueOnce(closed.promise)
+    const ctx = new Context()
+    const fiber = await ctx.plugin(KafkaService, { ...config, requestTimeoutMs: 25 })
+
+    await expect(fiber.dispose()).resolves.toBeUndefined()
+    expect(clients.admin.close).toHaveBeenCalledTimes(1)
+    closed.resolve(undefined)
+  })
+
+  it('bounds a stalled producer close during service disposal', async () => {
+    const closed = Promise.withResolvers<undefined>()
+    clients.producer.close.mockReturnValueOnce(closed.promise)
+    const ctx = new Context()
+    const fiber = await ctx.plugin(KafkaService, { ...config, requestTimeoutMs: 25 })
+
+    await expect(fiber.dispose()).resolves.toBeUndefined()
+    expect(clients.producer.close).toHaveBeenCalledTimes(1)
+    closed.resolve(undefined)
   })
 })

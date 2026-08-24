@@ -82,6 +82,7 @@ export interface TypeApiEntry {
 /** Service keys omitted from every model-facing runtime inspection. */
 export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
   'auth',
+  'cdc',
   'cordisInspect',
   'dynamicCordisRunner',
   'elasticsearch',

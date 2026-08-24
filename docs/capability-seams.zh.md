@@ -37,6 +37,10 @@ flowchart LR
   pkg_scope["scope"]
   pkg_kafka["kafka"]
   svc_kafka["ctx.kafka<br/>Host Kafka connectivity"]
+  pkg_cdc["cdc"]
+  pkg_cdc_redis["cdc-redis"]
+  pkg_cdc_elasticsearch["cdc-elasticsearch"]
+  svc_cdc["ctx.cdc<br/>MySQL row-change capture"]
   pkg_typert_registry["typert-registry"]
   svc_typert["ctx.typert<br/>Runtime type registry"]
   pkg_typert_loader["typert-loader"]
@@ -218,6 +222,7 @@ flowchart LR
   pkg_auth --> svc_auth
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
+  pkg_cdc --> svc_cdc
   pkg_code_runtime --> svc_codeRuntime
   pkg_code_runtime_worker --> svc_codeRuntime
   pkg_commands --> svc_commands
@@ -333,6 +338,7 @@ flowchart LR
   svc_dynamicCordisRunner --> pkg_tool_cordis
   svc_e2b --> pkg_fs_e2b
   svc_e2b --> pkg_subprocess_e2b
+  svc_elasticsearch --> pkg_cdc_elasticsearch
   svc_fs --> pkg_tool_fs
   svc_invariants --> pkg_agent
   svc_invariants --> pkg_agent_loop
@@ -342,9 +348,13 @@ flowchart LR
   svc_jobs --> pkg_tool_jobs
   svc_jobs --> pkg_tool_subagent
   svc_jobs --> pkg_tool_terminal
+  svc_kafka --> pkg_cdc
+  svc_kafka --> pkg_cdc_elasticsearch
+  svc_kafka --> pkg_cdc_redis
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
+  svc_redis --> pkg_cdc_redis
   svc_sandbox --> pkg_bash_sandbox
   svc_sandbox --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_bash_sandbox
@@ -434,7 +444,8 @@ flowchart LR
 | `ctx.toolResultPruner` | `core` | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | 在摘要压缩前，通过可回放的单节点表层替换来改写过大的当前工具结果。 |
 | `ctx.sessions` | `core` | [`session`](../packages/core/session) | - | [`agent-loop`](../packages/core/agent-loop), [`agent`](../packages/core/agent), [`session-persistence`](../packages/session/session-persistence), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), `subagent-inprocess`, [`invariants`](../packages/runtime-diagnostics/invariants), [`message-feedback`](../packages/feedback/message-feedback) | - | 拥有仅追加的 Session 实例，并发出持久的会话事件流。 |
 | `ctx.invariants` | `core` | [`invariants`](../packages/runtime-diagnostics/invariants) | - | [`session`](../packages/core/session), [`agent`](../packages/core/agent), [`scope`](../packages/core/scope), [`agent-loop`](../packages/core/agent-loop) | - | 配套子路径注册所属包本地的检查；该服务负责选择、唯一性、子 fiber，以及标明所属包的失败。 |
-| `ctx.kafka` | `core` | [`kafka`](../packages/multi/kafka) | - | - | - | 拥有一个具名 Admin 客户端、启动元数据验证、有界健康元数据、分类错误和随 scope 关闭；producer 与 consumer 操作保持延后。 |
+| `ctx.kafka` | `core` | [`kafka`](../packages/multi/kafka) | - | [`cdc`](../packages/multi/cdc), [`cdc-redis`](../packages/multi/cdc-redis), [`cdc-elasticsearch`](../packages/multi/cdc-elasticsearch) | - | 拥有一个具名 Admin 客户端、启动元数据验证、有界健康元数据、分类错误和随 scope 关闭；producer 与 consumer 操作保持延后。 |
+| `ctx.cdc` | `core` | [`cdc`](../packages/multi/cdc) | - | - | - | 捕获配置的 MySQL 行变更并向 Kafka 发布带版本的事件；下游投影独立消费 Kafka 流。 |
 | `ctx.typert` | `core` | [`typert-registry`](../packages/typert/registry) | - | [`typert-loader`](../packages/typert/loader), [`api-gateway`](../packages/api/gateway) | - | 插件直接或通过 dsh-typert-loader 注册实时 zod 贡献；API 网关消费调用描述符和提供方，其他运行时消费方则在各自边界查询 schema 与反射元数据。 |
 | `ctx.typertGateway` | `core` | [`api-gateway`](../packages/api/gateway) | - | - | - | 将生成的 Remote 描述符与实时 Cordis 服务关联，解析已注册的身份，并通过共享的 Connection RPC 载体提供一元调用。 |
 | `ctx.sessionPersistence` | `seam` | [`session-persistence`](../packages/session/session-persistence) | [`session-persistence-jsonl`](../packages/session/session-persistence-jsonl), [`session-persistence-sqlite`](../packages/session/session-persistence-sqlite) | [`agent-loop`](../packages/core/agent-loop), [`tool-bash`](../packages/shell/tool-bash), [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`hooks-codex`](../packages/hooks/hooks-codex), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), [`message-feedback`](../packages/feedback/message-feedback) | - | 各后端持久化同一套 SessionEvent 词汇；应用在组合时选择后端。 |
@@ -445,8 +456,8 @@ flowchart LR
 | `ctx.sessionTelemetry` | `seam` | [`session-telemetry`](../packages/session/session-telemetry) | [`session-telemetry-otel`](../packages/session/session-telemetry-otel) | - | - | 该 seam 捕获会话记录、进行脱敏并交给一个后端；没有其他组件消费该服务，其输出会离开当前进程。 |
 | `ctx.storage` | `seam` | [`storage`](../packages/storage/storage) | [`storage-json`](../packages/storage/storage-json), [`storage-sqlite`](../packages/storage/storage-sqlite) | [`storage-domain`](../packages/storage/storage-domain) | - | 各后端以不同名称并列注册；数据形态（领域优先）挂载到枢纽上，并将类型化操作转换为不透明的 KV 单元原语。 |
 | `ctx.storageDomain` | `core` | [`storage-domain`](../packages/storage/storage-domain) | - | [`workspace`](../packages/workspace/workspace), [`message-feedback`](../packages/feedback/message-feedback) | - | 等待所有已配置后端就绪，然后将领域形态发布为一个受生命周期约束的服务，用于类型化持久状态。 |
-| `ctx.elasticsearch` | `core` | [`elasticsearch`](../packages/multi/elasticsearch) | - | - | - | 拥有一个官方 Host client，校验 target、authentication 与 TLS policy，通过一次有界 ping 验证启动，并等待已接纳 operation 完成；领域插件拥有 index、document、tenant scoping 与 rebuild policy。 |
-| `ctx.redis` | `core` | [`redis`](../packages/multi/redis) | - | - | - | 拥有一条 Host 非阻塞客户端，禁用离线排队，并等待已接纳回调；领域插件拥有 namespace、TTL、atomic command、tenant scoping 与故障策略。 |
+| `ctx.elasticsearch` | `core` | [`elasticsearch`](../packages/multi/elasticsearch) | - | [`cdc-elasticsearch`](../packages/multi/cdc-elasticsearch) | - | 拥有一个官方 Host client，校验 target、authentication 与 TLS policy，通过一次有界 ping 验证启动，并等待已接纳 operation 完成；领域插件拥有 index、document、tenant scoping 与 rebuild policy。 |
+| `ctx.redis` | `core` | [`redis`](../packages/multi/redis) | - | [`cdc-redis`](../packages/multi/cdc-redis) | - | 拥有一条 Host 非阻塞客户端，禁用离线排队，并等待已接纳回调；领域插件拥有 namespace、TTL、atomic command、tenant scoping 与故障策略。 |
 | `ctx.messageFeedback` | `core` | [`message-feedback`](../packages/feedback/message-feedback) | - | - | - | 拥有本地逐 assistant 消息反馈、生命周期与目标校验、逐条目 compare-and-set 及 Host 一元 Remote 契约，且不进入 Session 历史或遥测。 |
 | `ctx.workspaceRegistry` | `core` | [`workspace`](../packages/workspace/workspace) | - | `apiproxy` | - | 通过领域设施拥有带 WorkspaceId 品牌类型的记录；稳定的 sessionIds 账户驱动 Host RPC 与 GUI 投影。 |
 | `ctx.sessionQuery` | `seam` | [`session-query`](../packages/session-query/session-query) | [`session-query-sqlite`](../packages/session-query/session-query-sqlite) | [`session-reference`](../packages/context/session-reference), [`tool-session-query`](../packages/session-query/tool-session-query) | - | 该接口提供精确读取、过滤和追踪；具体后端还提供全文协调、排序、摘要片段和游标世代，而模型消费方负责工作区权限与不含游标的渲染。 |
