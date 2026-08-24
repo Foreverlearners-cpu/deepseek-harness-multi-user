@@ -4975,6 +4975,21 @@ importers:
         specifier: workspace:^
         version: link:../user
 
+  packages/identity/auth-password:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-user-credential':
+        specifier: workspace:^
+        version: link:../user-credential
+
   packages/identity/user:
     devDependencies:
       '@deepseek-ai/cordis':

@@ -162,6 +162,7 @@
     { "path": "./packages/session/session-telemetry" },
     { "path": "./packages/identity/anonymous-user-id" },
     { "path": "./packages/identity/auth" },
+    { "path": "./packages/identity/auth-password" },
     { "path": "./packages/identity/user" },
     { "path": "./packages/identity/user-credential" },
     { "path": "./packages/multi/elasticsearch" },
