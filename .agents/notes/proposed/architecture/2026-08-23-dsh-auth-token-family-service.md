@@ -16,7 +16,7 @@ Add `@deepseek-ai/dsh-auth-token` as a Host-only Service Definition at `ctx.auth
 
 The public operations are `issueFamily`, `rotate`, `inspect`, and `revoke`. JWT Providers separately own access-token signing and verification and may expose the operations through `dsh-auth`'s credential lifecycle capability. A later MySQL Provider owns schema, transactions, locks, indexes, migrations, and a transactional outbox.
 
-JWT composition has an explicit failure boundary. A JWT Provider resolves and validates its signing key and prepares every potentially failing signing dependency before a refresh-family issue or rotation commit. Signing after that commit must be a non-failing in-memory operation. A Provider that cannot guarantee this must synchronously revoke the newly committed family as compensation before surfacing the signing failure; this package does not perform JWT signing or that orchestration itself.
+JWT composition has an explicit failure boundary. `issueFamilyWithPreparation` and `rotateWithPreparation` let a JWT Provider sign artifacts through a Host-only callback after the persistence Provider constructs and locks the candidate records but before it mutates durable state. Callback failure leaves no issued family or leaves the current refresh Credential active. This package does not perform JWT signing itself.
 
 ## Secret handling
 
@@ -32,7 +32,7 @@ Refresh-token input is limited to 4 KiB of UTF-8 data before hashing or Provider
 
 ## Atomic rotation and reuse
 
-The Provider locks the digest, checks family and credential expiry and state, consumes an active credential, inserts one active replacement, and increments family revision in one transaction. The commit returns the consumed rotated credential and replacement so the base validates ids, digest, timestamps, family relation, and revision before returning the new secret.
+The Provider locks the digest, checks family and credential expiry and state, constructs the consumed and replacement records, and calls the Host preparation callback inside that transaction. Only callback success permits it to consume the active credential, insert the active replacement, increment family revision, and commit. The base validates the candidate before preparation and requires the returned commit to equal the prepared candidate.
 
 A matched rotated digest is reuse. The Provider revokes the active family and every active credential in the same transaction, records `refresh-token-reuse`, increments revision, and returns the reuse commit. The base emits `reuse-detected` and then throws `refresh-token-reused`. An already revoked family fails without another revision change.
 
@@ -64,7 +64,7 @@ Inspection targets a refresh Credential, family, or principal and removes digest
 - Family revision and absolute expiry are validated on Provider commits.
 - Inspection and revocation results are bound to their requested target.
 - Post-commit listener failures never make lifecycle operations fail.
-- JWT composition prepares signing before commit or compensates by synchronously revoking the committed family.
+- JWT composition prepares signing inside the Provider transaction; preparation failure commits no new state.
 - Inspection and events exclude secrets, digests, access tokens, claims, and diagnostics.
 - Revocation supports Credential, family, and principal targets and is idempotent.
 - The shared suite covers issue, rotation, reuse, expiry, inspection, redaction, and revocation.

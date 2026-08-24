@@ -19,19 +19,36 @@ export class MemoryAuthTokens extends AuthTokenService {
   private readonly credentials = new Map<CredentialId, RefreshCredentialRecord>()
   private sequence = 0
   private clock = 1_000
+  private transactionTail: Promise<void> = Promise.resolve()
 
   /** Move the deterministic Provider clock to one exact time. */
   setTime(value: number): void {
     this.clock = value
   }
 
-  protected createFamilyRecord(input: TokenFamilyCreateInput): Promise<TokenFamilyCreateInput> {
-    this.families.set(input.family.tokenFamilyId, input.family)
-    this.credentials.set(input.credential.credentialId, input.credential)
-    return Promise.resolve(input)
+  protected createFamilyRecord(
+    input: TokenFamilyCreateInput,
+    prepare: () => Promise<void>,
+  ): Promise<TokenFamilyCreateInput> {
+    return this.transaction(async () => {
+      await prepare()
+      this.families.set(input.family.tokenFamilyId, input.family)
+      this.credentials.set(input.credential.credentialId, input.credential)
+      return input
+    })
   }
 
-  protected rotateFamilyRecord(input: RefreshTokenRotationInput): Promise<RefreshTokenRotationCommit> {
+  protected rotateFamilyRecord(
+    input: RefreshTokenRotationInput,
+    prepare: (candidate: RefreshTokenRotationCommit) => Promise<void>,
+  ): Promise<RefreshTokenRotationCommit> {
+    return this.transaction(() => this.rotateTransaction(input, prepare))
+  }
+
+  private async rotateTransaction(
+    input: RefreshTokenRotationInput,
+    prepare: (candidate: RefreshTokenRotationCommit) => Promise<void>,
+  ): Promise<RefreshTokenRotationCommit> {
     const credential = [...this.credentials.values()].find(value => value.digest === input.digest)
     if (credential === undefined) throw new AuthTokenError('refresh-token-invalid', 'memory token was not found')
     const family = this.families.get(credential.tokenFamilyId)!
@@ -50,7 +67,7 @@ export class MemoryAuthTokens extends AuthTokenService {
       }
       this.families.set(current.tokenFamilyId, current)
       this.revokeActiveCredentials(current.tokenFamilyId, input.time)
-      return Promise.resolve({ kind: 'reused', previousFamily: family, currentFamily: current, reusedCredential: credential })
+      return { kind: 'reused', previousFamily: family, currentFamily: current, reusedCredential: credential }
     }
     if (credential.status !== 'active') throw new AuthTokenError('token-family-revoked', 'memory credential is revoked')
     const consumedCredential: RefreshCredentialRecord = {
@@ -68,16 +85,24 @@ export class MemoryAuthTokens extends AuthTokenService {
       expiresAt: family.expiresAt,
     }
     const currentFamily: TokenFamilyRecord = { ...family, updatedAt: input.time, revision: family.revision + 1 }
-    this.credentials.set(consumedCredential.credentialId, consumedCredential)
-    this.credentials.set(replacementCredential.credentialId, replacementCredential)
-    this.families.set(currentFamily.tokenFamilyId, currentFamily)
-    return Promise.resolve({
+    const commit: RefreshTokenRotationCommit = {
       kind: 'rotated',
       previousFamily: family,
       currentFamily,
       consumedCredential,
       replacementCredential,
-    })
+    }
+    await prepare(commit)
+    this.credentials.set(consumedCredential.credentialId, consumedCredential)
+    this.credentials.set(replacementCredential.credentialId, replacementCredential)
+    this.families.set(currentFamily.tokenFamilyId, currentFamily)
+    return commit
+  }
+
+  private transaction<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.transactionTail.then(operation, operation)
+    this.transactionTail = result.then(() => undefined, () => undefined)
+    return result
   }
 
   protected inspectRecords(target: AuthTokenInspectRequest['target']): Promise<Readonly<{
