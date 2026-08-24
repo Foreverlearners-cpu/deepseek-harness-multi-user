@@ -28,11 +28,12 @@
 | [`session-projection-reconciler/`](session-projection-reconciler/README.md) | 从应用权威数据源重建外部会话投影 | `ctx.sessionProjectionReconciler` |
 | [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | 将通过校验的 CDC 会话消息行投影为租户隔离的搜索文档 | `ctx.kafkaEvents`、`ctx.elasticsearch` |
 | [`session-stats/`](session-stats/README.md) | 提供全日志会话计数与墙钟时间（`sessionStats` 单元） | 注册到 `ctx.sessionProjections` |
-| [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | 将通过校验的 CDC 会话消息行投影为租户隔离的搜索文档 | `ctx.kafkaEvents`、`ctx.elasticsearch` |
 
 ## Cache 失效
 
 [`session-cache-invalidation-redis/`](session-cache-invalidation-redis/README.md) 消费已校验的 session message CDC event，并使用权威 revision watermark 保护 tenant 隔离的 Redis cache。
+
+[`session-cdc-starter/`](session-cdc-starter/README.md) 组合并监督 Redis 与 Elasticsearch CDC consumer，并通过 `ctx.sessionCdcStarter` 以及可选的 `ctx.sessionProjectionReconciler` 提供权威对账。
 
 ## 标题
 

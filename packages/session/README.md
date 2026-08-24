@@ -28,11 +28,12 @@ Serves current, log-derived per-session state to client carriers.
 | [`session-projection-reconciler/`](session-projection-reconciler/README.md) | Rebuilds external session projections from an authoritative application source | `ctx.sessionProjectionReconciler` |
 | [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | Projects validated CDC session-message rows into tenant-scoped search documents | `ctx.kafkaEvents`, `ctx.elasticsearch` |
 | [`session-stats/`](session-stats/README.md) | Serves whole-log conversation counts and wall times (`sessionStats` unit) | registers on `ctx.sessionProjections` |
-| [`session-search-projection-elasticsearch/`](session-search-projection-elasticsearch/README.md) | Projects validated CDC session-message rows into tenant-scoped search documents | `ctx.kafkaEvents`, `ctx.elasticsearch` |
 
 ## Cache invalidation
 
 [`session-cache-invalidation-redis/`](session-cache-invalidation-redis/README.md) consumes validated session-message CDC events and protects tenant-isolated Redis caches with authoritative revision watermarks.
+
+[`session-cdc-starter/`](session-cdc-starter/README.md) composes and supervises the Redis and Elasticsearch CDC consumers, with optional authoritative reconciliation through `ctx.sessionCdcStarter` and `ctx.sessionProjectionReconciler`.
 
 ## Titles
 

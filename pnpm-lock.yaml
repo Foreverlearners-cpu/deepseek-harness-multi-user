@@ -6351,6 +6351,40 @@ importers:
         specifier: workspace:^
         version: link:../../storage/storage-domain
 
+  packages/session/session-cdc-starter:
+    dependencies:
+      '@deepseek-ai/dsh-kafka-events':
+        specifier: workspace:^
+        version: link:../../multi/kafka-events
+      '@deepseek-ai/dsh-session-cache-invalidation-redis':
+        specifier: workspace:^
+        version: link:../session-cache-invalidation-redis
+      '@deepseek-ai/dsh-session-projection-reconciler':
+        specifier: workspace:^
+        version: link:../session-projection-reconciler
+      '@deepseek-ai/dsh-session-search-projection-elasticsearch':
+        specifier: workspace:^
+        version: link:../session-search-projection-elasticsearch
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-elasticsearch':
+        specifier: workspace:^
+        version: link:../../multi/elasticsearch
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-kafka':
+        specifier: workspace:^
+        version: link:../../multi/kafka
+      '@deepseek-ai/dsh-redis':
+        specifier: workspace:^
+        version: link:../../multi/redis
+
   packages/session/session-projection-reconciler:
     dependencies:
       '@deepseek-ai/schemastery':

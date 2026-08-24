@@ -1,0 +1,21 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/types.tsbuildinfo"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../../runtime-diagnostics/invariants" },
+    { "path": "../../multi/elasticsearch" },
+    { "path": "../../multi/kafka" },
+    { "path": "../../multi/kafka-events" },
+    { "path": "../../multi/redis" },
+    { "path": "../session-cache-invalidation-redis" },
+    { "path": "../session-projection-reconciler" },
+    { "path": "../session-search-projection-elasticsearch" }
+  ]
+}
