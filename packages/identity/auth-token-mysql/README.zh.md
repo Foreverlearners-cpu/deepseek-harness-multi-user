@@ -44,7 +44,7 @@ export async function beginSession(ctx: Context): Promise<string> {
 
 `dsh_auth_token_families` 保存 principal identity、family 状态、过期时间、吊销原因和单调递增 revision。`dsh_auth_refresh_credentials` 保存唯一 SHA-256 digest、对应的生命周期 metadata 和 family 关系。检查结果由 `dsh-auth-token` 移除 digest；API 结果和事件都不会暴露 digest 或 bearer secret。
 
-创建 family 时在一个事务中写入 family 与首个 credential。轮换先定位不可变的 family 关系，再依次锁定 family 和提交的 credential，只消费一次 active digest，并让 replacement 沿用已锁定 family 的绝对过期时间。并发或后续重用会锁定相同记录，在同一事务中吊销 family 及其所有 active credential，然后返回 `refresh-token-reused`。按 credential、family 或 principal 吊销时采用相同的锁顺序，并且操作具有幂等性。
+创建 family 时在一个事务中写入 family 与首个 credential。提交前，Provider 会等待 `dsh-auth-token` 要求的 Host artifact preparation；preparation 失败会回滚两条记录。轮换先定位不可变的 family 关系，再依次锁定 family 和提交的 credential，只消费一次 active digest，并让 replacement 沿用已锁定 family 的绝对过期时间。轮换也会在暂存这些修改后、提交前等待 preparation，因此失败会回滚 replacement，并让旧 credential 保持 active。并发或后续重用会锁定相同记录，在同一事务中吊销 family 及其所有 active credential，然后返回 `refresh-token-reused`。按 credential、family 或 principal 吊销时采用相同的锁顺序，并且操作具有幂等性。
 
 检查操作在一个事务中持有 shared family lock 并读取选中的 family 与 credential，因此结果不会把并发修改前的 family metadata 和修改后的 credential 组合起来。按 credential 检查和吊销时，返回 base service 前会将结果绑定到请求指定的 credential。未知 credential 和 family 产生空的检查或吊销结果。使用持久数据前会验证每个 id、enum、digest、时间关系和特定状态专属的 nullable 字段。未知 refresh secret 返回 `refresh-token-invalid`；过期状态和 family 已吊销状态保留 `dsh-auth-token` 错误码。连接、SQL、异常数据库行、schema 和事务故障统一变成 `provider-unavailable`，不会暴露 SQL、digest、bearer secret 或 driver diagnostics。
 

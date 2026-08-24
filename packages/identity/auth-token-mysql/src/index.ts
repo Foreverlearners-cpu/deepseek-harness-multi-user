@@ -191,7 +191,10 @@ export class AuthTokenMysql extends AuthTokenService {
     }
   }
 
-  protected createFamilyRecord(input: TokenFamilyCreateInput): Promise<TokenFamilyCreateInput> {
+  protected createFamilyRecord(
+    input: TokenFamilyCreateInput,
+    prepare: () => Promise<void>,
+  ): Promise<TokenFamilyCreateInput> {
     return this.storage(connection => transaction(connection, async () => {
       const family = input.family
       await connection.execute(
@@ -210,11 +213,15 @@ export class AuthTokenMysql extends AuthTokenService {
         [credential.credentialId, credential.tokenFamilyId, credential.digest, credential.status,
           credential.issuedAt, credential.expiresAt],
       )
+      await prepare()
       return input
     }))
   }
 
-  protected rotateFamilyRecord(input: RefreshTokenRotationInput): Promise<RefreshTokenRotationCommit> {
+  protected rotateFamilyRecord(
+    input: RefreshTokenRotationInput,
+    prepare: (candidate: RefreshTokenRotationCommit) => Promise<void>,
+  ): Promise<RefreshTokenRotationCommit> {
     return this.storage(connection => transaction(connection, async () => {
       const initial = await this.credentialByDigest(connection, input.digest)
       if (initial === undefined) throw expected('refresh-token-invalid', 'refresh token is invalid')
@@ -281,7 +288,11 @@ export class AuthTokenMysql extends AuthTokenService {
         [input.time, previousFamily.tokenFamilyId, previousFamily.revision],
       )
       if (updated.affectedRows !== 1) throw unavailable('locked token family was not advanced')
-      return { kind: 'rotated', previousFamily, currentFamily, consumedCredential, replacementCredential }
+      const commit: RefreshTokenRotationCommit = {
+        kind: 'rotated', previousFamily, currentFamily, consumedCredential, replacementCredential,
+      }
+      await prepare(commit)
+      return commit
     }))
   }
 

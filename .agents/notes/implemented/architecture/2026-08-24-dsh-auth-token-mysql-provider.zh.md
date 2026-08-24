@@ -14,7 +14,7 @@ Status: implemented
 
 Schema version 1 保存 principal kind 和 id、family 生命周期状态、绝对过期时间、单调递增 revision 与可选吊销 metadata。每个 credential 数据行保存 id、family id、唯一 SHA-256 digest、生命周期状态、过期时间以及轮换或吊销 metadata。只有因为 `dsh-auth-token` 生成至少 256 位随机熵的 refresh secret，SHA-256 才适合此处；该 schema 不通过此 API 接收密码。
 
-创建 family 时在一个事务中插入 family 与初始 credential。轮换先读取 digest 来确定不可变的 family id，锁定该 family，然后锁定 credential 并再次验证两者关系。每条吊销路径都按确定的 id 顺序锁定 family，再锁定或更新它们的 credential。统一的 family-first 顺序防止轮换与吊销形成应用层锁循环。
+创建 family 时在一个事务中插入 family 与初始 credential，然后在提交前等待 base service 的 Host artifact preparation。preparation 失败会回滚两次插入。轮换先读取 digest 来确定不可变的 family id，锁定该 family，然后锁定 credential 并再次验证两者关系。在暂存消费、replacement 和 revision 写入后，它会在提交前等待 preparation；失败会回滚全部写入，并让提交的 credential 保持 active。每条吊销路径都按确定的 id 顺序锁定 family，再锁定或更新它们的 credential。统一的 family-first 顺序防止轮换与吊销形成应用层锁循环。
 
 针对同一个 active digest 的两次轮换会在 family 锁上串行执行。第一个事务将提交的 credential 标记为 rotated，插入沿用已锁定 family 绝对过期时间的 replacement，并推进 family revision。第二个事务发现 rotated credential 后吊销 family 及其所有 active credential，再次推进 revision，提交，并返回 `dsh-auth-token` 要求的重用结果。过期状态和 family 已吊销状态也在相同锁内完成检查，不发生修改。
 
@@ -38,4 +38,4 @@ Schema 激活会取得名称中包含所选 database digest 的 MySQL advisory l
 
 该 Provider 为多个 Host 进程提供一个持久的 refresh token 轮换与吊销串行点，同时让 bearer secret 保持短暂存在。重用检测会保留已消费 digest，直到后续 retention policy 删除 family。按 principal 吊销时会依照 id 顺序锁定所有选中的 family，持锁数量可能多于单 family 操作。Schema version 不匹配或未记录版本的部分 DDL 会导致启动失败，因为目前不存在已发布的持久兼容承诺。
 
-无密钥测试针对有状态 MySQL 测试服务运行共享 Provider suite，并固定串行 schema 初始化、精确目标绑定、shared-lock 检查快照、回滚行为、错误脱敏、恶意持久数据行验证、并发轮换、重用和幂等吊销。由 `DSH_MYSQL_TEST_URL` 控制的测试会创建真实 schema、验证只保存 digest、让两次轮换并发竞争、观察 family 吊销，并执行按 principal 吊销。
+无密钥测试针对有状态 MySQL 测试服务运行共享 Provider suite，并固定串行 schema 初始化、精确目标绑定、shared-lock 检查快照、preparation 回滚、错误脱敏、恶意持久数据行验证、并发轮换、重用和幂等吊销。由 `DSH_MYSQL_TEST_URL` 控制的测试会创建真实 schema，验证签发和轮换 preparation 回滚、只保存 digest、让两次轮换并发竞争、观察 family 吊销，并执行按 principal 吊销。

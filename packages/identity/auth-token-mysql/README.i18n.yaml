@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/identity/auth-token-mysql/README.md
-README.md: e74156970d3be472e3c6d588ccad3c445265c4bb
-README.zh.md: bf2541faf1e98d309f9a11a9f46965014fb3b5a3
+README.md: 34f14450007170f03af8609d7fb858b5a4ce174c
+README.zh.md: 2e755da7987f2ca31d49e38ac676165e6f7ad399

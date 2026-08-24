@@ -51,6 +51,30 @@ afterEach(async () => {
 })
 
 describe.skipIf(target === undefined)('real MySQL auth-token Provider', () => {
+  it('rolls back issue and rotation when pre-commit preparation fails', async () => {
+    const service = ctx!.authTokens
+    await expect(service.issueFamilyWithPreparation(
+      { requestId, signal, principal, expiresAt: Date.now() + 60_000 },
+      async () => { throw new Error('prepare failed') },
+    )).rejects.toMatchObject({ code: 'provider-unavailable' })
+    await expect(service.inspect({
+      requestId, signal, target: { kind: 'principal', principal },
+    })).resolves.toEqual({ families: [], credentials: [] })
+
+    const issued = await service.issueFamily({ requestId, signal, principal, expiresAt: Date.now() + 60_000 })
+    await expect(service.rotateWithPreparation(
+      { requestId, signal, refreshToken: issued.refreshToken.value },
+      async () => { throw new Error('prepare failed') },
+    )).rejects.toMatchObject({ code: 'provider-unavailable' })
+    const unchanged = await service.inspect({
+      requestId, signal, target: { kind: 'token-family', tokenFamilyId: issued.family.tokenFamilyId },
+    })
+    expect(unchanged.families).toEqual([expect.objectContaining({ status: 'active', revision: 1 })])
+    expect(unchanged.credentials).toEqual([expect.objectContaining({ status: 'active' })])
+    await expect(service.rotate({ requestId, signal, refreshToken: issued.refreshToken.value }))
+      .resolves.toMatchObject({ family: { status: 'active', revision: 2 } })
+  })
+
   it('stores only digests and atomically handles concurrent rotation, replay, and revocation', async () => {
     const service = ctx!.authTokens
     const issued = await service.issueFamily({ requestId, signal, principal, expiresAt: Date.now() + 60_000 })
