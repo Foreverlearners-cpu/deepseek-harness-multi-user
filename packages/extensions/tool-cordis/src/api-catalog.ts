@@ -94,15 +94,67 @@ export const MODEL_HIDDEN_SERVICE_KEYS: ReadonlySet<string> = new Set([
 /** Every harness `ctx.<key>` service, sorted by key. */
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
+    key: 'accountAdministration',
+    summary: 'Explicit administrator capability guarded by one fail-closed authorizer.',
+    description: 'Explicit administrator capability guarded by one fail-closed authorizer.',
+    methods: [
+      {
+        signature: 'readonly authorizers: AccountAdminAuthorizerRegistry = new AccountAdminAuthorizerRegistry()',
+        description: 'Sole administrator authorization Provider registry.',
+        parameters: [],
+      },
+      {
+        signature: 'async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord>',
+        description: 'Create an account after explicit administrator authorization.',
+        parameters: [{ name: 'request', description: 'actor and registration input.' }],
+        returns: 'committed account record.',
+      },
+      {
+        signature: 'async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord>',
+        description: 'Update a target after explicit administrator authorization.',
+        parameters: [{ name: 'request', description: 'actor, target, revision, and patch.' }],
+        returns: 'committed target record.',
+      },
+      {
+        signature: 'async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord>',
+        description: 'Disable a target after explicit administrator authorization.',
+        parameters: [{ name: 'request', description: 'actor, target, revision, and lifecycle.' }],
+        returns: 'committed disabled target.',
+      },
+      {
+        signature: 'async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord>',
+        description: 'Enable a target after explicit administrator authorization.',
+        parameters: [{ name: 'request', description: 'actor, target, revision, and lifecycle.' }],
+        returns: 'committed active target.',
+      },
+      {
+        signature: 'async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord>',
+        description: 'Reset a target password after explicit administrator authorization.',
+        parameters: [{ name: 'request', description: 'actor, target, revision, and new password.' }],
+        returns: 'committed credential metadata.',
+      },
+      {
+        signature: 'async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void>',
+        description: 'Revoke target sessions after explicit administrator authorization.',
+        parameters: [{ name: 'request', description: 'actor, target, and lifecycle.' }],
+      },
+    ],
+  },
+  {
     key: 'accounts',
     summary: 'Coordinates users, credentials, authentication, and JWT lifecycle operations.',
     description: 'Coordinates users, credentials, authentication, and JWT lifecycle operations.',
     methods: [
       {
-        signature: 'async register(request: AccountRegistrationInput): Promise<AccountSessionResult>',
-        description: 'Register an active account and issue its first JWT pair.',
+        signature: 'readonly registrationOperations: RegistrationOperationProviderRegistry = new RegistrationOperationProviderRegistry()',
+        description: 'Durable registration operation Provider registry.',
+        parameters: [],
+      },
+      {
+        signature: 'async register(request: AccountRegistrationInput): Promise<UserRecord>',
+        description: 'Idempotently register one active account.',
         parameters: [{ name: 'request', description: 'profile, identifier, secret, and operation lifecycle.' }],
-        returns: 'committed user plus newly issued credentials.',
+        returns: 'the same committed user for every completed retry.',
       },
       {
         signature: 'async login(request: AccountLoginRequest): Promise<AccountSessionResult>',
@@ -132,41 +184,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Change the current user\'s password and revoke all existing JWT sessions.',
         parameters: [{ name: 'request', description: 'current call, revision, old/new secrets, and lifecycle.' }],
         returns: 'committed non-secret credential metadata.',
-      },
-      {
-        signature: 'async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord>',
-        description: 'Create an account after the trusted caller authorizes the administrator.',
-        parameters: [{ name: 'request', description: 'authorized actor and new account values.' }],
-        returns: 'committed account record without issued credentials.',
-      },
-      {
-        signature: 'async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord>',
-        description: 'Update a profile after the trusted caller authorizes the administrator.',
-        parameters: [{ name: 'request', description: 'authorized actor, target, revision, and patch.' }],
-        returns: 'committed target record.',
-      },
-      {
-        signature: 'async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord>',
-        description: 'Disable a target and revoke all sessions after caller authorization.',
-        parameters: [{ name: 'request', description: 'authorized actor, target revision, reason, and lifecycle.' }],
-        returns: 'committed disabled record.',
-      },
-      {
-        signature: 'async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord>',
-        description: 'Enable a target after caller authorization.',
-        parameters: [{ name: 'request', description: 'authorized actor, target revision, and reason.' }],
-        returns: 'committed active record.',
-      },
-      {
-        signature: 'async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord>',
-        description: 'Reset a target password and revoke all sessions after caller authorization.',
-        parameters: [{ name: 'request', description: 'authorized actor, target credential revision, and new secret.' }],
-        returns: 'committed non-secret credential metadata.',
-      },
-      {
-        signature: 'async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void>',
-        description: 'Revoke a target user\'s JWT sessions after caller authorization.',
-        parameters: [{ name: 'request', description: 'authorized actor, target, reason, and lifecycle.' }],
       },
     ],
   },
@@ -2867,6 +2884,22 @@ export const EVENT_API: readonly EventApiEntry[] = [
 /** Shapes of every exported type the Service and Event signatures reference (transitively), sorted by name. */
 export const TYPE_API: readonly TypeApiEntry[] = [
   {
+    name: 'AccountAdminAction',
+    declaration: 'export type AccountAdminAction = \'create\' | \'update\' | \'disable\' | \'enable\' | \'reset-password\' | \'revoke-sessions\';',
+  },
+  {
+    name: 'AccountAdminAuthorizationRequest',
+    declaration: 'export interface AccountAdminAuthorizationRequest {\n    readonly actor: AuthenticatedCall;\n    readonly action: AccountAdminAction;\n    readonly target?: UserId;\n}',
+  },
+  {
+    name: 'AccountAdminAuthorizer',
+    declaration: 'export interface AccountAdminAuthorizer {\n    authorize(request: AccountAdminAuthorizationRequest): Promise<void>;\n}',
+  },
+  {
+    name: 'AccountAdminAuthorizerRegistry',
+    declaration: 'export class AccountAdminAuthorizerRegistry {\n    register(provider: AccountAdminAuthorizer): () => void;\n    async authorize(actor: AuthenticatedCall, action: AccountAdminAction, target?: UserId): Promise<void>;\n}',
+  },
+  {
     name: 'AccountChangeEvent',
     declaration: 'export interface AccountChangeEvent {\n    readonly kind: \'registered\' | \'logged-in\' | \'logged-out\' | \'profile-updated\' | \'password-changed\' | \'admin-created\' | \'admin-updated\' | \'admin-disabled\' | \'admin-enabled\' | \'admin-password-reset\' | \'admin-sessions-revoked\';\n    readonly requestId: AuthenticationRequestId;\n    readonly userId: UserId;\n    readonly actorUserId?: UserId;\n    readonly time: number;\n}',
   },
@@ -2884,7 +2917,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AccountProfileUpdateRequest',
-    declaration: 'export interface AccountProfileUpdateRequest {\n    readonly call: AuthenticatedCall;\n    readonly expectedRevision: number;\n    readonly patch: UserProfilePatch;\n}',
+    declaration: 'export interface AccountProfileUpdateRequest {\n    readonly call: AuthenticatedCall;\n    readonly expectedRevision: number;\n    readonly displayName: string | null;\n}',
+  },
+  {
+    name: 'AccountRecoveryState',
+    declaration: 'export interface AccountRecoveryState {\n    readonly userId: UserId;\n    readonly operation: \'registration\' | \'credential-issue\' | \'password-change\' | \'disable\' | \'password-reset\';\n    readonly userStatus: UserRecord[\'status\'];\n    readonly credentialsConfigured: boolean;\n    readonly compensationComplete: boolean;\n}',
   },
   {
     name: 'AccountRefreshRequest',
@@ -2916,7 +2953,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AdminAccountUpdateRequest',
-    declaration: 'export interface AdminAccountUpdateRequest {\n    readonly actor: AuthenticatedCall;\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly patch: UserProfilePatch;\n    readonly reason?: string;\n}',
+    declaration: 'export interface AdminAccountUpdateRequest {\n    readonly actor: AuthenticatedCall;\n    readonly userId: UserId;\n    readonly expectedRevision: number;\n    readonly patch: {\n        readonly displayName?: string | null;\n        readonly extensions?: UserExtensions;\n    };\n    readonly reason?: string;\n}',
   },
   {
     name: 'AdminPasswordResetRequest',
@@ -3969,6 +4006,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RedactedSecret',
     declaration: 'export interface RedactedSecret {\n    path: string[];\n    set: boolean;\n}',
+  },
+  {
+    name: 'RegistrationOperationAdvanceRequest',
+    declaration: 'export interface RegistrationOperationAdvanceRequest {\n    readonly requestId: AuthenticationRequestId;\n    readonly expectedRevision: number;\n    readonly expectedStage: RegistrationOperationStage;\n    readonly stage: Exclude<RegistrationOperationStage, \'begun\' | \'completed\'>;\n    readonly userId: UserId;\n    readonly recovery?: AccountRecoveryState;\n}',
+  },
+  {
+    name: 'RegistrationOperationProvider',
+    declaration: 'export interface RegistrationOperationProvider {\n    begin(requestId: AuthenticationRequestId): Promise<RegistrationOperationRecord>;\n    read(requestId: AuthenticationRequestId): Promise<RegistrationOperationRecord | undefined>;\n    advance(request: RegistrationOperationAdvanceRequest): Promise<RegistrationOperationRecord>;\n    complete(requestId: AuthenticationRequestId, expectedRevision: number, result: UserRecord): Promise<RegistrationOperationRecord>;\n}',
+  },
+  {
+    name: 'RegistrationOperationProviderRegistry',
+    declaration: 'export class RegistrationOperationProviderRegistry {\n    register(provider: RegistrationOperationProvider): () => void;\n    require(): RegistrationOperationProvider;\n}',
+  },
+  {
+    name: 'RegistrationOperationRecord',
+    declaration: 'export interface RegistrationOperationRecord {\n    readonly requestId: AuthenticationRequestId;\n    readonly revision: number;\n    readonly stage: RegistrationOperationStage;\n    readonly userId?: UserId;\n    readonly recovery?: AccountRecoveryState;\n    readonly result?: UserRecord;\n}',
+  },
+  {
+    name: 'RegistrationOperationStage',
+    declaration: 'export type RegistrationOperationStage = \'begun\' | \'user-created\' | \'identifier-added\' | \'password-set\' | \'completed\' | \'failed\';',
   },
   {
     name: 'RemoveLoginIdentifierRequest',

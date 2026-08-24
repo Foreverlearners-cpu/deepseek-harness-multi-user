@@ -22,7 +22,11 @@ Providers may implement issue, refresh, inspect, and revoke operations for crede
 
 ## Account orchestration
 
-`ctx.accounts` coordinates user, password-credential, and JWT lifecycle services for Host-only registration, login, self-service, and administrator operations. It preserves each owning service's optimistic revision checks, reports non-secret recovery state after partial commits, and requires trusted Consumers to authorize administrator calls before invocation.
+`ctx.accounts` coordinates durable registration, password login, JWT refresh/logout, and self-service profile/password changes. Registration returns a `UserRecord`; callers log in separately to receive the access/refresh JWT pair. Before registration can write, composition must install exactly one durable `RegistrationOperationProvider` with `ctx.accounts.registrationOperations.register(provider)`. The Provider persists the request-id keyed `begin`/`advance`/`complete` state machine and exposes `read` for recovery tooling. Missing persistence fails closed, completed retries return the same non-secret user result, and partial commits report an `AccountRecoveryState` without passwords or tokens.
+
+Password login fences JWT issuance with credential metadata. The account service resolves and reads the credential revision before password authentication, then reads it again after issuing the JWT pair. A changed owner, revision, or password-enabled state causes the newly issued token family to be revoked and the login to fail, so a concurrent password reset cannot leave a successful stale login.
+
+Self-service profile updates accept only `displayName`; extension writes remain an administrator capability. All administrator methods live on the separate `ctx.accountAdministration` service. Composition must install exactly one `AccountAdminAuthorizer` with `ctx.accountAdministration.authorizers.register(authorizer)`. Every call passes the current actor, exact action, and optional target to that authorizer, and a missing or rejecting authorizer returns `forbidden` without performing the mutation.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -32,6 +36,53 @@ Providers may implement issue, refresh, inspect, and revoke operations for crede
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxaccountadministration--accountadministrationservice"></a>
+
+### `ctx.accountAdministration` — `AccountAdministrationService`
+
+Explicit administrator capability guarded by one fail-closed authorizer.
+
+```ts cordis-catalog
+/** Create an account after explicit administrator authorization.
+ * @param request - actor and registration input.
+ * @returns committed account record.
+ */
+async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord>
+
+/** Update a target after explicit administrator authorization.
+ * @param request - actor, target, revision, and patch.
+ * @returns committed target record.
+ */
+async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord>
+
+/** Disable a target after explicit administrator authorization.
+ * @param request - actor, target, revision, and lifecycle.
+ * @returns committed disabled target.
+ */
+async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord>
+
+/** Enable a target after explicit administrator authorization.
+ * @param request - actor, target, revision, and lifecycle.
+ * @returns committed active target.
+ */
+async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord>
+
+/** Reset a target password after explicit administrator authorization.
+ * @param request - actor, target, revision, and new password.
+ * @returns committed credential metadata.
+ */
+async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord>
+
+/** Revoke target sessions after explicit administrator authorization.
+ * @param request - actor, target, and lifecycle.
+ */
+async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void>
+```
+
+Types: [UserCredentialRecord](user-credentials.md) · [UserRecord](user-directory.md)
+
+Source: [`packages/identity/account/src/index.ts:818`](../../packages/identity/account/src/index.ts)
+
 <a id="ctxaccounts--accountservice"></a>
 
 ### `ctx.accounts` — `AccountService`
@@ -39,11 +90,11 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Coordinates users, credentials, authentication, and JWT lifecycle operations.
 
 ```ts cordis-catalog
-/** Register an active account and issue its first JWT pair.
+/** Idempotently register one active account.
  * @param request - profile, identifier, secret, and operation lifecycle.
- * @returns committed user plus newly issued credentials.
+ * @returns the same committed user for every completed retry.
  */
-async register(request: AccountRegistrationInput): Promise<AccountSessionResult>
+async register(request: AccountRegistrationInput): Promise<UserRecord>
 
 /** Authenticate a password, require an active user, and issue a JWT pair.
  * @param request - trusted transport login request.
@@ -73,46 +124,11 @@ async updateProfile(request: AccountProfileUpdateRequest): Promise<UserRecord>
  * @returns committed non-secret credential metadata.
  */
 async changePassword(request: AccountPasswordChangeRequest): Promise<UserCredentialRecord>
-
-/** Create an account after the trusted caller authorizes the administrator.
- * @param request - authorized actor and new account values.
- * @returns committed account record without issued credentials.
- */
-async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord>
-
-/** Update a profile after the trusted caller authorizes the administrator.
- * @param request - authorized actor, target, revision, and patch.
- * @returns committed target record.
- */
-async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord>
-
-/** Disable a target and revoke all sessions after caller authorization.
- * @param request - authorized actor, target revision, reason, and lifecycle.
- * @returns committed disabled record.
- */
-async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord>
-
-/** Enable a target after caller authorization.
- * @param request - authorized actor, target revision, and reason.
- * @returns committed active record.
- */
-async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord>
-
-/** Reset a target password and revoke all sessions after caller authorization.
- * @param request - authorized actor, target credential revision, and new secret.
- * @returns committed non-secret credential metadata.
- */
-async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord>
-
-/** Revoke a target user's JWT sessions after caller authorization.
- * @param request - authorized actor, target, reason, and lifecycle.
- */
-async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void>
 ```
 
 Types: [UserCredentialRecord](user-credentials.md) · [UserRecord](user-directory.md)
 
-Source: [`packages/identity/account/src/index.ts:67`](../../packages/identity/account/src/index.ts)
+Source: [`packages/identity/account/src/index.ts:152`](../../packages/identity/account/src/index.ts)
 
 <a id="ctxauth--authenticationruntime"></a>
 
@@ -157,7 +173,7 @@ Completed account orchestration fact without credential material.
 'account/changed'(event: AccountChangeEvent): void
 ```
 
-Source: [`packages/identity/account/src/types.ts:149`](../../packages/identity/account/src/types.ts)
+Source: [`packages/identity/account/src/types.ts:205`](../../packages/identity/account/src/types.ts)
 
 <a id="auth-events"></a>
 

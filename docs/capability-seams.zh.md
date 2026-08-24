@@ -63,6 +63,7 @@ flowchart LR
   pkg_auth_jwt["auth-jwt"]
   pkg_account["account"]
   svc_accounts["ctx.accounts<br/>Host account orchestration"]
+  svc_accountAdministration["ctx.accountAdministration<br/>Authorized account administration"]
   pkg_auth_token["auth-token"]
   svc_authTokens["ctx.authTokens<br/>Opaque refresh-token family seam"]
   pkg_user["user"]
@@ -215,6 +216,7 @@ flowchart LR
   pkg_cordis_host_runner["cordis-host-runner"]
   svc_dynamicCordisRunner["ctx.dynamicCordisRunner<br/>Dynamic Cordis package host runner"]
   svc_cordisInspect["ctx.cordisInspect<br/>Dynamic Cordis inspect registry"]
+  pkg_account --> svc_accountAdministration
   pkg_account --> svc_accounts
   pkg_acp --> svc_approval
   pkg_agent --> svc_agents
@@ -464,7 +466,8 @@ flowchart LR
 | `ctx.settings` | `seam` | [`settings`](../packages/settings/settings) | [`settings-file`](../packages/settings/settings-file) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | 插件注册命名空间 schema 并解析分层值；提供方存储原始文档。LLM（大语言模型）适配器在用户分区下将其入口配置注册为组合基础；Web 网关提供经过脱敏的分层描述符，并写入用户层。 |
 | `ctx.credentials` | `seam` | [`credentials`](../packages/credentials/credentials) | [`credentials-local`](../packages/credentials/credentials-local) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | 配置携带对机密信息的引用；提供方拥有实际值。消费方按操作解析，因此轮换后的凭据会在紧接着的下一次请求中生效；Web 网关提供不含实际值的视图和只写存储。 |
 | `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | [`auth-password`](../packages/identity/auth-password), [`auth-jwt`](../packages/identity/auth-jwt) | [`account`](../packages/identity/account) | - | 按证据类型选择唯一提供方，签发仅限进程内使用的已认证调用，并分派可选的凭证生命周期操作。 |
-| `ctx.accounts` | `core` | [`account`](../packages/identity/account) | - | - | - | 协调用户、密码凭据与 JWT 生命周期服务，同时保留 revision 检查、当前 Call 验证、补偿状态和秘密脱敏。 |
+| `ctx.accounts` | `core` | [`account`](../packages/identity/account) | - | - | - | 协调用户、密码凭据与 JWT 生命周期服务中的持久化注册、登录和自助操作，同时保留 revision 与凭据状态栅栏。 |
+| `ctx.accountAdministration` | `core` | [`account`](../packages/identity/account) | - | - | - | 只有唯一的 `AccountAdminAuthorizer` 明确批准操作者、操作和目标后才执行管理员账号修改；缺少策略或策略拒绝时默认失败。 |
 | `ctx.authTokens` | `seam` | [`auth-token`](../packages/identity/auth-token) | - | [`auth-jwt`](../packages/identity/auth-jwt) | - | 生成不透明 refresh secret，只向 Provider 提供 digest，并定义原子轮换、复用触发的 family 撤销、安全检查与定向撤销。 |
 | `ctx.users` | `seam` | [`user`](../packages/identity/user) | - | [`account`](../packages/identity/account), [`auth-jwt`](../packages/identity/auth-jwt) | - | 定义稳定的人类用户记录、生命周期转换、乐观 revision、有界分页和脱敏提交事件；持久化与 Credential Provider 保持独立。 |
 | `ctx.userCredentials` | `seam` | [`user-credential`](../packages/identity/user-credential) | - | [`account`](../packages/identity/account), [`auth-password`](../packages/identity/auth-password) | - | 定义登录标识归一化与查询、密码验证、聚合乐观 revision 和脱敏提交事件；verifier 存储保持为 Provider 私有状态。 |

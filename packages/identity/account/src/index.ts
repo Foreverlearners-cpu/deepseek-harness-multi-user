@@ -41,6 +41,13 @@ import type {
 export type * from './types.ts'
 
 const JWT_METHOD = authenticationMethod('jwt')
+const ADMIN_VALIDATE = Symbol('account.admin.validate')
+const ADMIN_CREATE = Symbol('account.admin.create')
+const ADMIN_UPDATE = Symbol('account.admin.update')
+const ADMIN_DISABLE = Symbol('account.admin.disable')
+const ADMIN_ENABLE = Symbol('account.admin.enable')
+const ADMIN_RESET_PASSWORD = Symbol('account.admin.reset-password')
+const ADMIN_REVOKE_SESSIONS = Symbol('account.admin.revoke-sessions')
 const REGISTRATION_STAGES = new Set<RegistrationOperationRecord['stage']>([
   'begun',
   'user-created',
@@ -144,10 +151,10 @@ declare module '@deepseek-ai/cordis' {
 /** Coordinates users, credentials, authentication, and JWT lifecycle operations. */
 export class AccountService extends Service {
   /** Durable registration operation Provider registry. */
-  readonly registrationOperations = new RegistrationOperationProviderRegistry()
+  readonly registrationOperations: RegistrationOperationProviderRegistry = new RegistrationOperationProviderRegistry()
   /** @param ctx - Host context carrying all account dependencies. */
-  constructor(ctx: Context, serviceName = 'accounts') {
-    super(ctx, serviceName)
+  constructor(ctx: Context) {
+    super(ctx, 'accounts')
   }
 
   /** Idempotently register one active account.
@@ -346,7 +353,7 @@ export class AccountService extends Service {
    * @param request - authorized actor and new account values.
    * @returns committed account record without issued credentials.
    */
-  protected async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord> {
+  async [ADMIN_CREATE](request: AdminAccountCreateRequest): Promise<UserRecord> {
     this.operation(request)
     const actor = await this.currentUser(request.actor)
     const user = await this.ctx.accounts.register(request)
@@ -358,7 +365,7 @@ export class AccountService extends Service {
    * @param request - authorized actor, target, revision, and patch.
    * @returns committed target record.
    */
-  protected async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord> {
+  async [ADMIN_UPDATE](request: AdminAccountUpdateRequest): Promise<UserRecord> {
     this.operation(request.actor)
     const actor = await this.currentUser(request.actor)
     try {
@@ -379,7 +386,7 @@ export class AccountService extends Service {
    * @param request - authorized actor, target revision, reason, and lifecycle.
    * @returns committed disabled record.
    */
-  protected async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord> {
+  async [ADMIN_DISABLE](request: AdminAccountStatusRequest): Promise<UserRecord> {
     this.operation(request)
     const actor = await this.currentUser(request.actor)
     let user: UserRecord
@@ -411,7 +418,7 @@ export class AccountService extends Service {
    * @param request - authorized actor, target revision, and reason.
    * @returns committed active record.
    */
-  protected async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord> {
+  async [ADMIN_ENABLE](request: AdminAccountStatusRequest): Promise<UserRecord> {
     this.operation(request)
     const actor = await this.currentUser(request.actor)
     try {
@@ -431,7 +438,7 @@ export class AccountService extends Service {
    * @param request - authorized actor, target credential revision, and new secret.
    * @returns committed non-secret credential metadata.
    */
-  protected async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord> {
+  async [ADMIN_RESET_PASSWORD](request: AdminPasswordResetRequest): Promise<UserCredentialRecord> {
     this.operation(request)
     const actor = await this.currentUser(request.actor)
     let credential
@@ -464,7 +471,7 @@ export class AccountService extends Service {
   /** Revoke a target user's JWT sessions after caller authorization.
    * @param request - authorized actor, target, reason, and lifecycle.
    */
-  protected async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void> {
+  async [ADMIN_REVOKE_SESSIONS](request: AdminSessionRevokeRequest): Promise<void> {
     this.operation(request)
     const actor = await this.currentUser(request.actor)
     try {
@@ -748,6 +755,11 @@ export class AccountService extends Service {
     if (request.signal.aborted) throw new AccountError('unauthenticated', 'account: operation was cancelled')
   }
 
+  async [ADMIN_VALIDATE](call: AuthenticatedCall): Promise<void> {
+    this.operation(call)
+    await this.currentUser(call)
+  }
+
   protected map(cause: unknown): AccountError {
     if (cause instanceof AccountError) return cause
     if (cause instanceof AuthenticationError) {
@@ -803,9 +815,9 @@ export class AccountService extends Service {
 }
 
 /** Explicit administrator capability guarded by one fail-closed authorizer. */
-export class AccountAdministrationService extends AccountService {
+export class AccountAdministrationService extends Service {
   /** Sole administrator authorization Provider registry. */
-  readonly authorizers = new AccountAdminAuthorizerRegistry()
+  readonly authorizers: AccountAdminAuthorizerRegistry = new AccountAdminAuthorizerRegistry()
 
   /** @param ctx - Host context carrying account and authentication services. */
   constructor(ctx: Context) {
@@ -816,58 +828,57 @@ export class AccountAdministrationService extends AccountService {
    * @param request - actor and registration input.
    * @returns committed account record.
    */
-  override async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord> {
+  async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord> {
     await this.authorize(request.actor, 'create')
-    return super.adminCreate(request)
+    return this.ctx.accounts[ADMIN_CREATE](request)
   }
 
   /** Update a target after explicit administrator authorization.
    * @param request - actor, target, revision, and patch.
    * @returns committed target record.
    */
-  override async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord> {
+  async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord> {
     await this.authorize(request.actor, 'update', request.userId)
-    return super.adminUpdate(request)
+    return this.ctx.accounts[ADMIN_UPDATE](request)
   }
 
   /** Disable a target after explicit administrator authorization.
    * @param request - actor, target, revision, and lifecycle.
    * @returns committed disabled target.
    */
-  override async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord> {
+  async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord> {
     await this.authorize(request.actor, 'disable', request.userId)
-    return super.adminDisable(request)
+    return this.ctx.accounts[ADMIN_DISABLE](request)
   }
 
   /** Enable a target after explicit administrator authorization.
    * @param request - actor, target, revision, and lifecycle.
    * @returns committed active target.
    */
-  override async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord> {
+  async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord> {
     await this.authorize(request.actor, 'enable', request.userId)
-    return super.adminEnable(request)
+    return this.ctx.accounts[ADMIN_ENABLE](request)
   }
 
   /** Reset a target password after explicit administrator authorization.
    * @param request - actor, target, revision, and new password.
    * @returns committed credential metadata.
    */
-  override async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord> {
+  async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord> {
     await this.authorize(request.actor, 'reset-password', request.userId)
-    return super.adminResetPassword(request)
+    return this.ctx.accounts[ADMIN_RESET_PASSWORD](request)
   }
 
   /** Revoke target sessions after explicit administrator authorization.
    * @param request - actor, target, and lifecycle.
    */
-  override async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void> {
+  async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void> {
     await this.authorize(request.actor, 'revoke-sessions', request.userId)
-    return super.adminRevokeSessions(request)
+    return this.ctx.accounts[ADMIN_REVOKE_SESSIONS](request)
   }
 
   private async authorize(call: AuthenticatedCall, action: AccountAdminAction, target?: UserId): Promise<void> {
-    this.operation(call)
-    await this.currentUser(call)
+    await this.ctx.accounts[ADMIN_VALIDATE](call)
     await this.authorizers.authorize(call, action, target)
   }
 }

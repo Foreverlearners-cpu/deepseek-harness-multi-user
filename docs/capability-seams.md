@@ -61,6 +61,7 @@ flowchart LR
   pkg_auth_jwt["auth-jwt"]
   pkg_account["account"]
   svc_accounts["ctx.accounts<br/>Host account orchestration"]
+  svc_accountAdministration["ctx.accountAdministration<br/>Authorized account administration"]
   pkg_auth_token["auth-token"]
   svc_authTokens["ctx.authTokens<br/>Opaque refresh-token family seam"]
   pkg_user["user"]
@@ -213,6 +214,7 @@ flowchart LR
   pkg_cordis_host_runner["cordis-host-runner"]
   svc_dynamicCordisRunner["ctx.dynamicCordisRunner<br/>Dynamic Cordis package host runner"]
   svc_cordisInspect["ctx.cordisInspect<br/>Dynamic Cordis inspect registry"]
+  pkg_account --> svc_accountAdministration
   pkg_account --> svc_accounts
   pkg_acp --> svc_approval
   pkg_agent --> svc_agents
@@ -462,7 +464,8 @@ flowchart LR
 | `ctx.settings` | `seam` | [`settings`](../packages/settings/settings) | [`settings-file`](../packages/settings/settings-file) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | Plugins register namespace schemas and resolve layered values; providers store the raw document. The LLM adapters register their entry config as the composition base under the user section; the web gateway serves redacted layered descriptors and writes the user layer. |
 | `ctx.credentials` | `seam` | [`credentials`](../packages/credentials/credentials) | [`credentials-local`](../packages/credentials/credentials-local) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `apiproxy` | - | Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the web gateway exposes value-free views and write-only storage. |
 | `ctx.auth` | `seam` | [`auth`](../packages/identity/auth) | [`auth-password`](../packages/identity/auth-password), [`auth-jwt`](../packages/identity/auth-jwt) | [`account`](../packages/identity/account) | - | Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations. |
-| `ctx.accounts` | `core` | [`account`](../packages/identity/account) | - | - | - | Coordinates user, password-credential, and JWT lifecycle services while preserving revision checks, current-call validation, compensation state, and secret redaction. |
+| `ctx.accounts` | `core` | [`account`](../packages/identity/account) | - | - | - | Coordinates durable registration, login, and self-service across user, password-credential, and JWT lifecycle services while preserving revision and credential-state fences. |
+| `ctx.accountAdministration` | `core` | [`account`](../packages/identity/account) | - | - | - | Exposes administrator account mutations only after one explicit AccountAdminAuthorizer approves the exact actor, action, and target; missing or rejecting policy fails closed. |
 | `ctx.authTokens` | `seam` | [`auth-token`](../packages/identity/auth-token) | - | [`auth-jwt`](../packages/identity/auth-jwt) | - | Generates opaque refresh secrets, gives Providers only digests, and defines atomic rotation, reuse-triggered family revocation, safe inspection, and targeted revocation. |
 | `ctx.users` | `seam` | [`user`](../packages/identity/user) | - | [`account`](../packages/identity/account), [`auth-jwt`](../packages/identity/auth-jwt) | - | Defines stable human user records, lifecycle transitions, optimistic revisions, bounded pages, and sanitized commit events; persistence and credential providers remain separate. |
 | `ctx.userCredentials` | `seam` | [`user-credential`](../packages/identity/user-credential) | - | [`account`](../packages/identity/account), [`auth-password`](../packages/identity/auth-password) | - | Defines login identifier normalization and lookup, password verification, aggregate optimistic revisions, and sanitized commit events; verifier storage remains Provider-private. |

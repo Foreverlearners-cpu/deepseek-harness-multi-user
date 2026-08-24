@@ -12,11 +12,13 @@ Status: implemented
 
 `@deepseek-ai/dsh-account` 是协调这些服务的 Host-only Consumer。它不负责持久化、密码哈希、JOSE、HTTP 解析或授权策略。
 
-注册依次写入用户、标识和密码。标识写入失败时禁用用户；密码写入失败时先移除标识，再禁用用户。由于 Provider 不共享事务，稳定的 `AccountError.recovery` 会报告不含秘密的已提交状态，以及补偿是否完成。
+注册要求通过 `ctx.accounts.registrationOperations` 注入唯一的持久化 `RegistrationOperationProvider`。它以 request id 为键，通过 `begin`、比较并交换的 `advance`、`complete` 和用于恢复的 `read`，持久化不含秘密的 `begun`、`user-created`、`identifier-added`、`password-set`、`completed` 或 `failed` 阶段。重试会从持久化进度继续，根据实际已提交状态核对结果不明确的凭据修改，并在完成后返回已保存的同一个 `UserRecord`。注册不会签发 JWT；JWT 由后续单独登录签发，因此 Access 与 Refresh Secret 不会成为幂等记录。
 
-密码登录使用已注册的密码 Authentication Provider，通过 `assertCurrent()` 验证签发的 Call，确认用户仍为 active，然后使用 JWT 凭据生命周期能力。刷新和撤销仍由 JWT Provider 完成。修改密码、重置密码和禁用账号都会撤销目标用户的全部 Token Family。
+注册依次写入用户、标识和密码。恢复流程会尽可能禁用用户并移除已配置凭据。由于 Provider 不共享事务，稳定的 `AccountError.recovery` 会报告不含秘密的已提交状态，以及补偿是否完成。持久化进度可以跨进程崩溃恢复；缺少注册操作 Provider 时则默认失败，不允许未跟踪的写入。
 
-管理员入口要求准确且当前有效的用户 Call，区分 actor 与目标身份，并把 actor 写入委托修改上下文和账号事件。账号服务在不依赖 `dsh-authority` 时无法证明 RBAC 授权，因此可信 Consumer 必须先授权 actor，再调用管理员方法。
+密码登录会先解析规范化标识并记录凭据 revision，再使用已注册的密码 Authentication Provider。它通过 `assertCurrent()` 验证签发的 Call，要求 principal 与解析出的 active 用户一致，签发 JWT 凭据，然后再次读取凭据状态。若用户、revision、密码启用状态发生变化，或二次读取失败，服务会撤销刚签发的 JWT 并让登录失败。这个栅栏封闭了密码修改与管理员重置密码的竞争窗口。刷新和撤销仍由 JWT Provider 完成。修改密码、重置密码和禁用账号都会撤销目标用户的全部 Token Family。
+
+`ctx.accounts` 上的自助资料修改只能改变 `displayName`；extensions 仍由管理员控制。管理员入口只存在于 `ctx.accountAdministration`，要求准确且当前有效的用户 Call，区分 actor 与目标身份，并把 actor 写入委托修改上下文和账号事件。服务通过 `ctx.accountAdministration.authorizers` 只接受一个 `AccountAdminAuthorizer`。授权器缺失、拒绝或抛错都会默认以 `forbidden` 失败；具体决策由后续的 RBAC 集成等策略插件负责。
 
 事件只包含操作类型、请求 ID、目标用户 ID、可选 actor 用户 ID 和时间。请求、标识、密码、Refresh Secret 和 Provider Cause 都不会进入事件。
 
@@ -26,8 +28,8 @@ Status: implemented
 
 **让用户和凭据存储共享一个事务。** Provider-neutral 服务需要独立演进，也可能采用不同存储系统。要求共享事务会合并原本独立的能力边界。
 
-**在账号服务中实现 RBAC。** 这会在 `dsh-authority` 尚未成为依赖时虚构授权策略，并把有效认证 Call 错当成管理员权限证明。
+**让可信调用方预先授权管理员方法。** 这会把有效认证 Call 错当成管理员权限证明，也会让直接 Host 调用方绕过策略。强制授权器既保留依赖边界，也提供统一的默认拒绝决策点。
 
 ## Consequences
 
-可信 Consumer 获得统一稳定的账号 API 和脱敏错误分类。跨服务失败可被观察和恢复，且不会暴露秘密；但注册补偿属于尽力执行，Provider 持续失败时仍可能需要运维介入。由于通用认证 Call 不公开 JWT Family ID，自助登出会撤销用户的全部会话。
+可信 Consumer 获得统一的自助账号 API、显式保护的管理 API 和脱敏错误分类。跨服务失败可被观察和恢复，且不会暴露秘密；但组合层必须提供持久化注册操作存储和管理员策略。注册补偿属于尽力执行，Provider 持续失败时仍可能需要运维介入。由于通用认证 Call 不公开 JWT Family ID，自助登出会撤销用户的全部会话。

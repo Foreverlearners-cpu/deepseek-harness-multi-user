@@ -50,6 +50,7 @@ export { REGION_BEGIN, REGION_END }
  * errors, so the partition can never silently drift from the service API.
  */
 export const SERVICE_PAGE: Record<string, string> = {
+  accountAdministration: 'authentication.md',
   accounts: 'authentication.md',
   agentLoop: 'core.md',
   auth: 'authentication.md',

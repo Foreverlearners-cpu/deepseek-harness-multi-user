@@ -218,7 +218,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'account',
     title: 'Host account orchestration',
     mode: 'core',
-    note: 'Coordinates user, password-credential, and JWT lifecycle services while preserving revision checks, current-call validation, compensation state, and secret redaction.',
+    note: 'Coordinates durable registration, login, and self-service across user, password-credential, and JWT lifecycle services while preserving revision and credential-state fences.',
+  },
+  {
+    key: 'accountAdministration',
+    pkg: 'account',
+    title: 'Authorized account administration',
+    mode: 'core',
+    note: 'Exposes administrator account mutations only after one explicit AccountAdminAuthorizer approves the exact actor, action, and target; missing or rejecting policy fails closed.',
   },
   {
     key: 'authTokens',

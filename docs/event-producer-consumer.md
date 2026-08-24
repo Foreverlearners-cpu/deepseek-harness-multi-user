@@ -7,7 +7,7 @@ This matrix shows which packages dispatch each harness-owned event and which pac
 
 | Event | Mode | Declared in | Dispatchers | Listeners |
 | --- | --- | --- | --- | --- |
-| `account/changed` | `emit` | [`packages/identity/account/src/types.ts:149`](../packages/identity/account/src/types.ts) | [`account`](../packages/identity/account) (`events.dispatch`) | - |
+| `account/changed` | `emit` | [`packages/identity/account/src/types.ts:205`](../packages/identity/account/src/types.ts) | [`account`](../packages/identity/account) (`events.dispatch`) | - |
 | `agent-loop/config-start-failed` | `emit` | [`packages/core/agent-loop/src/index.ts:183`](../packages/core/agent-loop/src/index.ts) | [`agent-loop`](../packages/core/agent-loop) (`events.dispatch`) | - |
 | `agent-preset/selected` | `emit` | [`packages/preset/agent-presets/src/types.ts:13`](../packages/preset/agent-presets/src/types.ts) | [`agent-presets`](../packages/preset/agent-presets) (`emit`) | `apiproxy` |
 | `agent/created` | `emit` | [`packages/core/agent/src/runtime-types.ts:159`](../packages/core/agent/src/runtime-types.ts) | [`agent`](../packages/core/agent) (`events.dispatch`) | [`agent-presets`](../packages/preset/agent-presets), [`goal-round-driver`](../packages/goal/goal-round-driver), [`schedule`](../packages/schedule/schedule) |

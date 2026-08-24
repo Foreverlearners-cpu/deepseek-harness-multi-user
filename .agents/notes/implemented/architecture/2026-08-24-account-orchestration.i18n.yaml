@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-24-account-orchestration.md
-2026-08-24-account-orchestration.md: 2a9acae2800bacbb9f89d5daa1d2186d5d90bb39
-2026-08-24-account-orchestration.zh.md: 6778ace336dac209769631ba161953dc44fba409
+2026-08-24-account-orchestration.md: 4290bc865e25d6393adc5ac598c4c64de22693cd
+2026-08-24-account-orchestration.zh.md: 7482114dec59396d272afb331f1791da00a87c66

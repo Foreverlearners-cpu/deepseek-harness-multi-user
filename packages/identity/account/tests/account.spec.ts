@@ -837,6 +837,8 @@ describe('account orchestration', () => {
 
   it('fails administrator operations closed and honors authorizer rejection or approval', async () => {
     const missing = await setup()
+    expect(missing.ctx.accountAdministration).not.toHaveProperty('register')
+    expect(missing.ctx.accountAdministration).not.toHaveProperty('login')
     const actor = (await missing.users.create()).userId
     const target = (await missing.users.create()).userId
     const actorCall = await currentCall(missing, actor)

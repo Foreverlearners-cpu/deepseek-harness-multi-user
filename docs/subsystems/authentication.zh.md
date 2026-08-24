@@ -22,7 +22,11 @@ Provider 可以为自己拥有的凭证实现签发、刷新、查询和吊销�
 
 ## 账号编排
 
-`ctx.accounts` 协调用户、密码凭据和 JWT 生命周期服务，为 Host 提供注册、登录、自助和管理员操作。它保留各归属服务的乐观并发 revision 检查，在部分提交后报告不含秘密的恢复状态，并要求可信 Consumer 在调用管理员接口前完成授权。
+`ctx.accounts` 协调持久化注册、密码登录、JWT 刷新/退出，以及资料和密码的自助修改。注册只返回 `UserRecord`；调用方需要再登录才能取得 access/refresh JWT 对。注册写入前，组合层必须通过 `ctx.accounts.registrationOperations.register(provider)` 注入唯一的持久化 `RegistrationOperationProvider`。Provider 按 request id 保存 `begin`/`advance`/`complete` 状态机，并通过 `read` 支持恢复工具。没有持久化 Provider 时默认失败；已经完成的重试返回同一个不含秘密的用户结果；部分提交只通过 `AccountRecoveryState` 报告恢复状态，不包含密码或 Token。
+
+密码登录会用凭据元数据约束 JWT 签发。账号服务先解析用户并读取密码凭据 revision，完成密码认证并签发 JWT 对后再读取一次。只要所有者、revision 或密码启用状态发生变化，就会吊销刚签发的 Token family 并使登录失败，因此并发密码重置不会留下成功的旧状态登录。
+
+自助资料修改只接受 `displayName`，extensions 只能由管理员修改。所有管理员方法都位于独立的 `ctx.accountAdministration` 服务。组合层必须通过 `ctx.accountAdministration.authorizers.register(authorizer)` 注入唯一的 `AccountAdminAuthorizer`。每次调用都会把当前操作者、准确 action 和可选 target 交给该 authorizer；缺少 authorizer 或 authorizer 拒绝时返回 `forbidden`，且不会执行修改。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -32,6 +36,53 @@ Provider 可以为自己拥有的凭证实现签发、刷新、查询和吊销�
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxaccountadministration--accountadministrationservice"></a>
+
+### `ctx.accountAdministration` — `AccountAdministrationService`
+
+Explicit administrator capability guarded by one fail-closed authorizer.
+
+```ts cordis-catalog
+/** Create an account after explicit administrator authorization.
+ * @param request - actor and registration input.
+ * @returns committed account record.
+ */
+async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord>
+
+/** Update a target after explicit administrator authorization.
+ * @param request - actor, target, revision, and patch.
+ * @returns committed target record.
+ */
+async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord>
+
+/** Disable a target after explicit administrator authorization.
+ * @param request - actor, target, revision, and lifecycle.
+ * @returns committed disabled target.
+ */
+async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord>
+
+/** Enable a target after explicit administrator authorization.
+ * @param request - actor, target, revision, and lifecycle.
+ * @returns committed active target.
+ */
+async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord>
+
+/** Reset a target password after explicit administrator authorization.
+ * @param request - actor, target, revision, and new password.
+ * @returns committed credential metadata.
+ */
+async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord>
+
+/** Revoke target sessions after explicit administrator authorization.
+ * @param request - actor, target, and lifecycle.
+ */
+async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void>
+```
+
+Types: [UserCredentialRecord](user-credentials.md) · [UserRecord](user-directory.md)
+
+Source: [`packages/identity/account/src/index.ts:818`](../../packages/identity/account/src/index.ts)
+
 <a id="ctxaccounts--accountservice"></a>
 
 ### `ctx.accounts` — `AccountService`
@@ -39,11 +90,11 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Coordinates users, credentials, authentication, and JWT lifecycle operations.
 
 ```ts cordis-catalog
-/** Register an active account and issue its first JWT pair.
+/** Idempotently register one active account.
  * @param request - profile, identifier, secret, and operation lifecycle.
- * @returns committed user plus newly issued credentials.
+ * @returns the same committed user for every completed retry.
  */
-async register(request: AccountRegistrationInput): Promise<AccountSessionResult>
+async register(request: AccountRegistrationInput): Promise<UserRecord>
 
 /** Authenticate a password, require an active user, and issue a JWT pair.
  * @param request - trusted transport login request.
@@ -73,46 +124,11 @@ async updateProfile(request: AccountProfileUpdateRequest): Promise<UserRecord>
  * @returns committed non-secret credential metadata.
  */
 async changePassword(request: AccountPasswordChangeRequest): Promise<UserCredentialRecord>
-
-/** Create an account after the trusted caller authorizes the administrator.
- * @param request - authorized actor and new account values.
- * @returns committed account record without issued credentials.
- */
-async adminCreate(request: AdminAccountCreateRequest): Promise<UserRecord>
-
-/** Update a profile after the trusted caller authorizes the administrator.
- * @param request - authorized actor, target, revision, and patch.
- * @returns committed target record.
- */
-async adminUpdate(request: AdminAccountUpdateRequest): Promise<UserRecord>
-
-/** Disable a target and revoke all sessions after caller authorization.
- * @param request - authorized actor, target revision, reason, and lifecycle.
- * @returns committed disabled record.
- */
-async adminDisable(request: AdminAccountStatusRequest): Promise<UserRecord>
-
-/** Enable a target after caller authorization.
- * @param request - authorized actor, target revision, and reason.
- * @returns committed active record.
- */
-async adminEnable(request: AdminAccountStatusRequest): Promise<UserRecord>
-
-/** Reset a target password and revoke all sessions after caller authorization.
- * @param request - authorized actor, target credential revision, and new secret.
- * @returns committed non-secret credential metadata.
- */
-async adminResetPassword(request: AdminPasswordResetRequest): Promise<UserCredentialRecord>
-
-/** Revoke a target user's JWT sessions after caller authorization.
- * @param request - authorized actor, target, reason, and lifecycle.
- */
-async adminRevokeSessions(request: AdminSessionRevokeRequest): Promise<void>
 ```
 
 Types: [UserCredentialRecord](user-credentials.md) · [UserRecord](user-directory.md)
 
-Source: [`packages/identity/account/src/index.ts:67`](../../packages/identity/account/src/index.ts)
+Source: [`packages/identity/account/src/index.ts:152`](../../packages/identity/account/src/index.ts)
 
 <a id="ctxauth--authenticationruntime"></a>
 
@@ -157,7 +173,7 @@ Completed account orchestration fact without credential material.
 'account/changed'(event: AccountChangeEvent): void
 ```
 
-Source: [`packages/identity/account/src/types.ts:149`](../../packages/identity/account/src/types.ts)
+Source: [`packages/identity/account/src/types.ts:205`](../../packages/identity/account/src/types.ts)
 
 <a id="auth-events"></a>
 
