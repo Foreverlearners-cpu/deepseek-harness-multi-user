@@ -83,7 +83,7 @@ Conversation 语义日志只接纳已完成且有业务意义的 `AgentRecord`�
 
 ### `dsh-file-storage` 与 `dsh-file-storage-local`
 
-前者定义流式保存、打开、删除和校验文件的 Provider API；第一版只交付后者提供的本地内容寻址实现。MinIO 或 S3 Provider 延后到出现明确部署需求时再增加，替换 Provider 不改变 Conversation 表中的文件标识。
+前者定义流式保存、打开和校验文件的 Provider API；第一版对象不可变且不提供删除接口，只交付后者提供的本地内容寻址实现。MinIO 或 S3 Provider 延后到出现明确部署需求时再增加，替换 Provider 不改变 Conversation 表中的文件标识。
 
 ### `dsh-conversation-files-mysql`
 
@@ -113,7 +113,7 @@ Conversation 语义日志只接纳已完成且有业务意义的 `AgentRecord`�
 
 ### 文件表
 
-`dsh_file_objects` 保存 `file_id`、`storage_backend`、不透明 `storage_key`、SHA-256、大小、媒体类型、原始文件名、状态和时间。`dsh_conversation_files` 与 `dsh_message_files` 分别保存文件和 Conversation、Message 的多对多关系。任何表都不保存服务器绝对路径，也不把大文件字节放进 JSON 或 BLOB。
+`dsh_file_objects` 保存 `file_id`、`storage_backend`、不透明 `storage_key`、SHA-256、大小、媒体类型、原始文件名、状态和时间。`dsh_conversation_files` 与 `dsh_conversation_message_files` 分别保存文件和 Conversation、Message 的多对多关系。任何表都不保存服务器绝对路径，也不把大文件字节放进 JSON 或 BLOB。
 
 ## 写入与 flush 策略
 
