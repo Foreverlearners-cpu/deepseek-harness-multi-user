@@ -20,7 +20,7 @@ One source Session event may produce an adjacent group of semantic records with 
 
 Tool effect classification and plugin-owned required-event projection are explicit contributions. An unknown effect or unhandled required event fails admission rather than silently treating an operation as safe or discarding durable meaning. Ignorable extension events may be skipped.
 
-Each Session owns a bounded queue and a serialized Promise chain. The first queued record starts a fixed timer; record count or exact UTF-8 size of complete target records may close the batch earlier. A single record larger than the byte bound writes alone. Separate Session controllers call the Provider concurrently. Capacity, projection, and Provider errors retain the first failure, stop automatic writes, and reject every later flush. Flush cancels the delay and drains immediately; Session and plugin disposal start a final drain and await plugin-wide quiescence where the lifecycle permits it.
+Each Session owns a bounded queue and a serialized Promise chain. The first queued record starts a fixed timer; record count or exact UTF-8 size of complete target records may close the batch earlier. A source group is indivisible and writes alone when it exceeds a bound. Ordered asynchronous record preparers may durably externalize complete payloads before append without changing record source identity or order. Separate Session controllers call the Provider concurrently. Capacity, preparation, projection, and Provider errors retain the first failure, stop automatic writes, and reject every later flush. Flush cancels the delay and drains immediately; Session and plugin disposal start a final drain and await plugin-wide quiescence where the lifecycle permits it.
 
 Defaults are 500 milliseconds, 64 records, 524288 bytes, and 4096 pending records per Session.
 
@@ -38,4 +38,4 @@ Defaults are 500 milliseconds, 64 records, 524288 bytes, and 4096 pending record
 
 Conversation Providers receive fewer, larger atomic appends without losing record-level recovery. A crash may lose the current buffered batch, but recovery restarts from the previous complete semantic source group rather than from a chunk boundary.
 
-Application composition must supply attachment and tool-effect policy before semantic events. Approval, subagent, and file integrations remain explicit because current Session facts do not contain every field required by their semantic record types. The planned local object-storage Provider and 256 KiB result-spill policy remain separate from this package.
+Application composition must supply attachment and tool-effect policy before semantic events. Approval, subagent, and file integrations remain explicit because current Session facts do not contain every field required by their semantic record types. The local object-storage and file-metadata plugins use the record-preparer seam to apply the separate 256 KiB result externalization policy.

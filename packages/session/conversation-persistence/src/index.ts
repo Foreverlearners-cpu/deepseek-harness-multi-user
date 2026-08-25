@@ -81,6 +81,21 @@ export type ConversationEventProjector = (
   request: ConversationEventProjectionRequest,
 ) => readonly ConversationRecordDraft[] | undefined
 
+/** Input passed through ordered asynchronous record preparers before append. */
+export interface ConversationRecordPrepareRequest {
+  readonly session: Session
+  readonly conversation: Conversation
+  readonly draft: ConversationRecordDraft
+}
+
+/**
+ * Prepare one record before Provider append. Returning `undefined` preserves
+ * the input; returning a draft replaces it for subsequent preparers.
+ */
+export type ConversationRecordPreparer = (
+  request: ConversationRecordPrepareRequest,
+) => Promise<ConversationRecordDraft | undefined> | ConversationRecordDraft | undefined
+
 interface SessionState {
   readonly session: Session
   readonly admittedSources: Set<number>
@@ -113,6 +128,7 @@ export class ConversationPersistence extends Service {
   private readonly states = new Map<Session, SessionState>()
   private readonly classifiers: ToolEffectClassifier[] = []
   private readonly projectors: ConversationEventProjector[] = []
+  private readonly preparers: ConversationRecordPreparer[] = []
   private readonly retirements = new Set<Promise<void>>()
 
   /** @param ctx - owning Host context. @param config - bounded batching policy. */
@@ -166,6 +182,24 @@ export class ConversationPersistence extends Service {
       active = false
       const index = this.projectors.indexOf(projector)
       if (index >= 0) this.projectors.splice(index, 1)
+    }
+  }
+
+  /**
+   * Register an ordered asynchronous transformation before Provider append.
+   * Preparers may externalize complete payloads but must preserve record source
+   * identity and type.
+   * @param preparer - ordered record transformation.
+   * @returns idempotent disposer.
+   */
+  registerRecordPreparer(preparer: ConversationRecordPreparer): () => void {
+    this.preparers.push(preparer)
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      const index = this.preparers.indexOf(preparer)
+      if (index >= 0) this.preparers.splice(index, 1)
     }
   }
 
@@ -418,7 +452,16 @@ export class ConversationPersistence extends Service {
       if (state.stickyError !== undefined) return
       const conversation = state.conversation
       if (conversation === undefined) return
-      const records = batch.map(({ draft }, offset) => ({
+      let drafts: readonly ConversationRecordDraft[]
+      try {
+        drafts = await this.prepareBatch(state.session, conversation, batch)
+      } catch (error) {
+        state.pending.unshift(...batch)
+        this.fail(state, error)
+        state.activeCount -= batch.length
+        return
+      }
+      const records = drafts.map((draft, offset) => ({
         ...draft,
         tenantId: conversation.tenantId,
         userId: conversation.userId,
@@ -447,6 +490,29 @@ export class ConversationPersistence extends Service {
       }
     }
     state.writing = state.writing.then(run, run)
+  }
+
+  private async prepareBatch(
+    session: Session,
+    conversation: Conversation,
+    batch: readonly PendingDraft[],
+  ): Promise<readonly ConversationRecordDraft[]> {
+    const prepared: ConversationRecordDraft[] = []
+    for (const pending of batch) {
+      let draft = pending.draft
+      for (const preparer of this.preparers) {
+        const candidate = await preparer({ session, conversation, draft })
+        if (candidate === undefined) continue
+        if (candidate.recordId !== draft.recordId
+          || candidate.sourceSequence !== draft.sourceSequence
+          || candidate.type !== draft.type) {
+          throw new Error('conversation persistence: record preparer changed source identity or type')
+        }
+        draft = candidate
+      }
+      prepared.push(draft)
+    }
+    return prepared
   }
 
   private async flushState(state: SessionState): Promise<void> {
@@ -591,13 +657,22 @@ function takeBatch(
 ): PendingDraft[] {
   let count = 0
   let bytes = 0
-  while (count < queue.length && count < maxRecords) {
-    const next = queue[count]
-    if (next === undefined) break
-    const nextBytes = encodedRecordBytes(conversation, next.draft, conversation.nextSequence + count)
-    if (count > 0 && bytes + nextBytes > maxBytes) break
-    bytes += nextBytes
-    count += 1
+  while (count < queue.length) {
+    const first = queue[count]
+    if (first === undefined) break
+    let groupEnd = count + 1
+    while (queue[groupEnd]?.draft.sourceSequence === first.draft.sourceSequence) groupEnd += 1
+    let groupBytes = 0
+    for (let index = count; index < groupEnd; index += 1) {
+      const item = queue[index]
+      if (item !== undefined) {
+        groupBytes += encodedRecordBytes(conversation, item.draft, conversation.nextSequence + index)
+      }
+    }
+    if (count > 0 && (groupEnd > maxRecords || bytes + groupBytes > maxBytes)) break
+    bytes += groupBytes
+    count = groupEnd
+    if (count >= maxRecords || bytes >= maxBytes) break
   }
   return queue.splice(0, count)
 }
