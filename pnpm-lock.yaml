@@ -5813,6 +5813,12 @@ importers:
       '@deepseek-ai/dsh-cdc-protocol':
         specifier: workspace:^
         version: link:../cdc-protocol
+      '@deepseek-ai/dsh-conversation':
+        specifier: workspace:^
+        version: link:../../session/conversation
+      '@deepseek-ai/dsh-conversation-mysql':
+        specifier: workspace:^
+        version: link:../../session/conversation-mysql
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
@@ -5822,9 +5828,15 @@ importers:
       '@deepseek-ai/dsh-kafka-events':
         specifier: workspace:^
         version: link:../kafka-events
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../mysql
       '@deepseek-ai/dsh-timeout':
         specifier: workspace:^
         version: link:../../util/timeout
+      '@platformatic/kafka':
+        specifier: 1.34.0
+        version: 1.34.0
 
   packages/multi/cdc-elasticsearch:
     dependencies:
@@ -6457,6 +6469,101 @@ importers:
         specifier: workspace:^
         version: link:../../core/tools
 
+  packages/session/conversation:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+
+  packages/session/conversation-mysql:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-conversation':
+        specifier: workspace:^
+        version: link:../conversation
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@22.20.0)
+
+  packages/session/conversation-persistence:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-conversation':
+        specifier: workspace:^
+        version: link:../conversation
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
+
+  packages/session/conversation-starter:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:^
+        version: link:../../core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:^
+        version: link:../../test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-conversation':
+        specifier: workspace:^
+        version: link:../conversation
+      '@deepseek-ai/dsh-conversation-mysql':
+        specifier: workspace:^
+        version: link:../conversation-mysql
+      '@deepseek-ai/dsh-conversation-persistence':
+        specifier: workspace:^
+        version: link:../conversation-persistence
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@22.20.0)
+
   packages/session/session-cache-invalidation-redis:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -6597,6 +6704,92 @@ importers:
       '@deepseek-ai/dsh-session-persistence':
         specifier: workspace:^
         version: link:../session-persistence
+
+  packages/session/conversation:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+
+  packages/session/conversation-files-mysql:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-conversation':
+        specifier: workspace:^
+        version: link:../conversation
+      '@deepseek-ai/dsh-conversation-mysql':
+        specifier: workspace:^
+        version: link:../conversation-mysql
+      '@deepseek-ai/dsh-conversation-persistence':
+        specifier: workspace:^
+        version: link:../conversation-persistence
+      '@deepseek-ai/dsh-file-storage':
+        specifier: workspace:^
+        version: link:../../storage/file-storage
+      '@deepseek-ai/dsh-file-storage-local':
+        specifier: workspace:^
+        version: link:../../storage/file-storage-local
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@22.20.0)
+
+  packages/session/conversation-mysql:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-conversation':
+        specifier: workspace:^
+        version: link:../conversation
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@22.20.0)
+
+  packages/session/conversation-persistence:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-conversation':
+        specifier: workspace:^
+        version: link:../conversation
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
 
   packages/session/session-persistence-sqlite:
     dependencies:
@@ -7468,6 +7661,18 @@ importers:
         specifier: workspace:^
         version: link:../../core/tools
 
+  packages/storage/file-storage:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+
   packages/storage/storage:
     devDependencies:
       '@deepseek-ai/cordis':
@@ -7495,6 +7700,22 @@ importers:
       '@deepseek-ai/dsh-storage':
         specifier: workspace:^
         version: link:../storage
+
+  packages/storage/file-storage-local:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-file-storage':
+        specifier: workspace:^
+        version: link:../file-storage
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
 
   packages/storage/storage-json:
     dependencies:
