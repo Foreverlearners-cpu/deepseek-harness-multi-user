@@ -38,6 +38,7 @@ function targetConfig(): Config {
 }
 
 async function cleanOwner(connection: MysqlConnection, owner: readonly [string, string]): Promise<void> {
+  const values: [string, string] = [owner[0], owner[1]]
   const [tables] = await connection.query<(RowDataPacket & { table_name: string })[]>(
     `SELECT TABLE_NAME AS table_name FROM information_schema.TABLES
      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN
@@ -45,19 +46,19 @@ async function cleanOwner(connection: MysqlConnection, owner: readonly [string, 
   )
   const available = new Set(tables.map(row => row.table_name))
   if (available.has('dsh_conversation_message_files')) {
-    await connection.query('DELETE FROM dsh_conversation_message_files WHERE tenant_id = ? AND user_id = ?', owner)
+    await connection.query('DELETE FROM dsh_conversation_message_files WHERE tenant_id = ? AND user_id = ?', values)
   }
   if (available.has('dsh_conversation_files')) {
-    await connection.query('DELETE FROM dsh_conversation_files WHERE tenant_id = ? AND user_id = ?', owner)
+    await connection.query('DELETE FROM dsh_conversation_files WHERE tenant_id = ? AND user_id = ?', values)
   }
   if (available.has('dsh_file_objects')) {
-    await connection.query('DELETE FROM dsh_file_objects WHERE tenant_id = ? AND user_id = ?', owner)
+    await connection.query('DELETE FROM dsh_file_objects WHERE tenant_id = ? AND user_id = ?', values)
   }
-  await connection.query('DELETE FROM dsh_subagent_runs WHERE tenant_id = ? AND user_id = ?', owner)
-  await connection.query('DELETE FROM dsh_conversation_message_state WHERE tenant_id = ? AND user_id = ?', owner)
-  await connection.query('DELETE FROM dsh_conversation_messages WHERE tenant_id = ? AND user_id = ?', owner)
-  await connection.query('DELETE FROM dsh_agent_records WHERE tenant_id = ? AND user_id = ?', owner)
-  await connection.query('DELETE FROM dsh_conversations WHERE tenant_id = ? AND user_id = ?', owner)
+  await connection.query('DELETE FROM dsh_subagent_runs WHERE tenant_id = ? AND user_id = ?', values)
+  await connection.query('DELETE FROM dsh_conversation_message_state WHERE tenant_id = ? AND user_id = ?', values)
+  await connection.query('DELETE FROM dsh_conversation_messages WHERE tenant_id = ? AND user_id = ?', values)
+  await connection.query('DELETE FROM dsh_agent_records WHERE tenant_id = ? AND user_id = ?', values)
+  await connection.query('DELETE FROM dsh_conversations WHERE tenant_id = ? AND user_id = ?', values)
 }
 
 async function fresh(
