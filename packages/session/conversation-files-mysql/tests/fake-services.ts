@@ -47,7 +47,7 @@ export class FakeConversationPersistence {
 
   readonly registerRecordPreparer = (preparer: ConversationRecordPreparer): (() => void) => {
     this.preparer = preparer
-    return () => { this.preparer = undefined }
+    return () => { delete this.preparer }
   }
 
   asService(): ConversationPersistence {

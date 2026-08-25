@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import CdcService from '@deepseek-ai/dsh-cdc'
+import CdcService, { type Config as CdcConfig } from '@deepseek-ai/dsh-cdc'
 import { decodeCdcEvent, encodeKey, type CdcCheckpoint, type CdcEvent } from '@deepseek-ai/dsh-cdc-protocol'
 import {
   agentRecordId,
@@ -131,7 +131,7 @@ describe.skipIf(!enabled)('ConversationMysql to Kafka CDC', () => {
       conversationId: conversationId(`cdc-conversation-${runId}`),
     }
     const sessionId = conversationSessionId(`cdc-session-${runId}`)
-    const producerConfig = {
+    const producerConfig: CdcConfig = {
       host: mysqlHost,
       port: mysqlPort,
       user: mysqlCdcUser,
@@ -151,7 +151,7 @@ describe.skipIf(!enabled)('ConversationMysql to Kafka CDC', () => {
       retryInitialDelayMs: 200,
       retryMaxDelayMs: 2_000,
       maxRetries: 5,
-    } as const
+    }
     let topicCreated = false
     let mysqlMounted = false
 

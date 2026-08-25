@@ -187,7 +187,7 @@ describe('bounded write-behind', () => {
 
   it('serializes one Session while allowing two Sessions to enter the Provider concurrently', async () => {
     const { ctx, provider } = await fixture({ maxDelayMs: 10_000, maxBatchRecords: 1 })
-    const gate = Promise.withResolvers<boolean>()
+    const gate = Promise.withResolvers<undefined>()
     provider.appendGate = gate.promise
     const first = await attached(ctx, 'session-a', 'conversation-a')
     const second = await attached(ctx, 'session-b', 'conversation-b')
@@ -195,7 +195,7 @@ describe('bounded write-behind', () => {
     first.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'a2' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
     second.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'b1' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
     await vi.waitFor(() => { expect(provider.starts).toEqual(['conversation-a', 'conversation-b']) })
-    gate.resolve(true)
+    gate.resolve(undefined)
     await Promise.all([ctx.sessions.flush(first), ctx.sessions.flush(second)])
     expect(provider.starts).toEqual(['conversation-a', 'conversation-b', 'conversation-a'])
   })
