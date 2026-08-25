@@ -117,9 +117,16 @@ export class MemoryConversationService extends ConversationService {
       if (records.some(current => current.recordId === record.recordId)) {
         throw new ConversationError('record-conflict', 'record id already exists')
       }
-      if (records.some(current => current.sourceSequence === record.sourceSequence)
-        || request.records.slice(0, index).some(current => current.sourceSequence === record.sourceSequence)) {
+      if (records.some(current => current.sourceSequence === record.sourceSequence)) {
         throw new ConversationError('record-conflict', 'source sequence already exists')
+      }
+      const previous = request.records[index - 1]
+      if (previous !== undefined && record.sourceSequence < previous.sourceSequence) {
+        throw new ConversationError('record-conflict', 'source sequence order is invalid')
+      }
+      if (previous?.sourceSequence !== record.sourceSequence
+        && request.records.slice(0, index).some(current => current.sourceSequence === record.sourceSequence)) {
+        throw new ConversationError('record-conflict', 'source sequence group is not contiguous')
       }
     })
     const committed = structuredClone(request.records)

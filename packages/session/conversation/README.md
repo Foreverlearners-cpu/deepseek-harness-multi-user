@@ -21,7 +21,7 @@ Every identity is explicitly tenant- and user-scoped. A root Session supplies bo
 
 ## Semantic Records
 
-`AgentRecord` includes the Provider-assigned contiguous `sequence` and the original Session `sourceSequence`. `sequence` provides business ordering; `sourceSequence` gives a projection a stable source identity when it scans or retries Session events. A retry with the same record identities and content is idempotent, while a different range at a stale `expectedNextSequence` fails.
+`AgentRecord` includes the Provider-assigned contiguous `sequence` and the original Session `sourceSequence`. `sequence` provides business ordering; `sourceSequence` gives a projection a stable source identity when it scans or retries Session events. One source event may produce multiple adjacent records in one atomic append, such as `assistant/interrupted` plus `turn/completed`. A retry with the same record identities and content is idempotent, while a different range at a stale `expectedNextSequence` fails.
 
 The closed first-version types are `user/message`, `assistant/message`, `assistant/interrupted`, `tool/call`, `tool/result`, `approval/asked`, `approval/decided`, `subagent/started`, `subagent/completed`, `file/published`, and `turn/completed`. Every entry is a complete small record. `assistant/chunk`, reasoning delta, tool-argument delta, transport frames, heartbeats, and transient progress do not belong in this service.
 

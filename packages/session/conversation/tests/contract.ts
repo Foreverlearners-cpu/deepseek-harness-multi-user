@@ -117,6 +117,36 @@ export function runConversationContract(
         .rejects.toMatchObject({ code: 'sequence-conflict' })
     })
 
+    it('atomically accepts adjacent records projected from one source event', async () => {
+      const { conversations } = await create()
+      const target = identity('source-group-conversation')
+      await conversations.create({
+        ...target,
+        sessionId: conversationSessionId('source-group-session'),
+        origin: 'top-level',
+        delegationDepth: 0,
+      })
+      const interrupted = record(target, 1, {
+        type: 'assistant/interrupted',
+        status: 'interrupted',
+        payload: { attemptId: 'attempt-1' },
+      })
+      const completed = {
+        ...record(target, 2, {
+          type: 'turn/completed',
+          status: 'completed',
+          payload: { turnId: conversationTurnId('turn-1'), outcome: 'interrupted' },
+        }),
+        sourceSequence: interrupted.sourceSequence,
+      } as AgentRecord
+
+      await expect(conversations.append({
+        ...target,
+        expectedNextSequence: 1,
+        records: [interrupted, completed],
+      })).resolves.toMatchObject({ records: [interrupted, completed] })
+    })
+
     it('persists interrupted attempts as metadata and tracks child conversations by reference', async () => {
       const { conversations } = await create()
       const parent = identity('subagent-parent')

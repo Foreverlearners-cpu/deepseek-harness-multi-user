@@ -122,7 +122,10 @@ export interface AgentRecordBase<
 > extends ConversationIdentity {
   readonly recordId: AgentRecordId
   readonly sequence: number
-  /** Original Session event sequence used for source-level idempotency. */
+  /**
+   * Original Session event sequence used for source-level idempotency. One
+   * source event may project to multiple adjacent records committed together.
+   */
   readonly sourceSequence: number
   readonly turnId?: ConversationTurnId
   readonly stepId?: ConversationStepId
@@ -187,7 +190,11 @@ export type AgentRecord =
     readonly outcome: 'completed' | 'failed' | 'interrupted'
   }>
 
-/** Atomic append request for a contiguous sequence range. */
+/**
+ * Atomic append request for a contiguous business-sequence range. Records are
+ * ordered by non-decreasing source sequence; records sharing one source must
+ * form one adjacent group in this append.
+ */
 export interface AgentRecordAppendRequest extends ConversationIdentity {
   readonly expectedNextSequence: number
   readonly records: readonly AgentRecord[]
