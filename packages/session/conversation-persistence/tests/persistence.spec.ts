@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import {
+  conversationFileId,
   conversationId,
   conversationSessionId,
   conversationTenantId,
@@ -95,6 +96,54 @@ describe('conversation record mapping', () => {
 })
 
 describe('bounded write-behind', () => {
+  it('keeps one source record group atomic even below the configured record limit', async () => {
+    const { ctx, provider, records } = await fixture({ maxDelayMs: 10_000, maxBatchRecords: 1 })
+    const session = await attached(ctx)
+    session.append('step/start', { turn: 1, step: 1 })
+    session.append('turn/end', { turn: 1, reason: { kind: 'interrupted' } })
+
+    await ctx.sessions.flush(session)
+    expect(provider.starts).toEqual(['conversation'])
+    expect(records('conversation').map(record => record.type))
+      .toEqual(['assistant/interrupted', 'turn/completed'])
+  })
+
+  it('runs asynchronous record preparers in order before Provider append', async () => {
+    const { ctx, records } = await fixture({ maxDelayMs: 10_000, toolEffects: { lookup: 'read-only' } })
+    const calls: string[] = []
+    ctx.conversationPersistence.registerRecordPreparer(async ({ draft }) => {
+      calls.push(`first:${draft.type}`)
+      await Promise.resolve()
+      if (draft.type !== 'tool/result') return undefined
+      return {
+        ...draft,
+        payload: {
+          toolCallId: draft.payload.toolCallId,
+          outcome: draft.payload.outcome,
+          resultFileId: conversationFileId(`${draft.recordId}~result`),
+        },
+      }
+    })
+    ctx.conversationPersistence.registerRecordPreparer(({ draft }) => {
+      calls.push(`second:${draft.type}`)
+      return undefined
+    })
+    const session = await attached(ctx)
+    session.append('tool/result', {
+      turn: 1,
+      step: 1,
+      message: createToolResultMessage({ callId: CallId('call-large'), content: [], isError: false }),
+    }, { surfaceOp: 'append' })
+
+    await ctx.sessions.flush(session)
+    expect(calls).toEqual(['first:tool/result', 'second:tool/result'])
+    expect(records('conversation')[0]).toMatchObject({
+      type: 'tool/result',
+      payload: { toolCallId: 'call-large', resultFileId: 'session~0~result' },
+    })
+    expect(records('conversation')[0]?.payload).not.toHaveProperty('result')
+  })
+
   it('uses a fixed time window and count trigger', async () => {
     vi.useFakeTimers()
     const { ctx, provider } = await fixture({ maxDelayMs: 500, maxBatchRecords: 2 })
