@@ -6610,6 +6610,40 @@ importers:
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
 
+  packages/session/conversation-files-mysql:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-conversation':
+        specifier: workspace:^
+        version: link:../conversation
+      '@deepseek-ai/dsh-conversation-mysql':
+        specifier: workspace:^
+        version: link:../conversation-mysql
+      '@deepseek-ai/dsh-conversation-persistence':
+        specifier: workspace:^
+        version: link:../conversation-persistence
+      '@deepseek-ai/dsh-file-storage':
+        specifier: workspace:^
+        version: link:../../storage/file-storage
+      '@deepseek-ai/dsh-file-storage-local':
+        specifier: workspace:^
+        version: link:../../storage/file-storage-local
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@22.20.0)
+
   packages/session/conversation-mysql:
     devDependencies:
       '@deepseek-ai/cordis':
@@ -7559,18 +7593,6 @@ importers:
       '@deepseek-ai/dsh-storage':
         specifier: workspace:^
         version: link:../storage
-
-  packages/storage/file-storage:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-brand':
-        specifier: workspace:^
-        version: link:../../util/brand
-      '@deepseek-ai/dsh-invariants':
-        specifier: workspace:^
-        version: link:../../runtime-diagnostics/invariants
 
   packages/storage/file-storage-local:
     dependencies:

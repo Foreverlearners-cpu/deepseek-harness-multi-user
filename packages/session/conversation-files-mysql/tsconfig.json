@@ -1,0 +1,17 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/types.tsbuildinfo"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../conversation" },
+    { "path": "../conversation-persistence" },
+    { "path": "../../storage/file-storage" },
+    { "path": "../../multi/mysql" },
+    { "path": "../../runtime-diagnostics/invariants" }
+  ]
+}

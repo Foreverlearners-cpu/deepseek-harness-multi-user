@@ -1,0 +1,44 @@
+{
+  "name": "@deepseek-ai/dsh-conversation-files-mysql",
+  "description": "Owner-scoped MySQL metadata for immutable conversation files",
+  "version": "0.1.0-rc.7",
+  "publishConfig": { "access": "public" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/session/conversation-files-mysql"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": { "types": "./lib/types/index.d.ts", "default": "./lib/index.js" },
+    "./invariant": { "types": "./lib/types/invariant.d.ts", "default": "./lib/invariant.js" },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": ["lib/index.js", "lib/invariant.js", "lib/types/**/*.d.ts"],
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/schemastery": "link:../../../vendor/schemastery"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-conversation": "workspace:^",
+    "@deepseek-ai/dsh-conversation-persistence": "workspace:^",
+    "@deepseek-ai/dsh-file-storage": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-mysql": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-conversation": "workspace:^",
+    "@deepseek-ai/dsh-conversation-mysql": "workspace:^",
+    "@deepseek-ai/dsh-conversation-persistence": "workspace:^",
+    "@deepseek-ai/dsh-file-storage": "workspace:^",
+    "@deepseek-ai/dsh-file-storage-local": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-mysql": "workspace:^",
+    "mysql2": "^3.23.3"
+  }
+}
