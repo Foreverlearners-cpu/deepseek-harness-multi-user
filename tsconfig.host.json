@@ -155,6 +155,7 @@
     { "path": "./packages/storage/storage-sqlite" },
     { "path": "./packages/storage/storage-domain" },
     { "path": "./packages/storage/file-storage" },
+    { "path": "./packages/storage/file-storage-local" },
     { "path": "./packages/multi/mysql" },
     { "path": "./packages/multi/cdc-protocol" },
     { "path": "./packages/multi/cdc" },

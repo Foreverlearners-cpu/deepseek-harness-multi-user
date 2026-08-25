@@ -11,6 +11,7 @@
 | [`storage-sqlite/`](storage-sqlite/README.md) | 在 SQLite 中存储数据 | 注册后端 `sqlite` |
 | [`storage-domain/`](storage-domain/README.md) | 提供经过验证的领域记录存储 | `ctx.storageDomain` |
 | [`file-storage/`](file-storage/README.md) | 定义不可变流式文件对象存储 | `ctx.fileStorage` |
+| [`file-storage-local/`](file-storage-local/README.md) | 在本地文件系统存储不可变文件对象 | `ctx.fileStorage` |
 
 消费方使用数据形式，而不是直接访问后端。[领域存储决策](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md)记录了该家族的设计。
 
