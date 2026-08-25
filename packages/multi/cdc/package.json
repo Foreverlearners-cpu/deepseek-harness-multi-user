@@ -31,9 +31,13 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-cdc-protocol": "workspace:^",
+    "@deepseek-ai/dsh-conversation": "workspace:^",
+    "@deepseek-ai/dsh-conversation-mysql": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-kafka": "workspace:^",
     "@deepseek-ai/dsh-kafka-events": "workspace:^",
+    "@deepseek-ai/dsh-mysql": "workspace:^",
+    "@platformatic/kafka": "1.34.0",
     "@deepseek-ai/dsh-timeout": "workspace:^"
   }
 }

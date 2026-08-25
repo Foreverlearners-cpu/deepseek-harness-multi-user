@@ -5813,6 +5813,12 @@ importers:
       '@deepseek-ai/dsh-cdc-protocol':
         specifier: workspace:^
         version: link:../cdc-protocol
+      '@deepseek-ai/dsh-conversation':
+        specifier: workspace:^
+        version: link:../../session/conversation
+      '@deepseek-ai/dsh-conversation-mysql':
+        specifier: workspace:^
+        version: link:../../session/conversation-mysql
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
@@ -5822,9 +5828,15 @@ importers:
       '@deepseek-ai/dsh-kafka-events':
         specifier: workspace:^
         version: link:../kafka-events
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../mysql
       '@deepseek-ai/dsh-timeout':
         specifier: workspace:^
         version: link:../../util/timeout
+      '@platformatic/kafka':
+        specifier: 1.34.0
+        version: 1.34.0
 
   packages/multi/cdc-elasticsearch:
     dependencies:
