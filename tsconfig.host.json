@@ -136,6 +136,7 @@
     { "path": "./packages/typert/loader" },
     { "path": "./packages/session/session-persistence" },
     { "path": "./packages/session/session-checkpoint-policy" },
+    { "path": "./packages/session/conversation" },
     { "path": "./packages/session/session-cache-invalidation-redis" },
     { "path": "./packages/session/session-cdc-starter" },
     { "path": "./packages/session/session-persistence-jsonl" },

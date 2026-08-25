@@ -93,6 +93,7 @@
       "@deepseek-ai/dsh-auth-jwt/types": ["./packages/identity/auth-jwt/src/types.ts"],
       "@deepseek-ai/dsh-auth-token/types": ["./packages/identity/auth-token/src/types.ts"],
       "@deepseek-ai/dsh-user/types": ["./packages/identity/user/src/types.ts"],
+      "@deepseek-ai/dsh-conversation/types": ["./packages/session/conversation/src/types.ts"],
       "@deepseek-ai/dsh-user-credential/types": ["./packages/identity/user-credential/src/types.ts"],
       "@deepseek-ai/dsh-user-credential/testing": ["./packages/identity/user-credential/src/testing.ts"],
       "@deepseek-ai/dsh-settings/types": ["./packages/settings/settings/src/types.ts"],
