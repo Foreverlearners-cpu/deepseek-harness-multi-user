@@ -187,6 +187,7 @@
     { "path": "./packages/identity/auth-token-mysql" },
     { "path": "./packages/identity/user" },
     { "path": "./packages/identity/tenant" },
+    { "path": "./packages/identity/team" },
     { "path": "./packages/identity/user-mysql" },
     { "path": "./packages/identity/user-credential" },
     { "path": "./packages/identity/user-credential-mysql" },

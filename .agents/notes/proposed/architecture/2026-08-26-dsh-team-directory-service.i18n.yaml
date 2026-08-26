@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-26-dsh-team-directory-service.md
+2026-08-26-dsh-team-directory-service.md: d2d145ada6f52421be80a55091f8ecbdf7f58cbe
+2026-08-26-dsh-team-directory-service.zh.md: 2dfbeb69228454818d634244df0e7a74ee3b49b1

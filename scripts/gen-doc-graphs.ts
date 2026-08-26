@@ -292,6 +292,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Defines tenant records, user membership lifecycle, optimistic revisions, bounded membership pages, and sanitized commit events; persistence, teams, and authorization remain separate.',
   },
   {
+    key: 'teams',
+    pkg: 'team',
+    title: 'Team membership directory seam',
+    mode: 'seam',
+    implementations: [],
+    consumers: [],
+    note: 'Defines team records bound to one tenant, user membership lifecycle, optimistic revisions, bounded membership pages, and sanitized commit events; persistence, roles, and object grants remain separate.',
+  },
+  {
     key: 'userCredentials',
     pkg: 'user-credential',
     title: 'User login credential seam',
