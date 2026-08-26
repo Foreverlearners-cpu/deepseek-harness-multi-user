@@ -301,6 +301,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Defines team records bound to one tenant, user membership lifecycle, optimistic revisions, bounded membership pages, and sanitized commit events; persistence, roles, and object grants remain separate.',
   },
   {
+    key: 'authority',
+    pkg: 'authority',
+    title: 'Authorization decision seam',
+    mode: 'seam',
+    implementations: [],
+    consumers: [],
+    note: 'Decides allow or deny by intersecting per-team Use or Delegate sets from the role and object routes on the resolved resource team; role storage, object grants, and membership directories remain separate.',
+  },
+  {
     key: 'userCredentials',
     pkg: 'user-credential',
     title: 'User login credential seam',

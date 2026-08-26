@@ -5219,6 +5219,30 @@ importers:
         specifier: ^3.23.3
         version: 3.23.3(@types/node@22.20.0)
 
+  packages/identity/authority:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-team':
+        specifier: workspace:^
+        version: link:../team
+      '@deepseek-ai/dsh-tenant':
+        specifier: workspace:^
+        version: link:../tenant
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+
   packages/identity/team:
     devDependencies:
       '@deepseek-ai/cordis':

@@ -24,6 +24,7 @@
 | [user-directory.md](user-directory.md) | 稳定的人类用户记录、生命周期状态、乐观 revision、Provider 操作和脱敏变更事件 |
 | [tenant-directory.md](tenant-directory.md) | 稳定的租户、用户成员生命周期、乐观 revision、Provider 操作和脱敏变更事件 |
 | [team-directory.md](team-directory.md) | 绑定到一个租户的稳定团队、用户成员生命周期、乐观 revision、Provider 操作和脱敏变更事件 |
+| [authority.md](authority.md) | Action 目录、资源 resolver、角色与对象路线 Provider，以及同一团队的允许或拒绝决策 |
 | [user-credentials.md](user-credentials.md) | 登录标识归一化与查询、密码验证、聚合 revision 和脱敏 Credential 事件 |
 | [session-query.md](session-query.md) | 逻辑记录、有界精确事件读取、关系追踪、语义筛选器/文档与全文检索结果页 |
 | [feedback.md](feedback.md) | 绑定生命周期的逐消息反馈记录、乐观版本、伴随记录持久化与 Host Remote 契约 |

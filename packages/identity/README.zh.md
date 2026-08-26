@@ -17,3 +17,4 @@
 | [`user-credential-mysql/`](user-credential-mysql/README.md) | 在 MySQL 中持久化登录标识和 scrypt 密码 verifier | `userCredentials` |
 | [`tenant/`](tenant/README.md) | 定义稳定租户、用户成员记录、生命周期状态和与 Provider 无关的管理操作 | `tenants` |
 | [`team/`](team/README.md) | 定义从属于一个租户的稳定团队、用户成员记录、生命周期状态和与 Provider 无关的管理操作 | `teams` |
+| [`authority/`](authority/README.md) | 通过对同一团队的角色与对象 Action 集合取交来决定允许或拒绝 | `authority` |
