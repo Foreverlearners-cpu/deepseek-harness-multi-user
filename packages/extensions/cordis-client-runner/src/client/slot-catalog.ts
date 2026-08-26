@@ -89,7 +89,9 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ownerProps: [
       '/** Conversation owner share: business state and actions belong to the registrant. */\nexport interface ConvOwnerProps {}',
     ],
-    ownerPropsReferences: [],
+    ownerPropsReferences: [
+      'Conversation',
+    ],
     standardProps: [
       'useSessions: SnapshotSelectorHook<SessionListState>',
       'useWorkspaces: SnapshotSelectorHook<import(\'./workspaces/service.ts\').WorkspaceListState>',
@@ -139,9 +141,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ownerProps: [
       '/**\n * Owner currency of the assistant-message action strip: the durable identity\n * of the one finalized message the contributed actions address. Only finalized\n * messages reach this slot, so the id is always present.\n */\nexport interface AssistantActionOwnerProps {\n  /** Stable identity carried from the `assistant/message` event. */\n  messageId: MessageId\n}',
     ],
-    ownerPropsReferences: [
-      'MessageId',
-    ],
+    ownerPropsReferences: [],
     standardProps: [
       'useSessions: SnapshotSelectorHook<SessionListState>',
       'useWorkspaces: SnapshotSelectorHook<import(\'./workspaces/service.ts\').WorkspaceListState>',
@@ -1457,7 +1457,9 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     hookContext: '',
     slotInject: '',
     declaredBy: 'an entry in \'root\' (client-ui-layout), so it exists while that entry is mounted',
-    occupants: [],
+    occupants: [
+      'client-ui-auth-login LoginOverlay id \'auth-login\'',
+    ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'shell.overlay\', () => ctx.slots.register(\n      { name: \'shell.overlay\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
     source: 'packages/client/ui-layout/src/client/index.ts:83',

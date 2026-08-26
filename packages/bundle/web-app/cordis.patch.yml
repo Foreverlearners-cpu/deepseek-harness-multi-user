@@ -180,6 +180,11 @@
     - id: ui-layout
       name: '@deepseek-ai/dsh-client-ui-layout'
 
+    # Local presentation-only login choice. Authentication and authorization
+    # remain Host responsibilities and are intentionally not inferred here.
+    - id: ui-auth-login
+      name: '@deepseek-ai/dsh-client-ui-auth-login'
+
     - id: ui-sidebar
       name: '@deepseek-ai/dsh-client-ui-sidebar'
 

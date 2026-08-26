@@ -63,6 +63,7 @@
     { "path": "./packages/extensions/ui-cordis" },
     { "path": "./packages/test-support/client-runtime" },
     { "path": "./packages/client/ui-layout" },
+    { "path": "./packages/client/ui-auth-login" },
     { "path": "./packages/client/ui-sidebar" },
     { "path": "./packages/client/ui-conversation" },
     { "path": "./packages/client/ui-tool" },
