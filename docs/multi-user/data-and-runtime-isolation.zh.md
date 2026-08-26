@@ -8,6 +8,8 @@
 
 每项资源在创建时都有不可变的租户所有者。表示单个 principal 工作的资源还具有可判别的 owner principal。可变授权和生命周期状态属于控制平面表，而不是复制到每条资源记录中。
 
+服务端 profile 中的 `SessionOwner` 是用户或 service account，本地 profile 还允许显式 local principal。Server composition 在 import 或创建记录时拒绝 local owner。
+
 | 资源 | 必需所有权 | 必需变更 |
 |---|---|---|
 | Session header | `tenantId`、`ownerPrincipal: SessionOwner`、`workspaceId?` | 从已认证上下文写入；永远不信任 create 请求中的这些字段 |
@@ -23,7 +25,7 @@
 
 ## Session 持久化
 
-`SessionHeader` 已经承载所有持久化后端使用的日志外存储元数据，因此它适合拥有不可变 session 租户信息。提案中的 header 新增品牌类型 `tenantId`、可判别的 `ownerPrincipal` 和可选 `workspaceId`。服务端模式的创建流程从 `AuthenticatedCall` 的 tenant variant 派生这些字段；只有 import 路径可以提交经过校验的历史所有权。
+`SessionHeader` 已经承载所有持久化后端使用的日志外存储元数据，因此它适合拥有不可变 session 租户信息。提案中的 header 新增品牌类型 `tenantId`、可判别的 `ownerPrincipal` 和可选 `workspaceId`。服务端模式的创建流程从已校验 `AuthorityCallContext` 的 tenant scope 派生这些字段；其中嵌套的 `AuthenticatedCall` 仍只包含身份。只有 import 路径可以提交经过校验的历史所有权。
 
 持久化 seam 的公共接口和后端接口都变为租户级。`create`、`prepare`、`load`、`inspect`、`readFrom`、`list`、`listSnapshots`、`fork`、修复和冲突检查都接收或派生访问 scope。任何方法都不能先扫描所有租户再过滤。系统维护接口可以枚举租户，但它属于独立控制平面能力，普通 Remote descriptor 无法访问。
 

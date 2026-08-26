@@ -8,6 +8,8 @@ This reference defines proposed ownership and isolation rules for durable data, 
 
 Every resource has an immutable tenant owner at creation. Resources that represent one principal's work also have a discriminated owner principal. Mutable grants and lifecycle state live in control-plane tables rather than being copied into every record.
 
+`SessionOwner` is a user or service account in a server profile and may additionally be the explicit local principal in a local profile. Server compositions reject local owners while importing or creating records.
+
 | Resource | Required ownership | Required change |
 |---|---|---|
 | Session header | `tenantId`, `ownerPrincipal: SessionOwner`, `workspaceId?` | Stamp from authenticated context; never trust these fields from a create request |
@@ -23,7 +25,7 @@ Opaque ids remain globally collision-resistant UUIDs or equivalent random identi
 
 ## Session persistence
 
-`SessionHeader` is the correct owner for immutable session tenancy because it already carries out-of-log storage metadata used by every persistence backend. The proposed header adds branded `tenantId`, discriminated `ownerPrincipal`, and an optional `workspaceId`. Server-mode creation derives them from the tenant variant of `AuthenticatedCall`; import is the only path that may supply validated historical ownership.
+`SessionHeader` is the correct owner for immutable session tenancy because it already carries out-of-log storage metadata used by every persistence backend. The proposed header adds branded `tenantId`, discriminated `ownerPrincipal`, and an optional `workspaceId`. Server-mode creation derives them from the tenant scope of the validated `AuthorityCallContext`; the nested `AuthenticatedCall` remains identity-only. Import is the only path that may supply validated historical ownership.
 
 The persistence seam becomes tenant-scoped at its public and backend interfaces. `create`, `prepare`, `load`, `inspect`, `readFrom`, `list`, `listSnapshots`, `fork`, repair, and collision checks all receive or derive an access scope. No method scans every tenant and filters afterward. A system maintenance interface may enumerate tenants, but it is a separate control-plane capability unavailable through ordinary Remote descriptors.
 

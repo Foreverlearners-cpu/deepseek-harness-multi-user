@@ -10,7 +10,7 @@
 
 在共享 Cordis 进程中只给部分方法增加 `tenantId`，不能作为首个安全边界。当前服务图包含全局列表、实时 Map、广播事件流、本地路径、同 UID 子进程，以及只用 `SessionId` 作为键的缓存；任何一个遗漏的过滤条件都可能暴露其他用户的内容或权限。在引入租户感知 API 的过程中，进程或容器隔离可以限制此类失败的影响范围。
 
-首个版本中的 session 应默认仅归创建它的 principal 私有。每个 session 由一个人类用户或 service account 所有；只有租户成员关系并不会授予 session 访问权。租户成员可以共享 workspace 定义和策略，但读取、steering、批准、导出或 fork 其他 principal 的 session，需要后续单独设计显式共享机制。多用户部署和 session 协作是两个不同功能。
+首个版本中的 session 应默认仅归创建它的 principal 私有。每个服务端 session 由一个人类用户或 service account 所有，本地 profile 的 session 则由显式 local principal 所有；只有租户成员关系并不会授予 session 访问权。租户成员可以共享 workspace 定义和策略，但读取、steering、批准、导出或 fork 其他 principal 的 session，需要后续单独设计显式共享机制。多用户部署和 session 协作是两个不同功能。
 
 ## 当前的单用户假设
 
@@ -59,6 +59,7 @@ Session 执行环境为模型控制的代码提供更强的安全边界。本地
 ## 文档地图
 
 - [身份与访问控制](identity-and-access.md)定义 principal、认证、授权、管理角色、session 所有权和传输要求。
+- [授权架构](authorization.md)定义统一授权 API、角色功能与资源关系两条路线、可扩展动作、转授、持久化、缓存、集合 scope 和执行边界。
 - [数据与运行时隔离](data-and-runtime-isolation.md)定义租户感知的持久化、事件日志与审计日志、settings、credentials、资源文件、事件流、缓存和执行隔离。
 - [流式分块保留策略](stream-chunk-retention.md)定义流式响应分块的有界存储与清理规则。
 - [交付计划](delivery-plan.md)安排工作顺序，定义兼容性立场和负向测试覆盖，并列出实现前必须确定的决策。

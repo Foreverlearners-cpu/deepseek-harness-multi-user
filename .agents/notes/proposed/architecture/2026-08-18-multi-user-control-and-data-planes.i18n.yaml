@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-18-multi-user-control-and-data-planes.md
-2026-08-18-multi-user-control-and-data-planes.md: a9f970f13b15c7e65f1e965b943402a98c3b5d24
-2026-08-18-multi-user-control-and-data-planes.zh.md: 3dcb2f1ce66a7e9269dbe426bdc0f429ec139143
+2026-08-18-multi-user-control-and-data-planes.md: 5345506fe63d78c8775a193bdf89ee920a61ccc9
+2026-08-18-multi-user-control-and-data-planes.zh.md: e4d49f701585b50b9f7315557a0ee94197e1f261

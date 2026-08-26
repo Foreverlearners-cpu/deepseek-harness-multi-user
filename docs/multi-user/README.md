@@ -10,7 +10,7 @@ The secure first implementation should use a control plane, tenant-scoped Harnes
 
 A shared Cordis process with `tenantId` added to selected methods is not an acceptable first security boundary. The current service graph contains global listings, live maps, broadcast streams, local paths, same-UID subprocesses, and caches whose keys are only `SessionId`; one missed filter would expose another user's content or authority. Process or container separation limits that failure while tenant-aware APIs are introduced.
 
-Sessions should be private to their owning principal in the first release. A human user or service account owns each session; tenant membership alone grants no session access. Tenant members may share workspace definitions and policy, but reading, steering, approving, exporting, or forking another principal's session requires an explicit later sharing design. Multi-user deployment and collaborative sessions are separate features.
+Sessions should be private to their owning principal in the first release. A human user or service account owns each server session, while the explicit local principal owns sessions in a local profile; tenant membership alone grants no session access. Tenant members may share workspace definitions and policy, but reading, steering, approving, exporting, or forking another principal's session requires an explicit later sharing design. Multi-user deployment and collaborative sessions are separate features.
 
 ## Current single-user assumptions
 
@@ -59,6 +59,7 @@ The session execution world provides the stronger boundary for model-controlled 
 ## Document map
 
 - [Identity and access](identity-and-access.md) defines principals, authentication, authorization, administrative roles, session ownership, and transport requirements.
+- [Authorization architecture](authorization.md) defines the unified authority API, role-functional and resource-relationship routes, extensible actions, delegation, persistence, caching, collection scopes, and the execution boundary.
 - [Data and runtime isolation](data-and-runtime-isolation.md) defines tenant-aware persistence, event and audit logs, settings, credentials, assets, streams, caches, and execution isolation.
 - [Stream chunk retention](stream-chunk-retention.md) defines bounded storage and cleanup for streamed response chunks.
 - [Delivery plan](delivery-plan.md) orders the work, defines compatibility posture and negative test coverage, and names decisions that must be settled before implementation.

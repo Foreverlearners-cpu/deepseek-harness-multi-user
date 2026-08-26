@@ -14,17 +14,21 @@ Status: proposed
 
 ## 提案
 
-把多用户部署拆成控制平面、租户级 Harness 运行时和 session 执行环境。详细参考见 [docs/multi-user](../../../../docs/multi-user/README.md)。
+把多用户部署拆成控制平面、租户级 Harness 运行时和 session 执行环境。详细参考见 [docs/multi-user](../../../../docs/multi-user/README.md)和[授权架构](../../../../docs/multi-user/authorization.md)。
 
 控制平面拥有认证、内部用户与租户 identity、成员关系与角色、service account、策略决策、管理、quota、runtime routing 和仅追加安全审计服务。浏览器认证委托给 OIDC；自动化使用有 scope 的短期 token。本地 profile 构造显式 local principal 和个人租户。服务端 profile 在没有挂载认证提供方时启动失败，并且不存在 loopback 或 trusted-host 认证旁路。
 
-每项受保护传输调用都在 API Proxy 或 Typert 分发前转换成不可变 `AuthenticatedCall`。它携带 request id、principal、authentication method、cancellation signal，以及可判别的 tenant 或 platform scope。Tenant scope 包含 active tenant 与 membership；platform scope 只由控制平面管理方法接受。受保护服务方法显式接收该上下文。请求 payload 不能建立自身 actor 或 tenant，进程内传输也使用相同调用路径。
+每项受保护传输调用都在 API Proxy 或 Typert 分发前转换成不可变 `AuthenticatedCall`。它只携带身份与认证事实。独立的 tenant-scope 或控制平面适配器校验 membership 或 operator 状态，并在 `AuthorityCallContext` 中把原样 call 与可判别的 tenant 或 platform scope 组合起来。受保护服务方法显式接收该上下文、证明 call 仍有效，并在领域操作内部强制授权。请求 payload 不能建立自身 actor 或 tenant，进程内传输也使用相同路径。
 
 策略与资源所有权都不可缺少。策略服务决定 session read、steer、approve、export、workspace manage、credential use/manage 和 membership manage 等动作。资源所有者执行租户级查找，并在内容、存在性、数量或事件离开服务前验证 session/principal 所有权。跨租户有效 id 与不存在 id 对外返回相同 not-found 结果。
 
-Session header 增加由 session factory 写入的不可变 tenant 与可判别 owner-principal identity。Session 可以由人类用户或 service account 所有。Persistence、query、workspace、settings、credentials、attachment references、projections、search、caches、event subscriptions、approvals、jobs、terminals 和 live-agent registries 全部变为租户级。Session id 仍是不透明抗冲突标识符，但任何组件都不能把不可猜测性当作授权。现有无所有权持久格式直接拒绝；独立一次性 importer 写入新的租户所有 store。
+`dsh-authority` 是唯一授权入口和 Provider 注册表。每个 action 都声明命名 functional-grant、relationship-grant 和 mandatory-guard slot，因此缺失 guard 不会消失在空集合 allow 中。其功能路线合并人类 membership 的所有 active role 动作 grant，使用 service-account membership 的有界直接 grant，或者在显式 local profile 中使用组合所有的 local grant；资源路线合并匹配的 membership、role、tenant 和 everyone grant 以及肯定性领域 grant。两条路线都必须包含请求动作，因此最终决定是两者的交集；每个必选领域 guard 也必须允许，任何拒绝都不能被 grant 覆盖。CRUD 只提供基础动作模板；领域插件可以注册 `execute`、`publish` 或 `export` 等动作。每个动作都区分 `use`，可转授 tenant action 还区分 `delegate`；`delegate` grant 可以分配其他 membership 的 `use` grant，但不能递归分配 `delegate`。
+
+Session header 增加由 session factory 写入的不可变 tenant 与可判别 owner-principal identity。服务端 session 可以由人类用户或 service account 所有；local-profile session 还可以由显式 local principal 所有，server composition 会拒绝该 owner。Persistence、query、workspace、settings、credentials、attachment references、projections、search、caches、event subscriptions、approvals、jobs、terminals 和 live-agent registries 全部变为租户级。Session id 仍是不透明抗冲突标识符，但任何组件都不能把不可猜测性当作授权。现有无所有权持久格式直接拒绝；独立一次性 importer 写入新的租户所有 store。
 
 MySQL 通过提议的 `dsh-mysql` 基础设施服务成为服务端关系数据权威存储。`dsh-mysql` 拥有具名 pool、transaction、migration coordination、health 和 classified failure；identity、会话持久化、settings、audit 和其他领域消费方拥有自身表与查询。Redis 承载可丢弃 cache 与协调状态，Elasticsearch 承载可重建 search projection。Transactional MySQL outbox 驱动两者，因此任何一个系统都不会成为 authorization 或 replay authority。
+
+授权 action、role、membership-role assignment、service-account direct grant、platform operator assignment、role grant、resource grant、delegated-grant origin 和 revision 使用规范化 MySQL 表，并建立面向 subject 的反向索引。资源记录永远不嵌入不断扩大的用户 list，MySQL 也不为每个 principal 物化具有权威性的最终权限并集。Redis 保存带版本且可丢弃的 membership、role 与 resource 读取模型；primary-only head 通过单调 compare-and-set 前进，每次决定都按 expiry 过滤 cache evidence，cache miss 或 revision 不一致时执行有索引的 MySQL 读取。每项减少授权的 mutation 都在 MySQL commit 前安装 fail-closed Redis revision fence，并在 commit 后替换它；失败可以留下 stale deny，但不能留下 stale allow。CDC 异步修复下游状态，不承担即时撤销边界。
 
 Session 事件日志仍是模型可见行为的 replay 真源。安全审计记录使用独立存储，包含 actor、tenant、action、resource identity、decision、outcome、request id、time 和有界 metadata，不含 authentication token、credential value 或 message/tool body。只有当共享 session 行为需要重建某个人类编写事实时，人类 actor 标注才进入 session 日志。
 
@@ -52,6 +56,16 @@ Session 事件日志仍是模型可见行为的 replay 真源。安全审计记�
 
 **在 Harness 内构建密码认证。** 否决，因为维护良好的 OIDC 提供方拥有密码存储、MFA、恢复、federation 和 compromise response。Harness 消费已校验 identity，并拥有产品授权。
 
+**把 RBAC 用作完整授权模型。** 否决，因为角色可以确定 actor 是否能够使用一项产品功能，但不能单独表达该 actor 是否拥有、获授或可以看见某一项具体资源。
+
+**把资源 ACL 用作完整授权模型。** 否决，因为与一项资源的关系不能悄悄向角色已禁止该功能的 actor 授予对应产品功能。功能策略与资源关系是两个独立要求，最终取交集。
+
+**持久化八个固定权限列或 bit。** 否决，因为 CRUD 及其转授检查只是基础模板；执行、发布、导出、安装和未来领域动作不能要求修改 schema，也不能继承固定宽度上限。MySQL 保存规范化 action 与 grant 记录，可丢弃的运行时读取模型可以使用带版本 bitmap。
+
+**在每项资源记录中为每个动作嵌入用户 list。** 否决，因为 list 会无限增长，使带索引反向查询和过期处理变得困难，在一项资源记录上形成竞争，并模糊 grantor 与 revoke 审计。资源 grant 按 subject、action 和 grant kind 规范化。
+
+**把每个 principal 的最终权限并集物化为权威 MySQL 记录。** 否决，因为修改一项角色会向所有被分配的 principal 扇出，并且可能在部分修复过程中留下陈旧安全状态。可选 Redis 并集使用 role 与 revision 指纹作为 key，并始终回源规范化 MySQL 权威数据。
+
 **把 `workspace-write`、worker thread 或 E2B 名称视为足够租户隔离。** 否决，因为本地文件策略允许读取，worker thread 与 `node:vm` 共享进程权限，而当前 E2B 包记录了 control-channel 和 same-UID 限制。服务端组合要求提供方保证满足执行威胁模型。
 
 ## 验收标准
@@ -62,6 +76,7 @@ Session 事件日志仍是模型可见行为的 replay 真源。安全审计记�
 - Tenant A 与 tenant B 可以并发运行，且不会接收对方的事件、pending interaction、workspace change、cache entry、temporary artifact、telemetry content 或 execution effect。
 - 服务端模型执行不能读取 Host 配置、控制平面 credentials、其他租户存储或其他 session execution state，并且 teardown 在有界时间达到完全停稳。
 - Session replay 保持无损，模型可见输入仍被记录；authentication 与 security-audit 数据不进入模型 history。
+- 只有适用的人类 role 并集、service-account direct grant、local-profile grant 或 platform operator grant 与匹配的 resource/domain 并集都允许一项动作，并且每个必选 guard 都通过时，授权才允许该动作；任何减少授权的 mutation 在报告成功后，都不能因陈旧 cache 继续允许已撤销访问。
 - 本地 Web、headless 和 automation profile 通过显式 local principal 继续工作，无需挂载服务端专属控制平面依赖。
 - Keyless assembled test 使用至少两个租户中的真实有效 id，并覆盖 HTTP、events、persistence、cold resume、fork、search、attachments、approvals、execution、revocation 和 administration。
 

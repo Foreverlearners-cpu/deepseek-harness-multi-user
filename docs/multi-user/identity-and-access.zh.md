@@ -10,10 +10,12 @@
 
 - `UserId` 标识一个人类账号；邮箱地址、显示名称或上游 identity 发生变化时，该 id 不变。
 - `TenantId` 标识一个管理和数据隔离单元。新用户获得个人租户；组织使用额外租户，而不是改变用户 identity。
-- `MembershipId` 把一个 principal 与一个租户连接起来，并带有生命周期状态和授权分配。人类成员关系携带角色；service-account 成员关系携带有界动作授权，并且不能持有租户 owner 权限。成员关系被禁用或删除后，即使 principal 仍有效，后续授权也会失效。
+- `MembershipId` 把一个 principal 与一个租户连接起来，并带有生命周期状态和授权分配。人类成员关系携带一个或多个 active role 分配；service-account 成员关系携带有界动作授权，并且不能持有租户 owner 权限。成员关系被禁用或删除后，即使 principal 仍有效，后续授权也会失效。
 - `ServiceAccountId` 标识非人类自动化主体。它的凭据、授权、有效期和撤销状态独立于人类登录 session，并且只能通过有效成员关系访问租户资源。
 
-已认证 principal 是一个用户或 service account 加认证事实。只有控制平面解析出有效成员关系后，一次调用才成为租户级调用。选中的 `TenantId` 是可信上下文，不是普通端点输入。
+本地 profile 另外拥有一个仅由组合创建的 `LocalPrincipalId`；它不是控制平面账号，服务端 profile 永远不接受它。
+
+已认证 principal 是一个用户、service account 或 local principal 加认证事实。只有控制平面解析出有效成员关系，或者本地组合解析出自身构造的个人租户与 membership 后，一次调用才成为租户级调用。选中的 `TenantId` 是可信上下文，不是普通端点输入。
 
 外部 OIDC 的 `issuer + subject` 组合映射到 `UserId`。邮箱属于个人资料，可以辅助邀请流程，但既不是唯一 identity，也不是授权证据。控制平面不会在认证记录中存储模型提供方 credential。
 
@@ -27,27 +29,35 @@ SDK 和自动化客户端使用短期 OAuth access token 或限定范围的 serv
 
 认证会校验 issuer、audience、签名、有效期、not-before 时间、token 类型，以及提供方特有的 nonce/state 要求。密钥轮换或身份提供方故障时，新调用按拒绝处理。撤销语义和最大 session 时长属于部署可调参数，不是插件中的硬编码常量。
 
-## 已认证调用上下文
+## 已认证与作用域调用上下文
 
-每种传输都必须在 API Proxy 或 Typert 方法解析之前，把已校验凭据和已解析授权 scope 适配成一个显式且不可变的调用上下文：
+每种传输都必须在 API Proxy 或 Typert 方法解析之前，把已校验凭据适配成 `dsh-auth` 定义的原样不可变 `AuthenticatedCall`。它只包含身份与认证事实。随后，`dsh-tenant-scope`、控制平面适配器或本地组合校验 active membership、operator 状态或 local profile，并在独立可信授权上下文中签发带 provenance 的 scope：
 
 ```text
 AuthenticatedCall = {
   requestId,
   principal,
-  authenticationMethod,
+  channel,
+  method,
   signal,
+  credentialId?,
+  authenticatedAt,
+  expiresAt?
+}
+
+AuthorityCallContext = {
+  call: AuthenticatedCall,
   scope:
     | { kind: "tenant", tenantId, membershipId }
     | { kind: "platform", operatorGrantId }
 }
 ```
 
-执行受保护操作的 handler 和服务 API 显式接收该上下文。租户产品 API 只接受 tenant variant；platform variant 只由控制平面管理 API 接受，并且不能作为租户权限向下转发。端点 payload 包含资源 id 和业务输入，而不包含具有权威性的 `userId` 或 `tenantId`。这个显式参数让授权在包边界可见，并避免依赖可变进程全局值或隐式异步局部值。
+执行受保护操作的 handler 和服务 API 显式接收 `AuthorityCallContext`。不能仅因其字段形状正确就信任它。每项受保护操作中，`dsh-authority` 都会证明原样 call 仍有效，验证 scope 由 active adapter 签发，并重新解析 membership 是否属于该 call principal 与 tenant，或者 active operator grant 是否属于该 call user。租户产品 API 只接受 tenant variant；platform variant 只由控制平面管理 API 接受，并且不能作为租户权限向下转发。端点 payload 包含资源 id 和业务输入，而不包含具有权威性的 `userId` 或 `tenantId`。这个显式参数让授权在包边界可见，并避免依赖可变进程全局值或隐式异步局部值。
 
-HTTP 为每个请求创建一个上下文。WebSocket 在升级前完成认证；连接在自身生命周期内固定 principal 和当前租户，成员关系撤销后，事件流必须在有界时间内关闭或重新授权。重连需要重新认证。进程内传输也使用同一上下文类型，不能因为没有跨越网络就绕过策略。
+HTTP 为每个请求创建一个已认证 call 和作用域上下文。WebSocket 在升级前完成认证；连接在自身生命周期内固定 principal 和当前租户，成员关系撤销后，事件流必须在有界时间内关闭或重新授权。重连需要重新认证。进程内传输也使用相同的两阶段上下文路径，不能因为没有跨越网络就绕过策略。
 
-控制平面与租户运行时之间的内部调用使用双向认证通道，或者使用不允许不可信插件输入构造的同进程能力。签名转发断言具有短有效期，audience 只允许一个运行时，并包含 request id、principal id、tenant id 和已授权动作；运行时仍然校验资源所有权。
+控制平面与租户运行时之间的内部调用使用双向认证通道，或者使用不允许不可信插件输入构造的同进程能力。由于 `AuthenticatedCall` 具有进程内 provenance 且不能序列化，目标运行时通过自己的 Provider 认证短期转发断言，并派生新的本地 call 与 scope。该断言的 audience 只允许一个运行时，并包含 request id、principal id、tenant id 和 action ceiling；该 ceiling 收窄 credential 使用范围，但不是上游授权结果，因此运行时仍完整判断功能、关系和 guard 路线。
 
 ## 授权
 
@@ -56,7 +66,7 @@ HTTP 为每个请求创建一个上下文。WebSocket 在升级前完成认证�
 - 策略服务根据成员关系、角色、资源分类和部署策略，决定已认证 actor 能否执行某个动作。
 - 资源服务只在已认证租户内加载或修改数据，并校验资源特有的所有权。它不把上游传来的布尔值当作证明，也不向远程调用方提供无 scope 的回退方法。
 
-首个版本为人类使用精简角色基线：租户 `owner`、租户 `admin` 和租户 `member`，以及独立的平台 `operator` 角色。Service account 直接获得有界动作授权，不能成为租户 owner 或平台 operator。平台 operator 管理部署健康、停用、配额和路由；它们不会自动获得租户 transcript 或 secret 访问权。租户 owner 管理成员关系和租户策略。租户 admin 管理策略允许的租户资源。Member 管理自己的 session，并使用已授权的租户 workspace。
+首个版本为人类使用精简角色基线：租户 `owner`、租户 `admin` 和租户 `member`，以及独立的平台 `operator` 角色。一个人类 membership 可以组合多个 active role 分配，其功能权限为这些角色的并集。Service account 直接获得有界动作授权，不能成为租户 owner 或平台 operator。平台 operator 管理部署健康、停用、配额和路由；它们不会自动获得租户 transcript 或 secret 访问权。租户 owner 管理成员关系和租户策略。租户 admin 管理策略允许的租户资源。Member 管理自己的 session，并使用已授权的租户 workspace。
 
 动作是领域特有且稳定的，例如 `session:create`、`session:read`、`session:steer`、`session:approve`、`session:export`、`workspace:manage`、`settings:user-write`、`settings:tenant-write`、`credential:use`、`credential:manage` 和 `membership:manage`。角色映射到动作；端点名称不能直接充当授权模型。
 
@@ -66,7 +76,7 @@ List、search、count、export、fork、resume 和事件订阅同样属于授权
 
 ## Session 所有权与批准
 
-Session 具有不可变的 `tenantId` 和 `ownerPrincipal` 元数据。`ownerPrincipal` 是可判别的 `SessionOwner`：它是 `UserId` 或 `ServiceAccountId`，而不是无类型 id。已认证创建者不能直接提交这两个值；session factory 从租户调用上下文写入它们。Fork 留在同一租户内并保留所有者，除非以后引入显式共享或转移操作。跨租户复制属于 export/import 工作流，它创建新 id、校验 attachment，并写入独立审计轨迹。
+Session 具有不可变的 `tenantId` 和 `ownerPrincipal` 元数据。`ownerPrincipal` 是可判别的 `SessionOwner`：它是 `UserId`、`ServiceAccountId` 或仅供 local profile 使用的 `LocalPrincipalId`，而不是无类型 id。已认证创建者不能直接提交这两个值；session factory 从租户调用上下文写入它们。Server composition 拒绝 local owner。Fork 留在同一租户内并保留所有者，除非以后引入显式共享或转移操作。跨租户复制属于 export/import 工作流，它创建新 id、校验 attachment，并写入独立审计轨迹。
 
 首个版本中只有 session owner 可以 steering 或取消。人类所有的 session 只允许该用户回答问题或交互式批准工具调用。Service account 所有的 session 使用预授权策略，不能冒充人类 approver；后续委托设计必须指定显式人类 approver。租户管理权限不会静默授予批准权，因为一次批准可能扩大文件系统或进程访问权限。未来的协作 session 设计必须分别定义 editor 和 approver 授权，给每条持久化人类输入标注 actor，并先解决并发轮次所有权，再启用共享修改。
 

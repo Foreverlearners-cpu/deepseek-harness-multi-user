@@ -10,10 +10,12 @@ The control plane owns four branded internal identities:
 
 - `UserId` identifies a human account and never changes when an email address, display name, or upstream identity changes.
 - `TenantId` identifies one administrative and data-isolation unit. A new user receives a personal tenant; organizations use additional tenants rather than changing user identity.
-- `MembershipId` joins one principal to one tenant with lifecycle state and an authorization assignment. Human memberships carry a role; service-account memberships carry bounded action grants and cannot hold tenant-owner authority. Disabled or removed membership invalidates future authorization even while the principal remains valid.
+- `MembershipId` joins one principal to one tenant with lifecycle state and authorization assignments. Human memberships carry one or more active role assignments; service-account memberships carry bounded action grants and cannot hold tenant-owner authority. Disabled or removed membership invalidates future authorization even while the principal remains valid.
 - `ServiceAccountId` identifies non-human automation. Its credentials, grants, expiry, and revocation are independent of a human login session, and it reaches tenant resources only through an active membership.
 
-An authenticated principal is either a user or service account plus authentication facts. A call becomes tenant-scoped only after the control plane resolves an active membership. The selected `TenantId` is trusted context, not ordinary endpoint input.
+A local profile additionally owns a composition-only `LocalPrincipalId`; it is not a control-plane account and is never accepted by a server profile.
+
+An authenticated principal is a user, service account, or local principal plus authentication facts. A call becomes tenant-scoped only after the control plane resolves an active membership, or after a local composition resolves its synthesized personal tenant and membership. The selected `TenantId` is trusted context, not ordinary endpoint input.
 
 External OIDC `issuer + subject` pairs map to `UserId`. Email is profile data and may help an invitation flow, but it is neither unique identity nor authorization evidence. The control plane stores no model-provider credential in an authentication record.
 
@@ -27,27 +29,35 @@ The local `web` and `headless` profiles synthesize a `LocalPrincipal` bound to o
 
 Authentication validates issuer, audience, signature, expiry, not-before time, token type, and provider-specific nonce/state requirements. Key rotation and identity-provider outages fail closed for new calls. Revocation semantics and maximum session age are deployment tunables, not hardcoded plugin constants.
 
-## Authenticated call context
+## Authenticated and scoped call contexts
 
-Every transport adapts a verified credential and resolved authorization scope into one explicit immutable call context before API Proxy or Typert method resolution:
+Every transport adapts a verified credential into the exact immutable `AuthenticatedCall` defined by `dsh-auth` before API Proxy or Typert method resolution. It contains identity and authentication facts only. `dsh-tenant-scope`, the control-plane adapter, or the local composition then validates active membership, operator state, or the local profile and mints a provenance-bearing scope in a separate trusted authorization context:
 
 ```text
 AuthenticatedCall = {
   requestId,
   principal,
-  authenticationMethod,
+  channel,
+  method,
   signal,
+  credentialId?,
+  authenticatedAt,
+  expiresAt?
+}
+
+AuthorityCallContext = {
+  call: AuthenticatedCall,
   scope:
     | { kind: "tenant", tenantId, membershipId }
     | { kind: "platform", operatorGrantId }
 }
 ```
 
-The context is passed through handler and service APIs that perform protected operations. Tenant product APIs accept only the tenant variant; the platform variant is accepted only by control-plane management APIs and cannot be forwarded as tenant authority. Endpoint payloads contain resource ids and business inputs, not an authoritative `userId` or `tenantId`. This explicit parameter keeps authorization visible at package boundaries and avoids relying on mutable process globals or an implicit asynchronous-local value.
+The `AuthorityCallContext` is passed through handler and service APIs that perform protected operations. It is not trusted merely because its fields have the right shape. On every protected operation, `dsh-authority` proves the exact call is still current, verifies the scope was minted by the active adapter, and re-resolves that the membership belongs to the call principal and tenant or that the active operator grant belongs to the call user. Tenant product APIs accept only the tenant variant; the platform variant is accepted only by control-plane management APIs and cannot be forwarded as tenant authority. Endpoint payloads contain resource ids and business inputs, not an authoritative `userId` or `tenantId`. This explicit parameter keeps authorization visible at package boundaries and avoids relying on mutable process globals or an implicit asynchronous-local value.
 
-HTTP creates one context per request. WebSocket authentication occurs before upgrade; the connection pins the principal and active tenant for its lifetime, and membership revocation closes or reauthorizes the stream within a bounded interval. Reconnect performs authentication again. In-process carriers use the same context type rather than bypassing policy because no network was crossed.
+HTTP creates one authenticated call and scoped context per request. WebSocket authentication occurs before upgrade; the connection pins the principal and active tenant for its lifetime, and membership revocation closes or reauthorizes the stream within a bounded interval. Reconnect performs authentication again. In-process carriers use the same two-stage context path rather than bypassing policy because no network was crossed.
 
-Internal calls between a control plane and tenant runtime use a mutually authenticated channel or a same-process capability that cannot be constructed by untrusted plugin input. A signed forwarding assertion has a short expiry, audience restricted to one runtime, request id, principal id, tenant id, and granted action; the runtime still validates resource ownership.
+Internal calls between a control plane and tenant runtime use a mutually authenticated channel or a same-process capability that cannot be constructed by untrusted plugin input. Because an `AuthenticatedCall` has process-local provenance and cannot be serialized, the target runtime authenticates a short-lived forwarding assertion through its own Provider and derives a new local call and scope. The assertion restricts audience to one runtime and includes request id, principal id, tenant id, and an action ceiling; that ceiling narrows credential use but is not an upstream authorization result, so the runtime still evaluates its full functional, relationship, and guard routes.
 
 ## Authorization
 
@@ -56,7 +66,7 @@ Authorization has two cooperating owners:
 - The policy service decides whether an authenticated actor may perform an action under a membership, role, resource classification, and deployment policy.
 - The resource service loads or mutates data only inside the authenticated tenant and verifies resource-specific ownership. It never accepts a prior boolean as proof and never offers an unscoped fallback method to a remote caller.
 
-The first release uses a small human role baseline: tenant `owner`, tenant `admin`, and tenant `member`, plus a separate platform `operator` role. Service accounts receive bounded action grants directly and cannot become tenant owners or platform operators. Platform operators manage deployment health, suspension, quotas, and routing; they do not automatically receive tenant transcript or secret access. Tenant owners manage membership and tenant policy. Tenant admins manage tenant resources allowed by policy. Members manage their own sessions and use authorized tenant workspaces.
+The first release uses a small human role baseline: tenant `owner`, tenant `admin`, and tenant `member`, plus a separate platform `operator` role. A human membership may combine active role assignments; its functional permission is their union. Service accounts receive bounded action grants directly and cannot become tenant owners or platform operators. Platform operators manage deployment health, suspension, quotas, and routing; they do not automatically receive tenant transcript or secret access. Tenant owners manage membership and tenant policy. Tenant admins manage tenant resources allowed by policy. Members manage their own sessions and use authorized tenant workspaces.
 
 Actions are domain-specific and stable, for example `session:create`, `session:read`, `session:steer`, `session:approve`, `session:export`, `workspace:manage`, `settings:user-write`, `settings:tenant-write`, `credential:use`, `credential:manage`, and `membership:manage`. A role maps to actions; endpoint names do not become the authorization model.
 
@@ -66,7 +76,7 @@ List, search, count, export, fork, resume, and event subscription are authorizat
 
 ## Session ownership and approvals
 
-A session has immutable `tenantId` and `ownerPrincipal` metadata. `ownerPrincipal` is a discriminated `SessionOwner`: either a `UserId` or a `ServiceAccountId`, never an untyped id. The authenticated creator supplies neither value directly; the session factory stamps both from the tenant call context. Forking stays inside the tenant and preserves the owner unless an explicit sharing or transfer operation is introduced. Cross-tenant copy is an export/import workflow that creates new ids, validates attachments, and writes a separate audit trail.
+A session has immutable `tenantId` and `ownerPrincipal` metadata. `ownerPrincipal` is a discriminated `SessionOwner`: a `UserId`, `ServiceAccountId`, or local-profile-only `LocalPrincipalId`, never an untyped id. The authenticated creator supplies neither value directly; the session factory stamps both from the tenant call context. A server composition rejects a local owner. Forking stays inside the tenant and preserves the owner unless an explicit sharing or transfer operation is introduced. Cross-tenant copy is an export/import workflow that creates new ids, validates attachments, and writes a separate audit trail.
 
 Only the session owner may steer or cancel in the first release. A human-owned session permits only that user to answer questions or grant interactive tool approval. A service-account-owned session uses pre-authorized policy and cannot impersonate a human approver; a later delegation design must name an explicit human approver. Tenant administration does not silently confer approval authority because an approval can widen filesystem or process access. A future collaborative session design must define editor and approver grants separately, attribute every durable human input, and settle concurrent turn ownership before enabling shared mutation.
 
