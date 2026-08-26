@@ -18,3 +18,4 @@ Identity values and authentication contracts shared across product domains. Anon
 | [`tenant/`](tenant/README.md) | Defines stable tenants, user membership records, lifecycle state, and Provider-independent management operations | `tenants` |
 | [`team/`](team/README.md) | Defines stable teams under one tenant, user membership records, lifecycle state, and Provider-independent management operations | `teams` |
 | [`authority/`](authority/README.md) | Decides allow or deny by intersecting same-team role and object action sets | `authority` |
+| [`auth-rbac/`](auth-rbac/README.md) | Unions team-scoped role actions and registers the authority role route | `authRbac` |

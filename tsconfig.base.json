@@ -96,6 +96,7 @@
       "@deepseek-ai/dsh-tenant/types": ["./packages/identity/tenant/src/types.ts"],
       "@deepseek-ai/dsh-team/types": ["./packages/identity/team/src/types.ts"],
       "@deepseek-ai/dsh-authority/types": ["./packages/identity/authority/src/types.ts"],
+      "@deepseek-ai/dsh-auth-rbac/types": ["./packages/identity/auth-rbac/src/types.ts"],
       "@deepseek-ai/dsh-conversation/types": ["./packages/session/conversation/src/types.ts"],
       "@deepseek-ai/dsh-user-credential/types": ["./packages/identity/user-credential/src/types.ts"],
       "@deepseek-ai/dsh-user-credential/testing": ["./packages/identity/user-credential/src/testing.ts"],

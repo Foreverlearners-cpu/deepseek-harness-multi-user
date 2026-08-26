@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-26-dsh-auth-rbac-role-route.md
+2026-08-26-dsh-auth-rbac-role-route.md: 5498040e19ddd78a6b16058cd8f48b63e5f2d6ec
+2026-08-26-dsh-auth-rbac-role-route.zh.md: 1efd7d9f4d4c9fe10c6fe059ec54fef90a587b41

@@ -25,6 +25,7 @@ One page per subsystem of the DeepSeek Harness: what it is, the data structures 
 | [tenant-directory.md](tenant-directory.md) | stable tenants, user membership lifecycle, optimistic revision, Provider operations, and sanitized change events |
 | [team-directory.md](team-directory.md) | stable teams bound to one tenant, user membership lifecycle, optimistic revision, Provider operations, and sanitized change events |
 | [authority.md](authority.md) | action catalogue, resource resolvers, role and object route Providers, and same-team allow or deny decisions |
+| [auth-rbac.md](auth-rbac.md) | team-scoped principal-role bindings, RoleUse and RoleDelegate aggregation, and the authority role route |
 | [user-credentials.md](user-credentials.md) | login identifier normalization and lookup, password verification, aggregate revision, and sanitized credential events |
 | [session-query.md](session-query.md) | logical records, bounded exact-event reads, relationship traces, semantic filters/documents, and full-text result pages |
 | [feedback.md](feedback.md) | lifecycle-bound per-message feedback records, optimistic versions, sidecar persistence, and the Host Remote contract |

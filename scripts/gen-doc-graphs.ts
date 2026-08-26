@@ -306,8 +306,17 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Authorization decision seam',
     mode: 'seam',
     implementations: [],
-    consumers: [],
+    consumers: ['auth-rbac'],
     note: 'Decides allow or deny by intersecting per-team Use or Delegate sets from the role and object routes on the resolved resource team; role storage, object grants, and membership directories remain separate.',
+  },
+  {
+    key: 'authRbac',
+    pkg: 'auth-rbac',
+    title: 'Team-scoped role route',
+    mode: 'seam',
+    implementations: [],
+    consumers: [],
+    note: 'Unions RoleUse or RoleDelegate for one user on the query team from principal-role bindings; object grants and Effective remain separate.',
   },
   {
     key: 'userCredentials',
