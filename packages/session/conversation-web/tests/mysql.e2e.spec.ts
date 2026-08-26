@@ -5,6 +5,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import Mysql, { type Config as MysqlConfig, type MysqlConnection } from '@deepseek-ai/dsh-mysql'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import type { RowDataPacket } from 'mysql2/promise'
 import { afterEach, describe, expect, it } from 'vitest'
 import ConversationMysql from '../../conversation-mysql/src/index.ts'
 import ConversationPersistence from '../../conversation-persistence/src/index.ts'
@@ -61,17 +62,17 @@ describe.skipIf(target === undefined)('real MySQL Web conversation composition',
       await ctx.conversationPersistence.flush(handle.agent.session)
 
       await ctx.mysql.connection(async (connection) => {
-        const [schema] = await connection.query<Array<{ schema_name: string; version: number }>>(
+        const [schema] = await connection.query<Array<RowDataPacket & { schema_name: string; version: number }>>(
           'SELECT schema_name, version FROM dsh_conversation_schema WHERE schema_name = ?', ['conversation'],
         )
         expect(schema).toEqual([{ schema_name: 'conversation', version: 1 }])
-        const [messages] = await connection.query<Array<{ visible_text: string }>>(
+        const [messages] = await connection.query<Array<RowDataPacket & { visible_text: string }>>(
           'SELECT visible_text FROM dsh_conversation_messages WHERE tenant_id = ? AND visible_text = ?',
           [tenantId, `MYSQL-PROBE-${suffix}`],
         )
         expect(messages).toEqual([{ visible_text: `MYSQL-PROBE-${suffix}` }])
         const identity = stableSessionIdentity(id)
-        const [chunks] = await connection.query<Array<{ count: number }>>(
+        const [chunks] = await connection.query<Array<RowDataPacket & { count: number }>>(
           'SELECT COUNT(*) AS count FROM dsh_agent_records WHERE tenant_id = ? AND conversation_id = ? AND record_type LIKE ?',
           [tenantId, identity.conversationId, '%chunk%'],
         )

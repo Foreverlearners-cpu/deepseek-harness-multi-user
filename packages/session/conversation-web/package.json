@@ -41,6 +41,7 @@
     "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-mysql": "workspace:^",
-    "@deepseek-ai/dsh-session": "workspace:^"
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "mysql2": "^3.23.3"
   }
 }
