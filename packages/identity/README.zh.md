@@ -15,3 +15,4 @@
 | [`user-mysql/`](user-mysql/README.md) | 在 MySQL 中持久化人类用户目录 | `users` |
 | [`user-credential/`](user-credential/README.md) | 定义登录标识、密码验证和 Credential 生命周期操作 | `userCredentials` |
 | [`user-credential-mysql/`](user-credential-mysql/README.md) | 在 MySQL 中持久化登录标识和 scrypt 密码 verifier | `userCredentials` |
+| [`tenant/`](tenant/README.md) | 定义稳定租户、用户成员记录、生命周期状态和与 Provider 无关的管理操作 | `tenants` |

@@ -22,6 +22,7 @@ One page per subsystem of the DeepSeek Harness: what it is, the data structures 
 | [authentication.md](authentication.md) | the Host authentication seam: evidence-kind Provider selection, verified identity facts, process-local `AuthenticatedCall` provenance, and optional credential lifecycle dispatch |
 | [auth-token.md](auth-token.md) | opaque refresh-token families, digest-only persistence, atomic rotation, reuse-triggered revocation, inspection, and targeted revocation |
 | [user-directory.md](user-directory.md) | stable human user records, lifecycle state, optimistic revision, Provider operations, and sanitized change events |
+| [tenant-directory.md](tenant-directory.md) | stable tenants, user membership lifecycle, optimistic revision, Provider operations, and sanitized change events |
 | [user-credentials.md](user-credentials.md) | login identifier normalization and lookup, password verification, aggregate revision, and sanitized credential events |
 | [session-query.md](session-query.md) | logical records, bounded exact-event reads, relationship traces, semantic filters/documents, and full-text result pages |
 | [feedback.md](feedback.md) | lifecycle-bound per-message feedback records, optimistic versions, sidecar persistence, and the Host Remote contract |

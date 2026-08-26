@@ -15,3 +15,4 @@ Identity values and authentication contracts shared across product domains. Anon
 | [`user-mysql/`](user-mysql/README.md) | Persists the human user directory in MySQL | `users` |
 | [`user-credential/`](user-credential/README.md) | Defines login identifiers, password verification, and credential lifecycle operations | `userCredentials` |
 | [`user-credential-mysql/`](user-credential-mysql/README.md) | Persists login identifiers and scrypt password verifiers in MySQL | `userCredentials` |
+| [`tenant/`](tenant/README.md) | Defines stable tenants, user membership records, lifecycle state, and Provider-independent management operations | `tenants` |

@@ -283,6 +283,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Defines stable human user records, lifecycle transitions, optimistic revisions, bounded pages, and sanitized commit events; persistence and credential providers remain separate.',
   },
   {
+    key: 'tenants',
+    pkg: 'tenant',
+    title: 'Tenant membership directory seam',
+    mode: 'seam',
+    implementations: [],
+    consumers: [],
+    note: 'Defines tenant records, user membership lifecycle, optimistic revisions, bounded membership pages, and sanitized commit events; persistence, teams, and authorization remain separate.',
+  },
+  {
     key: 'userCredentials',
     pkg: 'user-credential',
     title: 'User login credential seam',
