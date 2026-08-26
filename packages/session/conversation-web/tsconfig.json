@@ -1,0 +1,17 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/types.tsbuildinfo"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../core/agent" },
+    { "path": "../../runtime-diagnostics/invariants" },
+    { "path": "../conversation" },
+    { "path": "../conversation-persistence" },
+    { "path": "../conversation-starter" }
+  ]
+}

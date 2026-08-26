@@ -54,6 +54,9 @@
       "path": "../../session/session-persistence"
     },
     {
+      "path": "../../session/conversation-web"
+    },
+    {
       "path": "../../session/session-projection"
     },
     {

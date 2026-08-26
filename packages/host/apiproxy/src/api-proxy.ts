@@ -8,8 +8,9 @@ import { mkdir, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
-import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
+import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentSetup, AgentStatus } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
+import type {} from '@deepseek-ai/dsh-conversation-web'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { contentHasImage, createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
@@ -1195,24 +1196,24 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
    */
   async function composeAgent(presetId: string | undefined): Promise<{
     agentPreset?: string
-    setup: (agentCtx: Context) => Promise<void>
+    setup: AgentSetup
   }> {
     const presets = ctx.get('agentPresets')
     if (presets === undefined) {
-      return {
-        setup: (agentCtx: Context) => {
-          installSelection(agentCtx)
-          return Promise.resolve()
-        },
+      const setup = (agentCtx: Context): Promise<void> => {
+        installSelection(agentCtx)
+        return Promise.resolve()
       }
+      return { setup: ctx.get('conversationWeb')?.compose(setup) ?? setup }
     }
     const resolvedId = (await presets.resolve(presetId)).id
+    const setup = async (agentCtx: Context): Promise<void> => {
+      installSelection(agentCtx)
+      await presets.mount(agentCtx, resolvedId)
+    }
     return {
       agentPreset: resolvedId,
-      setup: async (agentCtx: Context) => {
-        installSelection(agentCtx)
-        await presets.mount(agentCtx, resolvedId)
-      },
+      setup: ctx.get('conversationWeb')?.compose(setup) ?? setup,
     }
   }
 

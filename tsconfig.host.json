@@ -139,6 +139,7 @@
     { "path": "./packages/session/conversation" },
     { "path": "./packages/session/conversation-persistence" },
     { "path": "./packages/session/conversation-starter" },
+    { "path": "./packages/session/conversation-web" },
     { "path": "./packages/session/conversation-mysql" },
     { "path": "./packages/session/conversation-files-mysql" },
     { "path": "./packages/session/session-cache-invalidation-redis" },

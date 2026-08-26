@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
-import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle, AgentSetup, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
@@ -99,6 +99,23 @@ describe('sessions.fork', () => {
     ])
     expect(child?.header.parentSession).toBe(source.id)
     expect(child?.header.cwd).toBe('/proj')
+    await ctx.fiber.dispose()
+  })
+
+  it('composes an optional conversation lifecycle adapter into the fork', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-conversation-source', 1)
+    let setups = 0
+    ctx.provide('conversationWeb', {
+      compose: (existing?: AgentSetup): AgentSetup => async (agentCtx) => {
+        setups++
+        return await existing?.(agentCtx)
+      },
+    } as never)
+
+    const response = await api(ctx).sessions.fork(request({ sessionId: source.id }))
+    expect(response.result.ok).toBe(true)
+    expect(setups).toBe(1)
     await ctx.fiber.dispose()
   })
 

@@ -23,6 +23,7 @@
 
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-conversation-web'
 import type {
   Agent,
   AgentHandle,
@@ -993,7 +994,7 @@ export class SubagentContinuationManager {
     // `AgentRegistry.enter()` is the authoritative collision boundary for an id
     // some other owner holds — a duplicate would reject there with rollback.
     inputs.signal.throwIfAborted()
-    const setup = (childCtx: Context): AgentSetupCommit => {
+    const childSetup = (childCtx: Context): AgentSetupCommit => {
       // Only fresh creation seeds the delegation policy onto the child's own
       // log (after any fork seed, so fresh policy wins stale seed state); a
       // cold resume replays those persisted events instead.
@@ -1003,6 +1004,7 @@ export class SubagentContinuationManager {
       applyChildComposition(childCtx, parent, inputs.composition)
       return this.setupRegistry.apply(childCtx)
     }
+    const setup = this.ownerCtx.get('conversationWeb')?.compose(childSetup) ?? childSetup
     const observer = this.host.observeActivation(provider, childId, parent)
     // Agent creation owns rollback before handle transfer. A rejection leaves
     // no resident Activation and therefore publishes no lifecycle edge.

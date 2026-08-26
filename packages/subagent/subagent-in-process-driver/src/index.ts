@@ -13,6 +13,7 @@
 
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-conversation-web'
 import { foldConsumedWork } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { SessionId, type SessionEvent, type TurnEndReason } from '@deepseek-ai/dsh-session'
@@ -135,7 +136,7 @@ export async function startInProcessRun(
     ...seed !== undefined ? { seed } : {},
     agentOptions: resolveChildAgentOptions(parent, request.agentOptions, childDepth),
     signal: request.signal,
-    setup,
+    setup: parent.ctx.get('conversationWeb')?.compose(setup) ?? setup,
   })
   return drivePublishedRun(
     handle,

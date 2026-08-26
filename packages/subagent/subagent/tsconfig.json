@@ -18,6 +18,9 @@
       "path": "../../core/agent"
     },
     {
+      "path": "../../session/conversation-web"
+    },
+    {
       "path": "../../llm/llm"
     },
     {
