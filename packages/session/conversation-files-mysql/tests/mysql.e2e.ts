@@ -109,7 +109,7 @@ describe.skipIf(target === undefined)('real MySQL conversation file metadata', (
       sourceSequence: 1,
       type: 'user/message',
       status: 'completed',
-      payload: { messageId, text: 'file owner' },
+      payload: { messageId, visibility: 'user', text: 'file owner' },
       occurredAt: Date.now(),
       extensions: {},
     }

@@ -99,6 +99,7 @@ function recordsFor(
       status: 'completed',
       payload: {
         messageId: conversationMessageId(`${runId}-message-${String(sequence)}`),
+        visibility: 'user',
         text: `semantic message ${String(sequence)}`,
       },
       occurredAt: Date.UTC(2026, 7, 25, 0, 0, 0, sequence),

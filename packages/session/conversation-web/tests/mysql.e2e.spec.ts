@@ -53,9 +53,18 @@ describe.skipIf(target === undefined)('real MySQL Web conversation composition',
     try {
       const id = SessionId(`web-mysql-${suffix}`)
       const handle = await ctx.agents.create({ sessionId: id, setup: ctx.conversationWeb.compose() })
+      const appendExtension = handle.agent.session.append.bind(handle.agent.session) as unknown as
+        (type: string, data: unknown) => void
       handle.agent.session.append('user/message', createUserMessage({
         content: [{ type: 'text', text: `MYSQL-PROBE-${suffix}` }], source: { kind: 'user' },
       }), { surfaceOp: 'append' })
+      handle.agent.session.append('user/message', createUserMessage({
+        content: [{ type: 'text', text: `MYSQL-INTERNAL-${suffix}` }],
+        source: { kind: 'plugin', plugin: 'mysql-probe' },
+      }), { surfaceOp: 'append' })
+      appendExtension('session/title', {
+        title: `MYSQL-TITLE-${suffix}`, messageSeqs: [], source: { kind: 'user' },
+      })
       handle.agent.session.append('assistant/chunk', {
         turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: `CHUNK-${suffix}` },
       })
@@ -66,12 +75,20 @@ describe.skipIf(target === undefined)('real MySQL Web conversation composition',
           'SELECT schema_name, version FROM dsh_conversation_schema WHERE schema_name = ?', ['conversation'],
         )
         expect(schema).toEqual([{ schema_name: 'conversation', version: 1 }])
-        const [messages] = await connection.query<Array<RowDataPacket & { visible_text: string }>>(
-          'SELECT visible_text FROM dsh_conversation_messages WHERE tenant_id = ? AND visible_text = ?',
-          [tenantId, `MYSQL-PROBE-${suffix}`],
+        const [messages] = await connection.query<Array<RowDataPacket & { visibility: string; visible_text: string }>>(
+          'SELECT visibility, visible_text FROM dsh_conversation_messages WHERE tenant_id = ? ORDER BY occurred_at',
+          [tenantId],
         )
-        expect(messages).toEqual([{ visible_text: `MYSQL-PROBE-${suffix}` }])
+        expect(messages).toEqual([
+          { visibility: 'user', visible_text: `MYSQL-PROBE-${suffix}` },
+          { visibility: 'internal', visible_text: `MYSQL-INTERNAL-${suffix}` },
+        ])
         const identity = stableSessionIdentity(id)
+        const [conversations] = await connection.query<Array<RowDataPacket & { title: string }>>(
+          'SELECT title FROM dsh_conversations WHERE tenant_id = ? AND conversation_id = ?',
+          [tenantId, identity.conversationId],
+        )
+        expect(conversations).toEqual([{ title: `MYSQL-TITLE-${suffix}` }])
         const [chunks] = await connection.query<Array<RowDataPacket & { count: number }>>(
           'SELECT COUNT(*) AS count FROM dsh_agent_records WHERE tenant_id = ? AND conversation_id = ? AND record_type LIKE ?',
           [tenantId, identity.conversationId, '%chunk%'],

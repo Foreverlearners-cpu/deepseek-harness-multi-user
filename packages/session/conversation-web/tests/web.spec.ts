@@ -65,6 +65,50 @@ describe('conversation Web lifecycle adapter', () => {
       .toEqual(['user/message'])
   })
 
+  it('keeps infrastructure events Session-only while persisting titles and messages', async () => {
+    const { ctx, provider } = await fixture()
+    const id = SessionId('web-control-events')
+    const handle = await ctx.agents.create({
+      sessionId: id,
+      setup: ctx.conversationWeb.compose((agentCtx) => {
+        const session = agentCtx.agent!.session
+        const message = createUserMessage({
+          content: [{ type: 'text', text: 'persist only this record' }],
+          source: { kind: 'user' },
+        })
+        session.append('permission/preset', { preset: 'workspace-write' })
+        session.append('sandbox/mode', { mode: 'workspace-write' })
+        session.append('approval/policy', { policy: 'ask' })
+        session.append('agent-preset/selected', { agentPreset: 'standard' })
+        session.append('session/title', {
+          title: 'Stored only in Session', messageSeqs: [], source: { kind: 'user' },
+        })
+        session.append('agent/inbox/spliced', {
+          target: 'next-turn', start: 0, inserted: [message],
+        })
+        session.append('agent/inbox/spliced', {
+          target: 'next-turn', start: 0, removedCount: 1, inserted: [],
+        })
+        session.append('user/message', message, { surfaceOp: 'append' })
+      }),
+    })
+    await ctx.conversationPersistence.flush(handle.agent.session)
+
+    expect(handle.agent.session.events.map(event => event.type)).toEqual([
+      'permission/preset',
+      'sandbox/mode',
+      'approval/policy',
+      'agent-preset/selected',
+      'session/title',
+      'agent/inbox/spliced',
+      'agent/inbox/spliced',
+      'user/message',
+    ])
+    expect(provider.recordsByConversation.get(stableSessionIdentity(id).conversationId)?.map(record => record.type))
+      .toEqual(['conversation/title', 'user/message'])
+    expect(provider.bySession.get(stableSessionIdentity(id).sessionId)?.title).toBe('Stored only in Session')
+  })
+
   it('stores an ordinary Web fork as an independent top-level conversation', async () => {
     const { ctx, provider } = await fixture()
     const parentId = SessionId('web-parent')

@@ -129,7 +129,11 @@ describe.skipIf(target === undefined)('real MySQL conversation provider contract
       sourceSequence: index + 1,
       type: 'user/message',
       status: 'completed',
-      payload: { messageId: conversationMessageId(`batch-message-${String(index + 1)}`), text: `line ${String(index + 1)}` },
+      payload: {
+        messageId: conversationMessageId(`batch-message-${String(index + 1)}`),
+        visibility: 'user',
+        text: `line ${String(index + 1)}`,
+      },
       occurredAt: 10_000 + index,
       extensions: {},
     }))
@@ -165,7 +169,7 @@ describe.skipIf(target === undefined)('real MySQL conversation provider contract
       sourceSequence: 1,
       type: 'user/message',
       status: 'completed',
-      payload: { messageId: conversationMessageId('rollback-message'), text: 'must roll back' },
+      payload: { messageId: conversationMessageId('rollback-message'), visibility: 'user', text: 'must roll back' },
       occurredAt: 20_001,
       extensions: {},
     }, {

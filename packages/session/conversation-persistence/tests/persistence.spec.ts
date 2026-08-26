@@ -49,6 +49,92 @@ async function attached(ctx: Context, sessionName = 'session', conversationName 
 }
 
 describe('conversation record mapping', () => {
+  it('projects titles, visibility, and approval audit while accepting Session-only events', async () => {
+    const { ctx, records } = await fixture({ maxDelayMs: 10_000 })
+    const session = await attached(ctx)
+    const appendExtension = session.append.bind(session) as unknown as (type: string, data: unknown) => void
+    const sessionOnly = [
+      'agent-preset/selected',
+      'agent/inbox/spliced',
+      'command/done',
+      'command/run',
+      'compaction/end',
+      'compaction/prune',
+      'compaction/start',
+      'compaction/summary',
+      'feedback/record',
+      'goal/change',
+      'hook/invoked',
+      'hook/result',
+      'llm/retry',
+      'llm/retry-started',
+      'permission/preset',
+      'plan/mode',
+      'sandbox/mode',
+      'schedule/change',
+      'session/title-llm-request',
+      'subagent/descriptor',
+      'tool-workflow/agent-end',
+      'tool-workflow/agent-start',
+      'tool-workflow/run-end',
+      'tool-workflow/run-start',
+      'tool/code-dispatch',
+      'tool/code-dispatch-start',
+      'web/deepseek-search-llm-request',
+    ]
+    for (const type of sessionOnly) appendExtension(type, {})
+    appendExtension('session/title', { title: 'Projected title' })
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'human' }], source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'runtime context' }],
+      source: { kind: 'plugin', plugin: 'test-runtime' },
+    }), { surfaceOp: 'append' })
+    appendExtension('approval/policy', { policy: 'never' })
+    appendExtension('approval/asked', {
+      id: 'approval-1', toolName: 'write', callId: 'call-approval', reason: 'modify a file',
+    })
+    appendExtension('approval/decided', { id: 'approval-1', outcome: 'rejected' })
+    await ctx.sessions.flush(session)
+
+    expect(records('conversation').map(record => record.type)).toEqual([
+      'conversation/title', 'user/message', 'user/message', 'approval/asked', 'approval/decided',
+    ])
+    expect(records('conversation')[1]).toMatchObject({ payload: { visibility: 'user', text: 'human' } })
+    expect(records('conversation')[2]).toMatchObject({ payload: { visibility: 'internal', text: 'runtime context' } })
+    expect(records('conversation')[3]).toMatchObject({
+      payload: { approvalId: 'approval-1', toolCallId: 'call-approval', summary: 'modify a file' },
+    })
+    expect(records('conversation')[4]).toMatchObject({
+      payload: { approvalId: 'approval-1', decision: 'denied', decidedBy: 'policy' },
+    })
+  })
+
+  it('still rejects an unclassified required extension event', async () => {
+    const { ctx } = await fixture({ maxDelayMs: 10_000 })
+    const session = await attached(ctx)
+    const appendExtension = session.append.bind(session) as unknown as (type: string, data: unknown) => void
+    appendExtension('future/required', {})
+    await expect(ctx.sessions.flush(session)).rejects.toThrow(
+      'required Session event "future/required" has no registered projector',
+    )
+  })
+
+  it('does not invent an actor for interactive approval decisions', async () => {
+    const { ctx, records } = await fixture({ maxDelayMs: 10_000 })
+    const session = await attached(ctx)
+    const appendExtension = session.append.bind(session) as unknown as (type: string, data: unknown) => void
+    appendExtension('approval/asked', { id: 'approval-interactive', toolName: 'write' })
+    appendExtension('approval/decided', { id: 'approval-interactive', outcome: 'allowed-once' })
+    await ctx.sessions.flush(session)
+
+    expect(records('conversation')).toMatchObject([
+      { payload: { summary: 'write' } },
+      { payload: { decision: 'approved', decidedBy: 'unknown' } },
+    ])
+  })
+
   it('emits interrupted only for an unfinished assistant attempt and never stores partial text', async () => {
     const { ctx, records } = await fixture({ maxDelayMs: 10_000 })
     const session = await attached(ctx)

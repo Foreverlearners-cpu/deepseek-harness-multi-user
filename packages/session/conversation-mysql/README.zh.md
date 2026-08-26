@@ -6,7 +6,7 @@
 
 Provider 拥有 `dsh_conversation_schema`、`dsh_conversations`、`dsh_agent_records`、`dsh_conversation_messages`、`dsh_conversation_message_state` 和 `dsh_subagent_runs`。启动时使用数据库 scoped `GET_LOCK` 串行化 schema 初始化，拒绝不兼容或不完整的 schema，并且只在所有自有表都存在后记录版本 1。`occurred_at`、`created_at` 和 `updated_at` 使用 24 字符 canonical UTC 时间戳。面向 CDC 的 `dsh_conversation_messages` 表只包含 `tenant_id`、`user_id`、`session_id`、`message_id`、`revision`、`status`、`visibility`、`role`、`visible_text` 和 `occurred_at`；内部分页状态隔离在 `dsh_conversation_message_state`。消息文本使用 `MEDIUMTEXT`，`revision` 使用 `INT UNSIGNED`，消息身份使用四字段主键。
 
-`append()` 锁定 scoped conversation 行，并在一个事务内提交 records、messages、subagent 投影、revision 和 `nextSequence`。共享 `sourceSequence` 的 records 保持在同一个相邻 group，并共享基于 canonical 完整 records 计算的 SHA-256。精确重试必须匹配每条 record 和 group hash。新 records 使用每批最多 64 行的多值 INSERT，因此 300 条 records 使用五条 record INSERT，但不会拆分外层事务。Provider 从不使用 `INSERT IGNORE`。
+`append()` 锁定 scoped conversation 行，并在一个事务内提交 records、messages、最新标题、subagent 投影、revision 和 `nextSequence`。消息投影保留每条 record 显式声明的 `user` 或 `internal` 可见性。共享 `sourceSequence` 的 records 保持在同一个相邻 group，并共享基于 canonical 完整 records 计算的 SHA-256。精确重试必须匹配每条 record 和 group hash。新 records 使用每批最多 64 行的多值 INSERT，因此 300 条 records 使用五条 record INSERT，但不会拆分外层事务。Provider 从不使用 `INSERT IGNORE`。
 
 所有读取都要求 tenant、user 和 conversation 身份。列表查询使用与过滤条件绑定的不透明 keyset cursor，而不是 offset。V1 保留策略固定为永久；tenant 归档策略属于后续领域功能。
 

@@ -142,8 +142,17 @@ export type AgentRecordStatus = 'completed' | 'interrupted' | 'unknown'
 
 /** Complete semantic Agent record accepted by a Provider. */
 export type AgentRecord =
-  | AgentRecordBase<'user/message', { readonly messageId: MessageId; readonly text: string }>
-  | AgentRecordBase<'assistant/message', { readonly messageId: MessageId; readonly text: string }>
+  | AgentRecordBase<'user/message', {
+    readonly messageId: MessageId
+    readonly visibility: ConversationMessage['visibility']
+    readonly text: string
+  }>
+  | AgentRecordBase<'assistant/message', {
+    readonly messageId: MessageId
+    readonly visibility: ConversationMessage['visibility']
+    readonly text: string
+  }>
+  | AgentRecordBase<'conversation/title', { readonly title: string }>
   | AgentRecordBase<'assistant/interrupted', {
     readonly attemptId: string
     readonly errorCode?: string
@@ -163,13 +172,13 @@ export type AgentRecord =
   }>
   | AgentRecordBase<'approval/asked', {
     readonly approvalId: ConversationApprovalId
-    readonly toolCallId: ConversationToolCallId
+    readonly toolCallId?: ConversationToolCallId
     readonly summary: string
   }>
   | AgentRecordBase<'approval/decided', {
     readonly approvalId: ConversationApprovalId
     readonly decision: 'approved' | 'denied'
-    readonly decidedBy: 'user' | 'administrator' | 'policy'
+    readonly decidedBy: 'user' | 'administrator' | 'policy' | 'unknown'
   }>
   | AgentRecordBase<'subagent/started', {
     readonly delegationId: DelegationId

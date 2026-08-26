@@ -15,7 +15,7 @@ declare module '@deepseek-ai/cordis' {
 
 /** Conversation attachment adapter consumed opportunistically by Agent entry points. */
 export class ConversationWeb extends Service {
-  static inject = ['conversationStarter']
+  static inject = ['conversationPersistence', 'conversationStarter']
 
   /** @param ctx - owning Host context. */
   constructor(ctx: Context) {

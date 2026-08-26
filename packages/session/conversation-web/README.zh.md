@@ -24,7 +24,7 @@
 - name: conversation-web
 ```
 
-`dsh-mysql` 提供 `ctx.mysql`；`dsh-conversation-mysql` 提供 `ctx.conversations`；`dsh-conversation-persistence` 投影完整的 Session 事件并缓冲写入；`dsh-conversation-starter` 提供本地归属标签；本插件把这些服务接入 Agent 的创建和恢复入口。
+`dsh-mysql` 提供 `ctx.mysql`；`dsh-conversation-mysql` 提供 `ctx.conversations`；`dsh-conversation-persistence` 对 Session 事件分类、投影完整语义事实并缓冲写入；`dsh-conversation-starter` 提供本地归属标签；本插件把这些服务接入 Agent 的创建和恢复入口。Web 适配器不注册事件专用投影器，因此 Web、headless 和其他组合共享同一套持久化行为。
 
 Provider 会在启动时创建并校验自己的表。功能验证会查询 `dsh_conversation_schema` 中的 `schema_name = 'conversation'` 和 `version = 1`，发送一条唯一的 Web 消息，刷新 Session，然后在 `dsh_conversation_messages` 中找到该文本。流式 chunk 不会被保存。
 

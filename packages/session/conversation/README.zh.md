@@ -23,7 +23,7 @@
 
 `AgentRecord` 同时包含 Provider 分配的连续 `sequence` 和原始 Session `sourceSequence`。`sequence` 表示业务顺序；`sourceSequence` 让投影扫描或重试 Session 事件时拥有稳定 source identity。一个 source event 可以在一次原子追加中生成多条相邻记录，例如 `assistant/interrupted` 和 `turn/completed`。相同记录身份和内容的重试是幂等操作；使用过期 `expectedNextSequence` 写入不同范围会失败。
 
-第一版封闭类型为 `user/message`、`assistant/message`、`assistant/interrupted`、`tool/call`、`tool/result`、`approval/asked`、`approval/decided`、`subagent/started`、`subagent/completed`、`file/published` 和 `turn/completed`。每一项都是完整的小记录。`assistant/chunk`、reasoning delta、工具参数 delta、传输帧、心跳和瞬时进度不属于本服务。
+第一版封闭类型为 `user/message`、`assistant/message`、`conversation/title`、`assistant/interrupted`、`tool/call`、`tool/result`、`approval/asked`、`approval/decided`、`subagent/started`、`subagent/completed`、`file/published` 和 `turn/completed`。每一项都是完整的小记录。消息记录显式携带 `user` 或 `internal` 可见性。审批决定的源事件没有标识决定者时，记录使用 `decidedBy: 'unknown'`。`assistant/chunk`、reasoning delta、工具参数 delta、传输帧、心跳和瞬时进度不属于本服务。
 
 `assistant/interrupted` 包含 attempt 身份、可选安全错误码和可选已生成字符数，不包含部分助手文本。后续投影从 interrupted、aborted 或 failed 的回合边界派生该记录，而不是向核心 Session 增加事件。
 

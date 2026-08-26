@@ -18,7 +18,7 @@ Status: implemented
 
 每条语义记录包含 Provider 分配的连续 `sequence` 和原始 Session `sourceSequence`。原子 append 比较 `expectedNextSequence`；完全相同的重试保持幂等，冲突的过期范围会失败。查询 cursor 是不透明值，由 Provider 绑定到 tenant、user、Conversation 和筛选条件。
 
-第一版记录 union 包含完整用户与助手消息、不含部分文本的助手中断 attempt 元数据、工具调用与结果、审批、子 Agent 生命周期、文件发布和回合完成。Chunk、reasoning delta、argument delta、传输、心跳和瞬时进度事件被排除。`assistant/interrupted` 从中断回合边界派生，不增加核心 Session 事件。
+第一版记录 union 包含显式可见性的完整用户与助手消息、Conversation 标题、不含部分文本的助手中断 attempt 元数据、工具调用与结果、审批、子 Agent 生命周期、文件发布和回合完成。源事件没有标识应答器时，审批决定者来源可以是 `unknown`。Chunk、reasoning delta、argument delta、传输、心跳和瞬时进度事件被排除。`assistant/interrupted` 从中断回合边界派生，不增加核心 Session 事件。
 
 除非显式版本化 tenant policy 提供归档或删除时间，否则 Conversation 永久保留。授权继续由 Consumer 负责。
 

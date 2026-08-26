@@ -330,16 +330,21 @@ export class ConversationMysql extends ConversationService {
       await this.insertRecords(connection, current, request.records, groups)
       await this.projectMessages(connection, current, request.records)
       await this.projectSubagents(connection, request.records)
+      const title = request.records.findLast(
+        (record): record is Extract<AgentRecord, { type: 'conversation/title' }> => record.type === 'conversation/title',
+      )?.payload.title
       const updatedAt = timestamp(Math.max(Date.now(), current.updatedAt))
       const [updated] = await connection.execute<ResultSetHeader>(
-        `UPDATE dsh_conversations SET revision = revision + 1, next_sequence = next_sequence + ?, updated_at = ?
+        `UPDATE dsh_conversations SET revision = revision + 1, next_sequence = next_sequence + ?,
+          title = COALESCE(?, title), updated_at = ?
          WHERE tenant_id = ? AND user_id = ? AND conversation_id = ? AND revision = ? AND next_sequence = ?`,
-        [request.records.length, updatedAt, request.tenantId, request.userId, request.conversationId,
+        [request.records.length, title ?? null, updatedAt, request.tenantId, request.userId, request.conversationId,
           current.revision, current.nextSequence],
       )
       if (updated.affectedRows !== 1) throw unavailable('locked conversation did not advance')
       const conversation: Conversation = {
         ...current,
+        ...(title === undefined ? {} : { title }),
         revision: current.revision + 1,
         nextSequence: current.nextSequence + request.records.length,
         updatedAt: parseTimestamp(updatedAt, 'updated_at'),
@@ -637,11 +642,12 @@ export class ConversationMysql extends ConversationService {
       const stateValues: SqlValue[] = []
       for (const record of batch) {
         values.push(record.tenantId, record.userId, conversation.sessionId, record.payload.messageId,
-          record.type === 'user/message' ? 'user' : 'assistant', record.payload.text, timestamp(record.occurredAt))
+          record.payload.visibility, record.type === 'user/message' ? 'user' : 'assistant', record.payload.text,
+          timestamp(record.occurredAt))
         stateValues.push(record.tenantId, record.userId, conversation.sessionId, record.payload.messageId,
           record.conversationId, record.sequence, '{}')
       }
-      const placeholders = batch.map(() => "(?, ?, ?, ?, 1, 'completed', 'user', ?, ?, ?)").join(', ')
+      const placeholders = batch.map(() => "(?, ?, ?, ?, 1, 'completed', ?, ?, ?, ?)").join(', ')
       await connection.execute(
         `INSERT INTO dsh_conversation_messages
           (tenant_id, user_id, session_id, message_id, revision, status, visibility, role, visible_text, occurred_at)

@@ -91,27 +91,30 @@ export function runConversationContract(
       const records: AgentRecord[] = [
         record(target, 1, {
           type: 'user/message', status: 'completed',
-          payload: { messageId: conversationMessageId('message-1'), text: 'hello' },
+          payload: { messageId: conversationMessageId('message-1'), visibility: 'internal', text: 'hello' },
         }),
         record(target, 2, {
           type: 'assistant/message', status: 'completed',
-          payload: { messageId: conversationMessageId('message-2'), text: 'hi' },
+          payload: { messageId: conversationMessageId('message-2'), visibility: 'user', text: 'hi' },
+        }),
+        record(target, 3, {
+          type: 'conversation/title', status: 'completed', payload: { title: 'Persisted title' },
         }),
       ]
       const request = { ...target, expectedNextSequence: 1, records }
       const first = await conversations.append(request)
       const retry = await conversations.append(request)
 
-      expect(first.conversation).toMatchObject({ nextSequence: 3, revision: 2 })
+      expect(first.conversation).toMatchObject({ title: 'Persisted title', nextSequence: 4, revision: 2 })
       expect(retry).toEqual(first)
       expect((await conversations.records({ ...target })).records).toEqual(records)
       expect((await conversations.messages({ ...target })).messages).toMatchObject([
-        { role: 'user', visibleText: 'hello', ordinal: 1 },
-        { role: 'assistant', visibleText: 'hi', ordinal: 2 },
+        { role: 'user', visibility: 'internal', visibleText: 'hello', ordinal: 1 },
+        { role: 'assistant', visibility: 'user', visibleText: 'hi', ordinal: 2 },
       ])
       const stale = record(target, 1, {
         type: 'user/message', status: 'completed',
-        payload: { messageId: conversationMessageId('stale-message'), text: 'stale' },
+        payload: { messageId: conversationMessageId('stale-message'), visibility: 'user', text: 'stale' },
       })
       await expect(conversations.append({ ...target, expectedNextSequence: 1, records: [stale] }))
         .rejects.toMatchObject({ code: 'sequence-conflict' })
@@ -214,7 +217,7 @@ export function runConversationContract(
         .rejects.toMatchObject({ code: 'invalid-input' })
       const foreign = record({ ...target, userId: conversationUserId('other-user') }, 1, {
         type: 'user/message', status: 'completed',
-        payload: { messageId: conversationMessageId('message-1'), text: 'foreign' },
+        payload: { messageId: conversationMessageId('message-1'), visibility: 'user', text: 'foreign' },
       })
       await expect(conversations.append({ ...target, expectedNextSequence: 1, records: [foreign] }))
         .rejects.toMatchObject({ code: 'record-conflict' })

@@ -18,7 +18,7 @@ A root Session is explicitly attached to tenant and user ownership before its fi
 
 Every semantic record carries a Provider-assigned contiguous `sequence` and its original Session `sourceSequence`. Atomic append compares `expectedNextSequence`; an exact retry is idempotent and a conflicting stale range fails. Query cursors are opaque and scoped by the Provider to tenant, user, conversation, and filters.
 
-The first record union includes complete user and assistant messages, interrupted assistant attempt metadata without partial text, tool calls and results, approvals, subagent lifecycle, file publication, and turn completion. Chunk, reasoning delta, argument delta, transport, heartbeat, and transient progress events are excluded. `assistant/interrupted` is derived from an interrupted turn boundary and does not add a core Session event.
+The first record union includes complete user and assistant messages with explicit visibility, Conversation titles, interrupted assistant attempt metadata without partial text, tool calls and results, approvals, subagent lifecycle, file publication, and turn completion. Approval actor provenance may be `unknown` when its source event does not identify the answerer. Chunk, reasoning delta, argument delta, transport, heartbeat, and transient progress events are excluded. `assistant/interrupted` is derived from an interrupted turn boundary and does not add a core Session event.
 
 Conversation retention is permanent unless an explicit versioned tenant policy supplies archive or deletion times. Authorization remains a Consumer responsibility.
 

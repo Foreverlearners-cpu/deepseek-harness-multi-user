@@ -24,7 +24,7 @@ The adapter does not create a database connection or select a Conversation Provi
 - name: conversation-web
 ```
 
-`dsh-mysql` supplies `ctx.mysql`; `dsh-conversation-mysql` supplies `ctx.conversations`; `dsh-conversation-persistence` projects complete Session events and buffers writes; `dsh-conversation-starter` supplies the local owner labels; this package joins those services to Agent creation and resume entry points.
+`dsh-mysql` supplies `ctx.mysql`; `dsh-conversation-mysql` supplies `ctx.conversations`; `dsh-conversation-persistence` classifies Session events, projects complete semantic facts, and buffers writes; `dsh-conversation-starter` supplies the local owner labels; this package joins those services to Agent creation and resume entry points. The Web adapter registers no event-specific projectors, so Web, headless, and other compositions share the same persistence behavior.
 
 The Provider creates and verifies its tables during startup. A functional check queries `dsh_conversation_schema` for `schema_name = 'conversation'` and `version = 1`, sends a unique Web message, flushes the Session, and finds that text in `dsh_conversation_messages`. Streaming chunks are not stored.
 

@@ -3,6 +3,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import {
   agentRecordId,
+  conversationApprovalId,
   conversationMessageId,
   conversationStepId,
   conversationToolCallId,
@@ -26,6 +27,37 @@ export const DEFAULT_MAX_BATCH_RECORDS = 64
 export const DEFAULT_MAX_BATCH_BYTES = 512 * 1024
 /** Default per-Session admission bound, including records currently writing. */
 export const DEFAULT_MAX_PENDING_RECORDS = 4096
+
+const SESSION_ONLY_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'agent-preset/selected',
+  'agent/inbox/spliced',
+  'approval/policy',
+  'command/done',
+  'command/run',
+  'compaction/end',
+  'compaction/prune',
+  'compaction/start',
+  'compaction/summary',
+  'feedback/record',
+  'goal/change',
+  'hook/invoked',
+  'hook/result',
+  'llm/retry',
+  'llm/retry-started',
+  'permission/preset',
+  'plan/mode',
+  'sandbox/mode',
+  'schedule/change',
+  'session/title-llm-request',
+  'subagent/descriptor',
+  'tool-workflow/agent-end',
+  'tool-workflow/agent-start',
+  'tool-workflow/run-end',
+  'tool-workflow/run-start',
+  'tool/code-dispatch',
+  'tool/code-dispatch-start',
+  'web/deepseek-search-llm-request',
+])
 
 /** Tool effect persisted before execution. */
 export type ToolEffect = 'read-only' | 'external-side-effect'
@@ -321,6 +353,7 @@ export class ConversationPersistence extends Service {
           status: 'completed',
           payload: {
             messageId: conversationMessageId(String(event.data.id)),
+            visibility: event.data.source.kind === 'user' ? 'user' : 'internal',
             text: visibleText(event.data.content),
           },
         }]
@@ -333,6 +366,7 @@ export class ConversationPersistence extends Service {
           status: 'completed',
           payload: {
             messageId: conversationMessageId(String(event.data.message.id)),
+            visibility: 'user',
             text: visibleText(event.data.message.content),
           },
         }]
@@ -383,9 +417,58 @@ export class ConversationPersistence extends Service {
       case 'session/end-seed':
         return []
       default:
-        const extension = event as unknown as SessionEvent
+        const extension = event as unknown as {
+          readonly type: string
+          readonly data: unknown
+          readonly seq: number
+          readonly ignorable?: boolean
+        }
+        if (extension.type === 'session/title') {
+          const data = extension.data as { title: string }
+          return [{ ...base(), type: 'conversation/title', status: 'completed', payload: { title: data.title } }]
+        }
+        if (extension.type === 'approval/asked') {
+          const data = extension.data as { id: string; toolName: string; callId?: string; reason?: string }
+          return [{
+            ...base(),
+            type: 'approval/asked',
+            status: 'completed',
+            payload: {
+              approvalId: conversationApprovalId(data.id),
+              ...(data.callId === undefined ? {} : { toolCallId: conversationToolCallId(data.callId) }),
+              summary: data.reason ?? data.toolName,
+            },
+          }]
+        }
+        if (extension.type === 'approval/decided') {
+          const data = extension.data as {
+            id: string
+            outcome: 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable'
+          }
+          let policy: string | undefined
+          for (const candidate of session.events) {
+            if (candidate.seq >= extension.seq) break
+            const prior = candidate as unknown as { readonly type: string; readonly data: unknown }
+            if (prior.type === 'approval/policy') policy = (prior.data as { readonly policy: string }).policy
+          }
+          const decidedBy = data.outcome === 'rejected'
+            && policy === 'never'
+            ? 'policy' as const
+            : 'unknown' as const
+          return [{
+            ...base(),
+            type: 'approval/decided',
+            status: 'completed',
+            payload: {
+              approvalId: conversationApprovalId(data.id),
+              decision: data.outcome === 'allowed-once' ? 'approved' : 'denied',
+              decidedBy,
+            },
+          }]
+        }
+        if (SESSION_ONLY_EVENT_TYPES.has(extension.type)) return []
         for (const projector of this.projectors) {
-          const records = projector({ session, event: extension, base })
+          const records = projector({ session, event, base })
           if (records !== undefined) return records
         }
         if (extension.ignorable === true) return []

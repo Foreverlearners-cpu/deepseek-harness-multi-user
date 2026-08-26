@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session/conversation-mysql/README.md
-README.md: 24ce52a0c30ade9a70b66dc43d02e3e392d3771e
-README.zh.md: 4cb2c0fd8d4b198622cc486af881d3b19a64d8a7
+README.md: c0776ac64a9c67475a8abcba6616ca0be82eabd9
+README.zh.md: 78944aa571f1a5e96576ff6a6fdbcbcf35a6fdbd

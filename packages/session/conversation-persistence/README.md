@@ -44,7 +44,11 @@ Call `ctx.sessions.flush(session)` before reading durable conversation state. Th
 
 ## Mapping and Ordering
 
-The built-in mapper persists `user/message`, `assistant/message`, `tool/call`, `tool/result`, and `turn/end`. It ignores chunks, step markers, request snapshots, todo snapshots, and seed boundaries. Visible message text includes only `text` blocks. Tool results preserve the complete tool-result message content, including an empty result.
+The built-in mapper persists `user/message`, `assistant/message`, `session/title`, `tool/call`, `tool/result`, `approval/asked`, `approval/decided`, and `turn/end`. Human user messages are `user` visible; plugin and other injected user messages are `internal`; assistant messages are `user` visible. Visible message text includes only `text` blocks. Tool results preserve the complete tool-result message content, including an empty result.
+
+Known control events for presets, inbox edits, policies, commands, compaction, goals, hooks, retries, permissions, schedules, workflow state, and auxiliary model requests remain Session-only. They create no semantic record. Unknown required events still fail admission unless an extension projector handles them; chunks, step markers, request snapshots, todo snapshots, and seed boundaries are also excluded.
+
+Approval requests retain their stable id, optional tool-call id, and reason. A deterministic rejection under the latest `never` policy records `decidedBy: 'policy'`. Other outcomes record `decidedBy: 'unknown'` because the current Session event does not identify whether a user, administrator, or another answerer supplied the response.
 
 An aborted, interrupted, or failed turn creates `assistant/interrupted` only when its latest started step has no complete `assistant/message`; partial text is never stored. Every turn end also creates `turn/completed`. A cancellation before a step or after a complete assistant message does not invent an interrupted assistant attempt.
 
@@ -72,7 +76,6 @@ None. Persistence does not rewrite the model-visible prefix.
 
 ## Known Limitations and Deferred Work
 
-- Approval events require an explicit projector because the current Session decision event does not identify whether a user, administrator, or policy made the decision, and an approval request may omit a tool call id.
 - Subagent lifecycle and file publication have no durable Session event mapping in this package.
 - Tool results remain inline unless a record preparer externalizes them. The file-metadata plugin supplies the 256 KiB object-storage policy.
 - This package supplies no MySQL or local-file Conversation Provider.

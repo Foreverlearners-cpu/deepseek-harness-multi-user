@@ -74,7 +74,16 @@ export class MemoryConversationService extends ConversationService {
     if (!duplicate) current.push(...structuredClone(request.records))
     this.recordsByConversation.set(request.conversationId, current)
     const conversation = [...this.bySession.values()].find(item => item.conversationId === request.conversationId)!
-    return { conversation: structuredClone(conversation), records: structuredClone(request.records) }
+    const title = request.records.findLast(record => record.type === 'conversation/title')?.payload.title
+    const updated = {
+      ...conversation,
+      ...(title === undefined ? {} : { title }),
+      revision: conversation.revision + 1,
+      nextSequence: conversation.nextSequence + request.records.length,
+      updatedAt: conversation.updatedAt + 1,
+    }
+    this.bySession.set(conversation.sessionId, updated)
+    return { conversation: structuredClone(updated), records: structuredClone(request.records) }
   }
 
   async records(query: AgentRecordListQuery): Promise<AgentRecordPage> {

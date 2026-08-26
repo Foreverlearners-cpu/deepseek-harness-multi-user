@@ -44,7 +44,11 @@ await ctx.conversationPersistence.attach(session, {
 
 ## 映射与顺序
 
-内置映射处理 `user/message`、`assistant/message`、`tool/call`、`tool/result` 和 `turn/end`，忽略 chunk、step 标记、请求快照、todo 快照和 seed 边界。消息正文只包含 `text` 块。工具结果保留完整的工具结果消息内容，空结果也会保留。
+内置映射处理 `user/message`、`assistant/message`、`session/title`、`tool/call`、`tool/result`、`approval/asked`、`approval/decided` 和 `turn/end`。人类用户消息的可见性为 `user`；插件等来源注入的用户消息为 `internal`；助手消息为 `user`。消息正文只包含 `text` 块。工具结果保留完整的工具结果消息内容，空结果也会保留。
+
+已知的 preset、inbox 编辑、策略、命令、压缩、Goal、Hook、重试、权限、调度、工作流状态和辅助模型请求事件只保留在 Session 中，不生成语义记录。未知必需事件仍会导致接纳失败，除非扩展投影器处理它；chunk、step 标记、请求快照、todo 快照和 seed 边界同样不会写入。
+
+审批请求保留稳定 ID、可选工具调用 ID 和原因。最新策略为 `never` 时的确定性拒绝记录为 `decidedBy: 'policy'`。其他结果记录为 `decidedBy: 'unknown'`，因为当前 Session 事件无法说明响应来自用户、管理员还是其他应答器。
 
 只有在某轮最新 step 已经开始、但没有完整 `assistant/message` 时，中止、打断或失败的轮次才生成 `assistant/interrupted`；部分文本永远不保存。每个轮次结束还会生成 `turn/completed`。进入 step 前取消，或完整助手消息之后取消，都不会虚构助手中断记录。
 
@@ -72,7 +76,6 @@ await ctx.conversationPersistence.attach(session, {
 
 ## 已知限制与后续工作
 
-- 审批事件需要显式投影器：当前 Session 决定事件不能说明决定来自用户、管理员还是策略，审批请求也可能没有工具调用 ID。
 - 子代理生命周期与文件发布目前没有可由本插件映射的持久 Session 事件。
 - 默认仍内联保存工具结果，除非 record preparer 将其外置；文件元数据插件提供 256 KiB 对象存储策略。
 - 本包不提供 MySQL 或本地文件 Conversation Provider。

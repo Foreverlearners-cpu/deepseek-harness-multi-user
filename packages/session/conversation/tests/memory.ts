@@ -134,6 +134,7 @@ export class MemoryConversationService extends ConversationService {
     this.project(id, committed)
     const current: Conversation = {
       ...conversation,
+      ...committed.findLast(record => record.type === 'conversation/title')?.payload,
       revision: conversation.revision + 1,
       nextSequence: conversation.nextSequence + committed.length,
       updatedAt: this.tick(),
@@ -188,7 +189,7 @@ export class MemoryConversationService extends ConversationService {
           ordinal: messages.length + 1,
           revision: 1,
           status: 'completed',
-          visibility: 'user',
+          visibility: record.payload.visibility,
           role: record.type === 'user/message' ? 'user' : 'assistant',
           visibleText: record.payload.text,
           occurredAt: record.occurredAt,
