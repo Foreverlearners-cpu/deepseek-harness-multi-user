@@ -60,6 +60,7 @@ The session execution world provides the stronger boundary for model-controlled 
 
 - [Identity and access](identity-and-access.md) defines principals, authentication, authorization, administrative roles, session ownership, and transport requirements.
 - [Authorization architecture](authorization.md) defines the unified authority API, role-functional and resource-relationship routes, extensible actions, delegation, persistence, caching, collection scopes, and the execution boundary.
+- [Interactive authorization data-flow demo](authorization-data-flow.html) presents the request path, overall architecture, persistence, cache, and change propagation as a self-contained HTML page.
 - [Data and runtime isolation](data-and-runtime-isolation.md) defines tenant-aware persistence, event and audit logs, settings, credentials, assets, streams, caches, and execution isolation.
 - [Stream chunk retention](stream-chunk-retention.md) defines bounded storage and cleanup for streamed response chunks.
 - [Delivery plan](delivery-plan.md) orders the work, defines compatibility posture and negative test coverage, and names decisions that must be settled before implementation.

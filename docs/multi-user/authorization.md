@@ -4,6 +4,8 @@ English | [中文](authorization.zh.md)
 
 This reference defines the proposed authorization architecture for multi-user deployments. Authentication and token lifecycle remain owned by the [authentication subsystem](../subsystems/authentication.md); this design starts from an authenticated call and decides whether that principal may perform one action on one resource. The principal and tenant rules come from [identity and access](identity-and-access.md).
 
+Open the self-contained [interactive authorization data-flow demo](authorization-data-flow.html) to explore the request path, overall architecture, storage model, change propagation, and seven example decisions.
+
 ## Ownership and package roles
 
 Authorization has one public entry point and distributed implementations. `dsh-authority` locates the relevant Providers and combines their decisions, while each Provider owns one kind of rule and reads data through a replaceable Source. The center never queries RBAC or domain tables directly.

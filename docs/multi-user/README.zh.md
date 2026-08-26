@@ -60,6 +60,7 @@ Session 执行环境为模型控制的代码提供更强的安全边界。本地
 
 - [身份与访问控制](identity-and-access.md)定义 principal、认证、授权、管理角色、session 所有权和传输要求。
 - [授权架构](authorization.md)定义统一授权 API、角色功能与资源关系两条路线、可扩展动作、转授、持久化、缓存、集合 scope 和执行边界。
+- [授权数据流交互演示](authorization-data-flow.html)以自包含 HTML 页面展示请求路径、整体架构、持久化、缓存和变更传播。
 - [数据与运行时隔离](data-and-runtime-isolation.md)定义租户感知的持久化、事件日志与审计日志、settings、credentials、资源文件、事件流、缓存和执行隔离。
 - [流式分块保留策略](stream-chunk-retention.md)定义流式响应分块的有界存储与清理规则。
 - [交付计划](delivery-plan.md)安排工作顺序，定义兼容性立场和负向测试覆盖，并列出实现前必须确定的决策。

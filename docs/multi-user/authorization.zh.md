@@ -4,6 +4,8 @@
 
 本文定义多用户部署提案中的授权架构。认证和 token 生命周期继续归[认证子系统](../subsystems/authentication.md)所有；本设计从已认证调用开始，判断该 principal 能否对一项资源执行一个动作。Principal 与租户规则见[身份与访问控制](identity-and-access.md)。
 
+打开自包含的[授权数据流交互演示](authorization-data-flow.html)，可以查看请求路径、整体架构、存储模型、变更传播和七个授权案例。
+
 ## 职责与插件角色
 
 授权提供一个公共入口和分散的实现。`dsh-authority` 定位相关 Provider 并合并其决定，每个 Provider 拥有一类规则，并通过可替换 Source 读取数据。中心插件不直接查询 RBAC 或领域表。

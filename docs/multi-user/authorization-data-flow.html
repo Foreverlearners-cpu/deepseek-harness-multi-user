@@ -1,0 +1,1689 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH Authority 数据流实验台</title>
+  <style>
+    :root {
+      --bg: #eef1f2;
+      --surface: #ffffff;
+      --surface-2: #f7f8f8;
+      --ink: #172126;
+      --muted: #68757c;
+      --line: #d4dadd;
+      --line-strong: #aeb9be;
+      --green: #147b62;
+      --green-soft: #e8f4ef;
+      --blue: #286b9f;
+      --blue-soft: #eaf2f8;
+      --amber: #9a630d;
+      --amber-soft: #fff3d9;
+      --red: #ab3d42;
+      --red-soft: #fbeaec;
+      --violet: #6d55a3;
+      --violet-soft: #f0edf8;
+      --shadow: 0 2px 8px rgba(20, 35, 42, .07);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { min-height: 100%; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    button, input, select { font: inherit; letter-spacing: 0; }
+
+    button:focus-visible {
+      outline: 3px solid rgba(40, 107, 159, .25);
+      outline-offset: 2px;
+    }
+
+    .app {
+      min-height: 100vh;
+      width: 100%;
+      max-width: 100vw;
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      overflow-x: hidden;
+    }
+
+    .topbar {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 14px 24px;
+      color: #fff;
+      background: #18252b;
+      border-bottom: 4px solid var(--green);
+    }
+
+    .brand { min-width: 0; }
+    .brand h1 { margin: 0; font-size: 21px; line-height: 1.25; font-weight: 680; }
+    .brand p { margin: 5px 0 0; color: #c7d1d5; font-size: 12px; }
+
+    .top-meta {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .meta-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 30px;
+      padding: 5px 9px;
+      color: #dbe4e7;
+      background: #23343c;
+      border: 1px solid #3a4b53;
+      border-radius: 4px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .meta-dot { width: 7px; height: 7px; border-radius: 50%; background: #57b89b; }
+    .meta-dot.mysql { background: #6ca9d5; }
+
+    .viewbar {
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 0 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      overflow-x: auto;
+    }
+
+    .tabs { display: flex; align-items: stretch; min-width: max-content; height: 50px; }
+
+    .tab {
+      position: relative;
+      min-width: 104px;
+      padding: 0 14px;
+      border: 0;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .tab:hover { color: var(--ink); background: #f5f7f7; }
+    .tab.active { color: var(--green); font-weight: 680; }
+    .tab.active::after {
+      content: "";
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 0;
+      height: 3px;
+      background: var(--green);
+    }
+
+    .formula {
+      min-width: max-content;
+      color: var(--muted);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+    }
+
+    .workspace {
+      width: 100%;
+      max-width: 100%;
+      min-height: 0;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 248px minmax(0, 1fr);
+    }
+
+    .case-rail {
+      min-height: 0;
+      min-width: 0;
+      max-width: 100%;
+      background: #f8f9f9;
+      border-right: 1px solid var(--line);
+      overflow-y: auto;
+    }
+
+    .rail-head {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      padding: 17px 16px 12px;
+      background: #f8f9f9;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .rail-head h2 { margin: 0; font-size: 13px; }
+    .rail-head p { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+
+    .case-list { display: grid; gap: 1px; padding: 8px; }
+
+    .case-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 9px;
+      min-height: 62px;
+      padding: 8px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: var(--ink);
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .case-button:hover { background: #fff; border-color: var(--line); }
+    .case-button.active { background: #fff; border-color: #9fc7bb; box-shadow: var(--shadow); }
+
+    .case-index {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 4px;
+      color: var(--blue);
+      background: var(--blue-soft);
+      font-size: 11px;
+      font-weight: 750;
+    }
+
+    .case-button.active .case-index { color: #fff; background: var(--green); }
+    .case-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 650; }
+    .case-sub { display: block; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 10px; }
+
+    .case-result {
+      min-width: 42px;
+      padding: 4px 6px;
+      border-radius: 3px;
+      text-align: center;
+      font-size: 9px;
+      font-weight: 800;
+    }
+
+    .case-result.allow { color: var(--green); background: var(--green-soft); }
+    .case-result.deny { color: var(--red); background: var(--red-soft); }
+
+    .main {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      min-height: 0;
+      padding: 20px;
+      overflow: auto;
+    }
+
+    .view { display: none; width: 100%; max-width: 100%; min-width: 0; }
+    .view.active { display: block; }
+
+    .case-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 14px;
+    }
+
+    .case-header h2 { margin: 0; font-size: 18px; line-height: 1.35; }
+    .case-header p { margin: 5px 0 0; max-width: 780px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+
+    .decision-badge {
+      min-width: 112px;
+      padding: 9px 12px;
+      border: 1px solid;
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .decision-badge strong { display: block; font-size: 14px; }
+    .decision-badge small { display: block; margin-top: 3px; font-size: 9px; }
+    .decision-badge.allow { color: var(--green); background: var(--green-soft); border-color: #9ccbbb; }
+    .decision-badge.deny { color: var(--red); background: var(--red-soft); border-color: #e1aab0; }
+
+    .request-strip {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 1px;
+      margin-bottom: 14px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--line);
+    }
+
+    .request-field { min-height: 58px; padding: 10px 12px; background: var(--surface); }
+    .request-field span { display: block; margin-bottom: 6px; color: var(--muted); font-size: 9px; font-weight: 750; text-transform: uppercase; }
+    .request-field code { display: block; overflow: hidden; color: var(--ink); font-family: Consolas, monospace; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+
+    .flow-surface {
+      width: 100%;
+      max-width: 100%;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow-x: auto;
+    }
+
+    .flow-track {
+      min-width: 1078px;
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    .flow-node {
+      position: relative;
+      flex: 0 0 125px;
+      min-height: 112px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 9px;
+      padding: 11px;
+      border: 1px solid var(--line-strong);
+      border-left: 4px solid var(--blue);
+      border-radius: 6px;
+      color: var(--ink);
+      background: var(--blue-soft);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .flow-node:hover, .flow-node.selected { box-shadow: 0 0 0 3px rgba(40, 107, 159, .13); }
+    .flow-node.pass { border-left-color: var(--green); background: var(--green-soft); }
+    .flow-node.fail { border-left-color: var(--red); background: var(--red-soft); }
+    .flow-node.control { border-left-color: var(--amber); background: var(--amber-soft); }
+    .flow-node.execute { border-left-color: var(--violet); background: var(--violet-soft); }
+
+    .node-step { color: var(--muted); font-size: 9px; font-weight: 800; text-transform: uppercase; }
+    .flow-node strong { display: block; font-size: 12px; line-height: 1.3; }
+    .flow-node small { display: block; color: var(--muted); font-size: 10px; line-height: 1.45; }
+
+    .node-status {
+      display: inline-flex;
+      align-self: flex-start;
+      align-items: center;
+      gap: 5px;
+      min-height: 21px;
+      padding: 3px 6px;
+      border-radius: 3px;
+      color: var(--blue);
+      background: rgba(255,255,255,.72);
+      font-size: 9px;
+      font-weight: 750;
+    }
+
+    .node-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .flow-node.pass .node-status { color: var(--green); }
+    .flow-node.fail .node-status { color: var(--red); }
+    .flow-node.control .node-status { color: var(--amber); }
+    .flow-node.execute .node-status { color: var(--violet); }
+
+    .arrow {
+      position: relative;
+      flex: 0 0 18px;
+      height: 2px;
+      background: #87949a;
+    }
+
+    .arrow::after {
+      content: "";
+      position: absolute;
+      top: -4px;
+      right: 0;
+      border-left: 7px solid #87949a;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+    }
+
+    .parallel-group {
+      flex: 0 0 220px;
+      padding: 9px;
+      border: 1px dashed #9fb1b7;
+      border-radius: 6px;
+      background: var(--surface-2);
+    }
+
+    .parallel-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 780;
+      text-transform: uppercase;
+    }
+
+    .parallel-group .flow-node { width: 100%; min-height: 94px; }
+    .parallel-group .flow-node + .flow-node { margin-top: 8px; }
+
+    .flow-footer {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr);
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .panel {
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .panel-head h3 { margin: 0; font-size: 12px; }
+    .panel-head span { color: var(--muted); font-size: 10px; }
+
+    .set-equation {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1fr) 26px minmax(0, 1fr);
+      align-items: stretch;
+      gap: 7px;
+    }
+
+    .set-box { min-width: 0; padding: 10px; border: 1px solid var(--line); background: var(--surface-2); }
+    .set-box.result { border-color: #9dc8ba; background: var(--green-soft); }
+    .set-box.result.deny { border-color: #dfa8ae; background: var(--red-soft); }
+    .set-box span { display: block; margin-bottom: 7px; color: var(--muted); font-size: 9px; font-weight: 750; }
+    .set-values { display: flex; flex-wrap: wrap; gap: 5px; min-height: 21px; }
+
+    .action-token {
+      display: inline-flex;
+      align-items: center;
+      min-height: 21px;
+      padding: 3px 6px;
+      border: 1px solid #bdc8cc;
+      border-radius: 3px;
+      color: #34434a;
+      background: #fff;
+      font-family: Consolas, monospace;
+      font-size: 9px;
+    }
+
+    .operator { display: grid; place-items: center; color: var(--muted); font-size: 17px; font-weight: 700; }
+
+    .detail-grid { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 7px 10px; font-size: 11px; line-height: 1.45; }
+    .detail-grid dt { color: var(--muted); }
+    .detail-grid dd { margin: 0; overflow-wrap: anywhere; }
+
+    .next-line {
+      margin-top: 12px;
+      padding: 10px;
+      border-left: 3px solid var(--violet);
+      color: #4e4268;
+      background: var(--violet-soft);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .timeline { display: grid; gap: 0; }
+    .timeline-item { position: relative; min-height: 39px; padding: 0 0 12px 24px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+    .timeline-item::before { content: ""; position: absolute; left: 5px; top: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+    .timeline-item::after { content: ""; position: absolute; left: 8px; top: 13px; bottom: -2px; width: 2px; background: var(--line); }
+    .timeline-item:last-child::after { display: none; }
+    .timeline-item strong { display: block; margin-bottom: 2px; color: var(--ink); font-size: 10px; }
+
+    .architecture-surface {
+      width: 100%;
+      max-width: 100%;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow-x: auto;
+    }
+
+    .architecture-stack {
+      min-width: 1020px;
+      display: grid;
+      gap: 0;
+    }
+
+    .architecture-band {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr);
+      border: 1px solid var(--line);
+      border-bottom: 0;
+      background: var(--surface-2);
+    }
+
+    .architecture-band:last-of-type { border-bottom: 1px solid var(--line); }
+
+    .architecture-label {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 5px;
+      min-height: 102px;
+      padding: 12px;
+      color: #fff;
+      background: #314148;
+    }
+
+    .architecture-label strong { font-size: 12px; }
+    .architecture-label small { color: #cdd6d9; font-size: 9px; line-height: 1.4; }
+
+    .architecture-modules {
+      display: grid;
+      gap: 10px;
+      align-items: stretch;
+      padding: 12px;
+    }
+
+    .architecture-modules.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .architecture-modules.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .architecture-modules.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+    .architecture-module {
+      position: relative;
+      min-width: 0;
+      min-height: 78px;
+      padding: 11px;
+      border: 1px solid #bcc7cb;
+      border-left: 4px solid var(--blue);
+      border-radius: 5px;
+      background: var(--blue-soft);
+    }
+
+    .architecture-module.auth { border-left-color: var(--blue); background: var(--blue-soft); }
+    .architecture-module.authority { border-left-color: var(--amber); background: var(--amber-soft); }
+    .architecture-module.provider { border-left-color: var(--green); background: var(--green-soft); }
+    .architecture-module.execution { border-left-color: var(--violet); background: var(--violet-soft); }
+    .architecture-module.data { border-left-color: #66777f; background: #edf1f2; }
+    .architecture-module.security { border-left-color: var(--red); background: var(--red-soft); }
+
+    .architecture-module strong { display: block; margin-bottom: 6px; font-size: 11px; line-height: 1.35; }
+    .architecture-module small { display: block; color: var(--muted); font-size: 9px; line-height: 1.5; }
+
+    .module-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .module-tag { padding: 3px 5px; border: 1px solid rgba(70,90,99,.22); border-radius: 3px; background: rgba(255,255,255,.65); font-size: 8px; }
+
+    .architecture-connector {
+      position: relative;
+      width: 2px;
+      height: 22px;
+      margin: 0 auto;
+      background: #77868c;
+    }
+
+    .architecture-connector::after {
+      content: "";
+      position: absolute;
+      left: -4px;
+      bottom: 0;
+      border-top: 7px solid #77868c;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+    }
+
+    .architecture-footer {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .architecture-note {
+      min-height: 116px;
+      padding: 13px;
+      border-top: 4px solid var(--green);
+      background: var(--surface);
+    }
+
+    .architecture-note:nth-child(2) { border-top-color: var(--amber); }
+    .architecture-note:nth-child(3) { border-top-color: var(--violet); }
+    .architecture-note h3 { margin: 0 0 7px; font-size: 11px; }
+    .architecture-note p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
+    .architecture-note code { display: block; margin-top: 8px; color: #2d414a; font-family: Consolas, monospace; font-size: 9px; }
+
+    .storage-flow {
+      width: 100%;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 180px 28px 200px 28px 190px 28px 190px;
+      align-items: center;
+      margin-bottom: 16px;
+      overflow-x: auto;
+    }
+
+    .storage-node { min-height: 92px; padding: 12px; border: 1px solid var(--line); border-left: 4px solid var(--blue); border-radius: 6px; background: var(--blue-soft); }
+    .storage-node.mysql { border-left-color: var(--green); background: var(--green-soft); }
+    .storage-node.redis { border-left-color: var(--amber); background: var(--amber-soft); }
+    .storage-node.cdc { border-left-color: var(--violet); background: var(--violet-soft); }
+    .storage-node strong { display: block; margin-bottom: 7px; font-size: 12px; }
+    .storage-node small { color: var(--muted); font-size: 10px; line-height: 1.45; }
+
+    .storage-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .table-wrap { overflow-x: auto; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    th, td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; white-space: nowrap; }
+    th { color: var(--muted); background: var(--surface-2); font-weight: 750; }
+    td code { font-family: Consolas, monospace; }
+
+    .cache-list { display: grid; gap: 8px; }
+    .cache-row { padding: 9px 10px; border-left: 3px solid var(--amber); background: var(--amber-soft); }
+    .cache-row code { display: block; overflow-wrap: anywhere; color: #72500f; font-family: Consolas, monospace; font-size: 10px; }
+    .cache-row span { display: block; margin-top: 5px; color: var(--muted); font-size: 9px; }
+
+    .write-track {
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      padding: 18px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      overflow-x: auto;
+    }
+
+    .write-step { flex: 0 0 155px; min-height: 105px; padding: 11px; border: 1px solid var(--line); border-top: 4px solid var(--green); background: var(--surface-2); }
+    .write-step.sync { border-top-color: var(--red); background: var(--red-soft); }
+    .write-step.async { border-top-color: var(--violet); background: var(--violet-soft); }
+    .write-step strong { display: block; margin-bottom: 7px; font-size: 11px; }
+    .write-step small { color: var(--muted); font-size: 9px; line-height: 1.45; }
+
+    .rule-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .rule-item { min-height: 145px; padding: 14px; border: 1px solid var(--line); border-top: 4px solid var(--blue); background: var(--surface); }
+    .rule-item:nth-child(2), .rule-item:nth-child(5) { border-top-color: var(--green); }
+    .rule-item:nth-child(3), .rule-item:nth-child(6) { border-top-color: var(--amber); }
+    .rule-item h3 { margin: 0 0 8px; font-size: 12px; }
+    .rule-item p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+    .rule-item code { display: block; margin-top: 10px; padding: 8px; color: #dce5e8; background: #223139; font-family: Consolas, monospace; font-size: 9px; line-height: 1.5; white-space: pre-wrap; }
+
+    @media (max-width: 1050px) {
+      .workspace { grid-template-columns: 210px minmax(0, 1fr); }
+      .request-strip { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
+      .flow-footer, .storage-layout { grid-template-columns: 1fr; }
+      .architecture-footer { grid-template-columns: 1fr; }
+      .rule-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 720px) {
+      html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+      .topbar { align-items: flex-start; flex-direction: column; gap: 10px; padding: 13px 14px; }
+      .top-meta { justify-content: flex-start; }
+      .viewbar { padding: 0 10px; }
+      .formula { display: none; }
+      .workspace { display: block; width: 100%; max-width: 100%; overflow-x: hidden; }
+      .case-rail { max-height: 214px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .rail-head { padding: 10px 12px; }
+      .case-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .case-button { min-height: 56px; }
+      .case-result { display: none; }
+      .main { width: 100%; max-width: 100%; padding: 12px; overflow-x: hidden; }
+      .case-header { align-items: stretch; flex-direction: column; }
+      .decision-badge { width: 100%; }
+      .request-strip { grid-template-columns: 1fr 1fr; }
+      .set-equation { min-width: 660px; }
+      .panel.set-panel { overflow-x: auto; }
+      .rule-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <h1>DSH Authority 数据流实验台</h1>
+        <p>功能资格与资源关系都必须包含 Action，所有 mandatory guard 必须通过</p>
+      </div>
+      <div class="top-meta">
+        <span class="meta-chip"><i class="meta-dot mysql"></i>MySQL 权威持久化</span>
+        <span class="meta-chip"><i class="meta-dot"></i>Redis 编译缓存</span>
+        <span class="meta-chip">默认拒绝</span>
+      </div>
+    </header>
+
+    <div class="viewbar">
+      <nav class="tabs" aria-label="数据流视图">
+        <button class="tab active" data-view="request-view">请求流向</button>
+        <button class="tab" data-view="architecture-view">整体架构</button>
+        <button class="tab" data-view="storage-view">存储与缓存</button>
+        <button class="tab" data-view="write-view">变更传播</button>
+        <button class="tab" data-view="rules-view">判断规则</button>
+      </nav>
+      <div class="formula">effective = functional ∩ relationship, when all guards allow</div>
+    </div>
+
+    <div class="workspace">
+      <aside class="case-rail">
+        <div class="rail-head">
+          <h2>业务案例</h2>
+          <p>相同入口，不同 Action 和资源关系</p>
+        </div>
+        <div class="case-list" id="case-list"></div>
+      </aside>
+
+      <main class="main">
+        <section class="view active" id="request-view">
+          <div class="case-header">
+            <div>
+              <h2 id="case-title"></h2>
+              <p id="case-summary"></p>
+            </div>
+            <div class="decision-badge" id="decision-badge">
+              <strong id="decision-label"></strong>
+              <small id="decision-reason"></small>
+            </div>
+          </div>
+
+          <div class="request-strip">
+            <div class="request-field"><span>Actor</span><code id="field-actor"></code></div>
+            <div class="request-field"><span>Resolved TenantScope</span><code id="field-tenant"></code></div>
+            <div class="request-field"><span>Route</span><code id="field-route"></code></div>
+            <div class="request-field"><span>Action</span><code id="field-action"></code></div>
+            <div class="request-field"><span>Resource</span><code id="field-resource"></code></div>
+          </div>
+
+          <div class="flow-surface">
+            <div class="flow-track">
+              <button class="flow-node" data-stage="request">
+                <span class="node-step">01 Input</span>
+                <strong>客户端请求</strong>
+                <small id="node-request-text"></small>
+                <span class="node-status">已接收</span>
+              </button>
+              <i class="arrow"></i>
+              <button class="flow-node pass" data-stage="auth">
+                <span class="node-step">02 Authenticate</span>
+                <strong>dsh-auth</strong>
+                <small>验证凭据，输出最小可信身份</small>
+                <span class="node-status">Authenticated</span>
+              </button>
+              <i class="arrow"></i>
+              <button class="flow-node control" data-stage="context">
+                <span class="node-step">03 Resolve</span>
+                <strong>授权上下文</strong>
+                <small id="node-context-text"></small>
+                <span class="node-status">已解析</span>
+              </button>
+              <i class="arrow"></i>
+
+              <div class="parallel-group">
+                <div class="parallel-label"><span>04 Parallel</span><span>路线并集 / Guard 全通过</span></div>
+                <button class="flow-node" data-stage="functional" id="functional-node">
+                  <span class="node-step">Functional Route</span>
+                  <strong>功能资格</strong>
+                  <small id="node-functional-text"></small>
+                  <span class="node-status" id="functional-status"></span>
+                </button>
+                <button class="flow-node" data-stage="relationship" id="relationship-node">
+                  <span class="node-step">Relationship Route</span>
+                  <strong>资源关系</strong>
+                  <small id="node-relationship-text"></small>
+                  <span class="node-status" id="relationship-status"></span>
+                </button>
+                <button class="flow-node" data-stage="guard" id="guard-node">
+                  <span class="node-step">Mandatory Guards</span>
+                  <strong>安全不变量</strong>
+                  <small>call / scope / credential / policy</small>
+                  <span class="node-status" id="guard-status">全部通过</span>
+                </button>
+              </div>
+
+              <i class="arrow"></i>
+              <button class="flow-node control" data-stage="merge" id="merge-node">
+                <span class="node-step">05 Intersect</span>
+                <strong>最终权限交集</strong>
+                <small id="node-merge-text"></small>
+                <span class="node-status" id="merge-status"></span>
+              </button>
+              <i class="arrow"></i>
+              <button class="flow-node" data-stage="outcome" id="outcome-node">
+                <span class="node-step">06 Decision</span>
+                <strong id="node-outcome-title"></strong>
+                <small id="node-outcome-text"></small>
+                <span class="node-status" id="outcome-status"></span>
+              </button>
+              <i class="arrow"></i>
+              <button class="flow-node execute" data-stage="next" id="next-node">
+                <span class="node-step">07 Enforce</span>
+                <strong id="node-next-title"></strong>
+                <small id="node-next-text"></small>
+                <span class="node-status">执行端</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="flow-footer">
+            <div class="panel set-panel">
+              <div class="panel-head"><h3 id="set-title">权限集合运算</h3><span id="set-kind"></span></div>
+              <div class="set-equation">
+                <div class="set-box"><span>功能路线并集</span><div class="set-values" id="functional-set"></div></div>
+                <div class="operator">∩</div>
+                <div class="set-box"><span>关系路线并集</span><div class="set-values" id="relationship-set"></div></div>
+                <div class="operator">=</div>
+                <div class="set-box result" id="effective-box"><span>Guard 后有效集合</span><div class="set-values" id="effective-set"></div></div>
+              </div>
+              <div class="next-line" id="next-line"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head"><h3 id="detail-title">节点数据</h3><span id="detail-stage">MERGE</span></div>
+              <dl class="detail-grid" id="detail-grid"></dl>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:14px">
+            <div class="panel-head"><h3>本次请求时间线</h3><span>从认证到执行</span></div>
+            <div class="timeline" id="timeline"></div>
+          </div>
+        </section>
+
+        <section class="view" id="architecture-view">
+          <div class="case-header">
+            <div>
+              <h2>DSH 认证与授权整体架构</h2>
+              <p>统一身份从上向下流动；授权中心只负责定位实现和合并结果，领域规则与数据访问分别由 Provider 和 Source 拥有。</p>
+            </div>
+          </div>
+
+          <div class="architecture-surface">
+            <div class="architecture-stack">
+              <div class="architecture-band">
+                <div class="architecture-label"><strong>入口层</strong><small>请求与边界防护</small></div>
+                <div class="architecture-modules cols-4">
+                  <div class="architecture-module"><strong>用户客户端</strong><small>Web、App、CLI 携带 Access Token 和业务参数。</small></div>
+                  <div class="architecture-module"><strong>内部服务</strong><small>使用服务身份并保留原始用户 Actor。</small></div>
+                  <div class="architecture-module execution"><strong>Agent / 大模型</strong><small>通过已注册 Tool 发起 Action，不能自行选择权限流程。</small></div>
+                  <div class="architecture-module security"><strong>dsh-auth-gateway</strong><small>路由绑定 Action，执行输入限制和速率限制。</small></div>
+                </div>
+              </div>
+
+              <div class="architecture-connector"></div>
+
+              <div class="architecture-band">
+                <div class="architecture-label"><strong>认证层</strong><small>只回答“你是谁”</small></div>
+                <div class="architecture-modules cols-3">
+                  <div class="architecture-module auth">
+                    <strong>dsh-auth</strong>
+                    <small>统一认证契约，不理解角色、插件可见性和沙箱能力。</small>
+                    <div class="module-tags"><span class="module-tag">principal</span><span class="module-tag">credential</span><span class="module-tag">request</span></div>
+                  </div>
+                  <div class="architecture-module auth">
+                    <strong>认证实现插件</strong>
+                    <small>密码验证、JWT 签发验签、Token Family 和用户状态。</small>
+                    <div class="module-tags"><span class="module-tag">password</span><span class="module-tag">jwt</span><span class="module-tag">token</span></div>
+                  </div>
+                  <div class="architecture-module auth">
+                    <strong>AuthenticatedCall</strong>
+                    <small>只包含身份与认证事实；租户 scope 由后续可信适配器派生。</small>
+                    <div class="module-tags"><span class="module-tag">user-red</span><span class="module-tag">credential</span><span class="module-tag">requestId</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="architecture-connector"></div>
+
+              <div class="architecture-band">
+                <div class="architecture-label"><strong>授权中心</strong><small>知道“去哪里问”</small></div>
+                <div class="architecture-modules cols-3">
+                  <div class="architecture-module authority">
+                    <strong>dsh-authority</strong>
+                    <small>提供 decide/require，统一默认拒绝和错误语义。</small>
+                    <div class="module-tags"><span class="module-tag">AuthorityRequest</span><span class="module-tag">Decision</span></div>
+                  </div>
+                  <div class="architecture-module authority">
+                    <strong>Action Catalog + Provider Registry</strong>
+                    <small>记录 Action plane、资源类型和命名 slot；缺失或重复 required Provider 会失败。</small>
+                    <div class="module-tags"><span class="module-tag">read</span><span class="module-tag">execute</span><span class="module-tag">publish</span></div>
+                  </div>
+                  <div class="architecture-module authority">
+                    <strong>Decision Runtime + Trace</strong>
+                    <small>并行执行功能、关系与 guard slot；路线取交集，任一 mandatory guard 拒绝即失败。</small>
+                    <div class="module-tags"><span class="module-tag">ALLOW</span><span class="module-tag">DENY</span><span class="module-tag">reason</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="architecture-connector"></div>
+
+              <div class="architecture-band">
+                <div class="architecture-label"><strong>授权实现</strong><small>知道“如何判断”</small></div>
+                <div class="architecture-modules cols-4">
+                  <div class="architecture-module provider">
+                    <strong>dsh-auth-rbac</strong>
+                    <small>人类角色取并集；service account、local profile 和 platform operator 使用各自有界 grant。</small>
+                    <div class="module-tags"><span class="module-tag">FunctionalUse</span><span class="module-tag">FunctionalDelegate</span></div>
+                  </div>
+                  <div class="architecture-module provider">
+                    <strong>dsh-authority-acl</strong>
+                    <small>合并 membership、role、tenant、everyone 对具体资源的授权。</small>
+                    <div class="module-tags"><span class="module-tag">RelationshipUse</span><span class="module-tag">RelationshipDelegate</span></div>
+                  </div>
+                  <div class="architecture-module provider">
+                    <strong>领域 Authority Provider</strong>
+                    <small>提供所有权等肯定关系，以及账号层级、插件状态等 mandatory guard。</small>
+                    <div class="module-tags"><span class="module-tag">account</span><span class="module-tag">plugin</span><span class="module-tag">session</span></div>
+                  </div>
+                  <div class="architecture-module provider">
+                    <strong>Baseline Guards</strong>
+                    <small>dsh-authority 强制检查 call currency、scope binding、credential ceiling、部署与 profile。</small>
+                    <div class="module-tags"><span class="module-tag">TenantScope</span><span class="module-tag">credential</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="architecture-connector"></div>
+
+              <div class="architecture-band">
+                <div class="architecture-label"><strong>执行层</strong><small>真正落实决定</small></div>
+                <div class="architecture-modules cols-4">
+                  <div class="architecture-module execution"><strong>账号与会话服务</strong><small>执行用户管理、会话读取和权威业务事务。</small></div>
+                  <div class="architecture-module execution"><strong>插件业务服务</strong><small>创建、读取、更新、分享和发布插件资源。</small></div>
+                  <div class="architecture-module execution"><strong>授权管理服务</strong><small>验证 EffectiveDelegate 子集后写角色授权或对象 Grant。</small></div>
+                  <div class="architecture-module security">
+                    <strong>dsh-execution-control + Sandbox</strong>
+                    <small>插件 execute 通过后，再限制文件、命令、网络、密钥和资源。</small>
+                  </div>
+                </div>
+              </div>
+
+              <div class="architecture-connector"></div>
+
+              <div class="architecture-band">
+                <div class="architecture-label"><strong>数据层</strong><small>权威与读取模型</small></div>
+                <div class="architecture-modules cols-5">
+                  <div class="architecture-module data"><strong>授权 MySQL</strong><small>Action、角色、Grant、origin、typed constraint 和 evidence head。</small></div>
+                  <div class="architecture-module data"><strong>业务 MySQL</strong><small>用户、插件、会话及可信 Resource Facts。</small></div>
+                  <div class="architecture-module data"><strong>Redis</strong><small>版本化读取模型与 evidence head；MISS 回源，减权时先安装 fence。</small></div>
+                  <div class="architecture-module data"><strong>CDC / Kafka</strong><small>异步传播投影和补偿修复，不承担即时撤销。</small></div>
+                  <div class="architecture-module data"><strong>安全审计</strong><small>认证、授权、转授、管理变更和沙箱执行轨迹。</small></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="architecture-footer">
+            <article class="architecture-note">
+              <h3>普通资源请求</h3>
+              <p>认证后派生可信 scope；功能路线和关系路线都包含 Action，且所有 mandatory guard 通过，业务服务才执行。</p>
+              <code>auth → scope → functional + relationship + guards → business</code>
+            </article>
+            <article class="architecture-note">
+              <h3>授权变更请求</h3>
+              <p>先验证 EffectiveDelegate；减权变更在 MySQL commit 前安装 fail-closed fence，commit 后发布 stable head。</p>
+              <code>delegate check → pre-fence → transaction → stable head → CDC</code>
+            </article>
+            <article class="architecture-note">
+              <h3>插件与 Agent 执行</h3>
+              <p>plugin:execute 只允许发起运行；具体文件、命令、网络和密钥能力由执行控制与真实沙箱限制。</p>
+              <code>authority → execution-control → sandbox</code>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="storage-view">
+          <div class="case-header">
+            <div><h2>存储与读取路径</h2><p>MySQL 保存可解释的授权与 evidence head；Redis 保存版本化读取模型，缓存未命中或版本不一致时回源。</p></div>
+          </div>
+
+          <div class="storage-flow">
+            <div class="storage-node"><strong>AuthorityRequest</strong><small>用户、租户、Action 和可信 ResourceRef</small></div>
+            <i class="arrow"></i>
+            <div class="storage-node redis"><strong>Redis Read Model</strong><small>membership、role、resource ACL 与 evidence head</small></div>
+            <i class="arrow"></i>
+            <div class="storage-node mysql"><strong>MySQL Fallback</strong><small>仅在 MISS 或版本不一致时通过索引读取</small></div>
+            <i class="arrow"></i>
+            <div class="storage-node cdc"><strong>确定性合并</strong><small>路线内部并集；路线交集；guard 与 constraint 全部收窄</small></div>
+          </div>
+
+          <div class="storage-layout">
+            <div class="panel">
+              <div class="panel-head"><h3>当前案例的 MySQL 权威记录</h3><span>示意数据</span></div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>表</th><th>主体 / GrantId</th><th>资源 / Source</th><th>Action / Evidence</th><th>类型</th></tr></thead>
+                  <tbody id="mysql-rows"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head"><h3>当前案例的 Redis 读取键</h3><span>版本化缓存</span></div>
+              <div class="cache-list" id="cache-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="write-view">
+          <div class="case-header">
+            <div><h2>授权变更传播</h2><p>增加权限可以保守地延迟生效；任何减少权限的 mutation 必须在 MySQL commit 前建立 fail-closed fence。</p></div>
+          </div>
+
+          <div class="write-track">
+            <div class="write-step"><strong>1. 校验并预留 revision</strong><small>Grant 必须是 EffectiveDelegate 的子集；事务锁定并复核 evidence。</small></div>
+            <i class="arrow"></i>
+            <div class="write-step sync"><strong>2. 减权时 pre-fence</strong><small>在持久 head 台账与 Redis primary 安装 deny-until；失败则不 commit。</small></div>
+            <i class="arrow"></i>
+            <div class="write-step"><strong>3. MySQL 事务</strong><small>写 Grant、origin 与 revision，并在同一事务追加 Outbox。</small></div>
+            <i class="arrow"></i>
+            <div class="write-step"><strong>4. 发布 stable head</strong><small>Commit 后替换 fence 与不可变 payload，完成后才返回成功。</small></div>
+            <i class="arrow"></i>
+            <div class="write-step async"><strong>5. CDC 异步传播</strong><small>Kafka 消费者更新其他投影，Reconciler 负责补偿修复。</small></div>
+          </div>
+
+          <div class="storage-layout" style="margin-top:14px">
+            <div class="panel">
+              <div class="panel-head"><h3>当前案例的写入结果</h3><span id="write-case-label"></span></div>
+              <dl class="detail-grid" id="write-detail"></dl>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h3>一致性边界</h3><span>安全优先</span></div>
+              <div class="timeline">
+                <div class="timeline-item"><strong>MySQL 是权威状态</strong>Redis 和搜索投影都不能反向覆盖权威授权。</div>
+                <div class="timeline-item"><strong>Grant 可以短暂延迟生效</strong>缓存旧数据导致临时拒绝是安全的。</div>
+                <div class="timeline-item"><strong>Revoke 不能继续放行</strong>pre-fence 或 stable head 无法确认时，相关授权默认拒绝。</div>
+                <div class="timeline-item"><strong>CDC 负责修复</strong>至少一次消费必须幂等，不能作为即时安全边界。</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="rules-view">
+          <div class="case-header">
+            <div><h2>授权判断规则</h2><p>基础 CRUD 不是上限；业务插件可以注册 execute、publish、configure 等领域 Action。</p></div>
+          </div>
+          <div class="rule-grid">
+            <article class="rule-item"><h3>功能路线内部取并集</h3><p>人类 membership 合并所有 active role grant；service account、local profile 与 platform operator 使用各自的有界 grant。</p><code>FunctionalUse(human) = R1 ∪ R2 ∪ ...</code></article>
+            <article class="rule-item"><h3>关系路线内部取并集</h3><p>资源可以授权给 membership、role、tenant 或 everyone，并合并所有肯定性的领域关系。</p><code>RelationshipUse = memberships ∪ roles ∪ tenant ∪ *</code></article>
+            <article class="rule-item"><h3>路线取交集，Guard 全通过</h3><p>功能资格不能替代资源关系；任何 required guard 拒绝、缺失、超时或异常都会 fail closed。</p><code>EffectiveUse = guards ? FunctionalUse ∩ RelationshipUse : ∅</code></article>
+            <article class="rule-item"><h3>创建检查父容器</h3><p>新对象尚不存在，因此 create 检查租户或集合资源。创建事务同时写入创建者的 Owner Grant。</p><code>plugin:create → plugin-collection:tenant-1</code></article>
+            <article class="rule-item"><h3>列表返回查询范围</h3><p>列表查询不能先读取全部对象再逐个鉴权。存储层通过索引 relation 校验 subject、Action、origin head 和 mandatory predicate。</p><code>subjects + action + valid origins → AccessScope</code></article>
+            <article class="rule-item"><h3>执行权限不是沙箱能力</h3><p>plugin:execute 只允许发起运行。文件、命令、网络和密钥能力仍由 execution-control 与沙箱限制。</p><code>authority ALLOW → execution-control → sandbox</code></article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const cases = [
+      {
+        id: "run-shared",
+        title: "小红运行别人分享的插件",
+        short: "共享插件执行",
+        summary: "功能路线允许使用插件，plugin-100 也向小红的当前 membership 授予 execute；授权通过后仍需进入执行控制和真实沙箱。",
+        actor: "user-red",
+        tenant: "tenant-1",
+        membership: "membership-red",
+        route: "POST /plugins/plugin-100/execute",
+        action: "plugin:execute",
+        actionName: "execute",
+        resource: "plugin:plugin-100",
+        roles: ["member", "plugin-runner"],
+        subjects: ["m:membership-red", "r:member", "r:plugin-runner", "t:tenant-1", "*"],
+        functionalUse: ["read", "execute"],
+        functionalDelegate: [],
+        relationshipUse: ["read", "execute"],
+        relationshipDelegate: [],
+        guards: ["call-current", "active-membership", "credential-ceiling", "plugin-enabled", "deployment-policy"],
+        guardPass: true,
+        kind: "use",
+        result: "allow",
+        reason: "两条路线都包含 execute",
+        nextTitle: "执行控制与沙箱",
+        next: "允许只读工作目录，禁止外网和密钥读取，然后启动 plugin-100。",
+        resourceFacts: "published / enabled / revision=7",
+        functionalRows: [
+          ["dsh_authz_membership_roles", "membership-red → plugin-runner", "tenant-1", "-", "membership"],
+          ["dsh_authz_role_action_grants", "plugin-runner", "plugin", "execute", "use"],
+          ["dsh_authz_role_action_grants", "member", "plugin", "read", "use"]
+        ],
+        relationshipRows: [
+          ["dsh_authz_resource_action_grants", "m:membership-red", "plugin-100", "read", "use"],
+          ["dsh_authz_resource_action_grants", "grant-red-execute / m:membership-red", "plugin-100", "execute", "use"],
+          ["dsh_authz_resource_grant_origins", "grant-red-execute", "acl-grant", "grant-blue-execute@3", "origin"]
+        ],
+        cache: [
+          ["authz:membership:tenant-1:membership-red:head", "stable@12"],
+          ["authz:membership:tenant-1:membership-red:v:12", "roles=[member, plugin-runner]"],
+          ["authz:role:tenant-1:plugin-runner:plugin:head", "stable@4"],
+          ["authz:role:tenant-1:plugin-runner:plugin:v:4", "use=[execute], delegate=[]"],
+          ["authz:resource:tenant-1:plugin:plugin-100:head", "stable@7"],
+          ["authz:resource:tenant-1:plugin:plugin-100:subjects-a9:v:7", "m:membership-red → use=[read, execute]"],
+          ["authz:evidence:acl-grant:grant-blue-execute:head", "stable@3"]
+        ],
+        timeline: [
+          ["Access Token 认证", "dsh-auth 输出 AuthenticatedCall(user-red)。"],
+          ["派生授权上下文", "TenantScope 选择 membership-red，并解析角色和 subject keys。"],
+          ["并行查询三类 slot", "功能路线、关系路线和 mandatory guards 都命中稳定 revision。"],
+          ["集合交集", "{read, execute} ∩ {read, execute}。"],
+          ["受限执行", "execution-control 生成能力集合并启动沙箱。"]
+        ],
+        write: ["业务结果", "不修改授权数据", "权威存储", "插件执行记录", "缓存动作", "无需失效 ACL", "异步事件", "写入执行审计"]
+      },
+      {
+        id: "grant-execute",
+        title: "小明把插件执行权授予小红",
+        short: "转授执行权限",
+        summary: "小明既要在功能路线具备 execute/delegate，也要在 plugin-100 关系路线上拥有 execute 的转授权限。",
+        actor: "user-blue",
+        tenant: "tenant-1",
+        membership: "membership-blue",
+        route: "POST /plugins/plugin-100/grants",
+        action: "plugin:execute/delegate",
+        actionName: "execute",
+        resource: "plugin:plugin-100",
+        roles: ["plugin-owner"],
+        subjects: ["m:membership-blue", "r:plugin-owner", "t:tenant-1"],
+        functionalUse: ["read", "update", "execute"],
+        functionalDelegate: ["read", "execute"],
+        relationshipUse: ["read", "update", "delete", "execute"],
+        relationshipDelegate: ["read", "execute"],
+        guards: ["call-current", "active-membership", "credential-ceiling", "plugin-enabled", "delegation-policy"],
+        guardPass: true,
+        kind: "delegate",
+        result: "allow",
+        reason: "execute 属于有效转授权集合",
+        nextTitle: "写入对象 Grant",
+        next: "向 m:membership-red 写入 execute/use，并记录支撑本次转授的精确 evidence origins。",
+        resourceFacts: "owner=user-blue / revision=7",
+        functionalRows: [
+          ["dsh_authz_membership_roles", "membership-blue → plugin-owner", "tenant-1", "-", "membership"],
+          ["dsh_authz_role_action_grants", "plugin-owner", "plugin", "execute", "delegate"]
+        ],
+        relationshipRows: [
+          ["dsh_authz_resource_action_grants", "grant-blue-execute / m:membership-blue", "plugin-100", "execute", "use"],
+          ["dsh_authz_resource_action_grants", "grant-blue-execute / m:membership-blue", "plugin-100", "execute", "delegate"],
+          ["dsh_authz_resource_grant_origins", "grant-red-execute", "membership", "membership-blue@5", "origin"],
+          ["dsh_authz_resource_grant_origins", "grant-red-execute", "role-action", "plugin-owner:execute:delegate@9", "origin"],
+          ["dsh_authz_resource_grant_origins", "grant-red-execute", "acl-grant", "grant-blue-execute@3", "origin"]
+        ],
+        cache: [
+          ["authz:membership:tenant-1:membership-blue:head", "stable@5"],
+          ["authz:membership:tenant-1:membership-blue:v:5", "roles=[plugin-owner]"],
+          ["authz:role:tenant-1:plugin-owner:plugin:head", "stable@9"],
+          ["authz:role:tenant-1:plugin-owner:plugin:v:9", "delegate=[read, execute]"],
+          ["authz:resource:tenant-1:plugin:plugin-100:head", "stable@7"],
+          ["authz:resource:tenant-1:plugin:plugin-100:subjects-b4:v:7", "m:membership-blue → delegate=[read, execute]"],
+          ["authz:evidence:acl-grant:grant-blue-execute:head", "stable@3"]
+        ],
+        timeline: [
+          ["认证小明", "获得 AuthenticatedCall(user-blue)。"],
+          ["检查转授资格", "功能路线与关系路线都包含 execute/delegate，mandatory guards 全部通过。"],
+          ["校验子集", "requested={execute} 是 EffectiveDelegate 的子集。"],
+          ["锁内复核 evidence", "捕获 membership、role-action 与 GrantId@evidenceRevision。"],
+          ["MySQL 权威事务", "新增小红 execute/use Grant、origin 和 Outbox，并递增 ACL revision。"],
+          ["发布新 read model", "这是增加权限，无需 pre-fence；发布 stable v8 后由 CDC 修复其他投影。"]
+        ],
+        write: ["新增 Grant", "grant-red-execute → m:membership-red", "Origins", "membership-blue@5 + role-action@9 + grant-blue-execute@3", "ACL revision", "7 → 8", "一致性", "增加权限无需 pre-fence；stable head 后 CDC"]
+      },
+      {
+        id: "edit-readonly",
+        title: "小红修改一个只读插件",
+        short: "对象权限拒绝",
+        summary: "功能路线允许 update，但 plugin-200 只向小红的当前 membership 授予 read，因此关系路线阻止修改。",
+        actor: "user-red",
+        tenant: "tenant-1",
+        membership: "membership-red",
+        route: "PATCH /plugins/plugin-200",
+        action: "plugin:update",
+        actionName: "update",
+        resource: "plugin:plugin-200",
+        roles: ["plugin-editor"],
+        subjects: ["m:membership-red", "r:plugin-editor", "t:tenant-1"],
+        functionalUse: ["read", "update"],
+        functionalDelegate: [],
+        relationshipUse: ["read"],
+        relationshipDelegate: [],
+        guards: ["call-current", "active-membership", "credential-ceiling", "plugin-enabled"],
+        guardPass: true,
+        kind: "use",
+        result: "deny",
+        reason: "关系路线不包含 update",
+        nextTitle: "返回 403",
+        next: "不进入插件更新事务，也不泄露插件的敏感配置。",
+        resourceFacts: "shared-readonly / revision=3",
+        functionalRows: [
+          ["dsh_authz_membership_roles", "membership-red → plugin-editor", "tenant-1", "-", "membership"],
+          ["dsh_authz_role_action_grants", "plugin-editor", "plugin", "update", "use"]
+        ],
+        relationshipRows: [
+          ["dsh_authz_resource_action_grants", "grant-red-read / m:membership-red", "plugin-200", "read", "use"],
+          ["dsh_authz_resource_grant_origins", "grant-red-read", "acl-grant", "grant-owner-read@4", "origin"]
+        ],
+        cache: [
+          ["authz:membership:tenant-1:membership-red:head", "stable@12"],
+          ["authz:membership:tenant-1:membership-red:v:12", "roles=[plugin-editor]"],
+          ["authz:role:tenant-1:plugin-editor:plugin:head", "stable@6"],
+          ["authz:role:tenant-1:plugin-editor:plugin:v:6", "use=[read, update]"],
+          ["authz:resource:tenant-1:plugin:plugin-200:head", "stable@3"],
+          ["authz:resource:tenant-1:plugin:plugin-200:subjects-a9:v:3", "m:membership-red → use=[read]"],
+          ["authz:evidence:acl-grant:grant-owner-read:head", "stable@4"]
+        ],
+        timeline: [
+          ["认证通过", "确认请求者是 user-red。"],
+          ["功能资格通过", "plugin-editor 的功能贡献包含 update。"],
+          ["资源关系拒绝", "plugin-200 对 membership-red 只有 read。"],
+          ["交集不含 update", "最终返回 403，不执行任何写操作。"]
+        ],
+        write: ["业务结果", "拒绝", "MySQL", "无写入", "Redis", "无变更", "审计", "记录 object-action-missing"]
+      },
+      {
+        id: "acl-without-role",
+        title: "对象给了执行权，但角色不允许",
+        short: "角色权限拒绝",
+        summary: "plugin-300 分享了 execute 给小红，但她的功能路线只有 read；资源分享不能绕过系统功能资格。",
+        actor: "user-red",
+        tenant: "tenant-1",
+        membership: "membership-red",
+        route: "POST /plugins/plugin-300/execute",
+        action: "plugin:execute",
+        actionName: "execute",
+        resource: "plugin:plugin-300",
+        roles: ["plugin-viewer"],
+        subjects: ["m:membership-red", "r:plugin-viewer", "t:tenant-1"],
+        functionalUse: ["read"],
+        functionalDelegate: [],
+        relationshipUse: ["read", "execute"],
+        relationshipDelegate: [],
+        guards: ["call-current", "active-membership", "credential-ceiling", "plugin-enabled"],
+        guardPass: true,
+        kind: "use",
+        result: "deny",
+        reason: "功能路线不包含 execute",
+        nextTitle: "返回 403",
+        next: "不进入 execution-control，更不会创建沙箱进程。",
+        resourceFacts: "published / enabled / revision=2",
+        functionalRows: [
+          ["dsh_authz_membership_roles", "membership-red → plugin-viewer", "tenant-1", "-", "membership"],
+          ["dsh_authz_role_action_grants", "plugin-viewer", "plugin", "read", "use"]
+        ],
+        relationshipRows: [
+          ["dsh_authz_resource_action_grants", "grant-red-read / m:membership-red", "plugin-300", "read", "use"],
+          ["dsh_authz_resource_action_grants", "grant-red-execute / m:membership-red", "plugin-300", "execute", "use"],
+          ["dsh_authz_resource_grant_origins", "grant-red-execute", "acl-grant", "grant-owner-execute@2", "origin"]
+        ],
+        cache: [
+          ["authz:membership:tenant-1:membership-red:head", "stable@12"],
+          ["authz:membership:tenant-1:membership-red:v:12", "roles=[plugin-viewer]"],
+          ["authz:role:tenant-1:plugin-viewer:plugin:head", "stable@2"],
+          ["authz:role:tenant-1:plugin-viewer:plugin:v:2", "use=[read]"],
+          ["authz:resource:tenant-1:plugin:plugin-300:head", "stable@2"],
+          ["authz:resource:tenant-1:plugin:plugin-300:subjects-a9:v:2", "m:membership-red → use=[read, execute]"],
+          ["authz:evidence:acl-grant:grant-owner-execute:head", "stable@2"]
+        ],
+        timeline: [
+          ["认证通过", "AuthenticatedCall 指向 user-red。"],
+          ["三类 slot 并行", "关系路线返回 execute，功能路线只返回 read，mandatory guards 通过。"],
+          ["交集不含 execute", "分享记录不能提升用户的系统角色能力。"],
+          ["快速拒绝", "不加载插件执行能力，不启动沙箱。"]
+        ],
+        write: ["业务结果", "拒绝", "MySQL", "无写入", "Runtime", "未启动", "审计", "记录 functional-action-missing"]
+      },
+      {
+        id: "disable-user",
+        title: "管理员禁用租户内用户",
+        short: "账号管理",
+        summary: "租户管理员拥有 account:disable，同时目标用户处于其可管理范围；通过后执行禁用和 Token Family 撤销。",
+        actor: "admin-a",
+        tenant: "tenant-1",
+        membership: "membership-admin-a",
+        route: "POST /accounts/user-b/disable",
+        action: "account:disable",
+        actionName: "disable",
+        resource: "account:user-b",
+        roles: ["tenant-admin"],
+        subjects: ["m:membership-admin-a", "r:tenant-admin", "t:tenant-1"],
+        functionalUse: ["read", "update", "disable", "revoke-sessions"],
+        functionalDelegate: [],
+        relationshipUse: ["read", "disable"],
+        relationshipDelegate: [],
+        guards: ["call-current", "active-membership", "credential-ceiling", "same-tenant", "admin-hierarchy", "step-up-policy"],
+        guardPass: true,
+        kind: "use",
+        result: "allow",
+        reason: "功能资格、管理关系与所有 mandatory guards 都允许 disable",
+        nextTitle: "账号安全事务",
+        next: "禁用 user-b、security_revision + 1，并撤销其全部 Token Family。",
+        resourceFacts: "active / same-tenant / lower-rank",
+        functionalRows: [
+          ["dsh_authz_membership_roles", "membership-admin-a → tenant-admin", "tenant-1", "-", "membership"],
+          ["dsh_authz_role_action_grants", "tenant-admin", "account", "disable", "use"]
+        ],
+        relationshipRows: [
+          ["domain_account_admin_relations", "m:membership-admin-a", "account:user-b", "disable", "affirmative"]
+        ],
+        cache: [
+          ["authz:membership:tenant-1:membership-admin-a:head", "stable@8"],
+          ["authz:membership:tenant-1:membership-admin-a:v:8", "roles=[tenant-admin]"],
+          ["authz:role:tenant-1:tenant-admin:account:head", "stable@11"],
+          ["authz:role:tenant-1:tenant-admin:account:v:11", "use=[read, update, disable, revoke-sessions]"],
+          ["authz:domain:account-hierarchy:tenant-1:user-b:head", "stable@6 / lower-rank"]
+        ],
+        timeline: [
+          ["管理员认证", "确认 admin-a 状态正常。"],
+          ["并行权限判断", "功能资格与管理关系允许 disable；同租户、低层级和 step-up guard 通过。"],
+          ["高风险确认", "管理操作通过审批或二次认证策略。"],
+          ["预留并 pre-fence", "在 commit 前为账号安全、membership 与 Token Family heads 安装 deny-until@7。"],
+          ["权威事务", "禁用 user-b、撤销 Token Family、递增 revision 并追加 Outbox。"],
+          ["发布 stable heads", "commit 后以单调 CAS 发布 stable@7，CDC 再更新其他投影。"]
+        ],
+        write: ["Pre-fence", "deny-until@7（commit 前）", "用户状态", "active → disabled", "Token Family", "全部 revoked", "完成边界", "stable@7 发布后返回；CDC 异步修复"]
+      },
+      {
+        id: "list-visible",
+        title: "小红查看自己能看见的插件",
+        short: "范围查询",
+        summary: "先检查 plugin:read 功能资格，再把用户、角色、租户和公共主体转换成 AccessScope，由数据库一次性筛选。",
+        actor: "user-red",
+        tenant: "tenant-1",
+        membership: "membership-red",
+        route: "GET /plugins",
+        action: "plugin:read",
+        actionName: "read",
+        resource: "plugin-collection:tenant-1",
+        roles: ["member", "plugin-viewer"],
+        subjects: ["m:membership-red", "r:member", "r:plugin-viewer", "t:tenant-1", "*"],
+        functionalUse: ["read"],
+        functionalDelegate: [],
+        relationshipUse: ["read"],
+        relationshipDelegate: [],
+        guards: ["call-current", "active-membership", "credential-ceiling", "tenant-scope", "resource-lifecycle"],
+        guardPass: true,
+        kind: "scope",
+        result: "allow",
+        reason: "返回 read AccessScope",
+        nextTitle: "索引化范围查询",
+        next: "用 subject_key IN (...) 查询 ACL 索引，不对每个插件逐条鉴权。",
+        resourceFacts: "collection / tenant-1",
+        functionalRows: [
+          ["dsh_authz_membership_roles", "membership-red → plugin-viewer", "tenant-1", "-", "membership"],
+          ["dsh_authz_role_action_grants", "plugin-viewer", "plugin", "read", "use"]
+        ],
+        relationshipRows: [
+          ["dsh_authz_resource_action_grants", "m:membership-red", "plugin-*", "read", "use"],
+          ["dsh_authz_resource_grant_origins", "grant-red-read", "acl-grant", "grant-owner-read@4", "origin"],
+          ["dsh_authz_resource_action_grants", "t:tenant-1", "plugin-*", "read", "use"],
+          ["dsh_authz_resource_action_grants", "*", "plugin-*", "read", "use"]
+        ],
+        cache: [
+          ["authz:membership:tenant-1:membership-red:head", "stable@12"],
+          ["authz:membership:tenant-1:membership-red:v:12", "roles=[member, plugin-viewer]"],
+          ["authz:role:tenant-1:plugin-viewer:plugin:head", "stable@2"],
+          ["authz:role:tenant-1:plugin-viewer:plugin:v:2", "use=[read]"],
+          ["authz:scope:tenant-1:plugin:subjects-a9:v12", "subjects=[m:membership-red, roles..., t:tenant-1, *]"],
+          ["authz:evidence:acl-grant:grant-owner-read:head", "stable@4"]
+        ],
+        timeline: [
+          ["认证并派生 scope", "选择 membership-red 并生成完整 subject keys。"],
+          ["功能权限检查", "功能路线并集包含 plugin:read。"],
+          ["生成 AccessScope", "返回用户、角色、租户和公共主体集合。"],
+          ["数据库范围查询", "用 indexed relation 批量 anti-join evidence heads，不逐资源调用 Provider。"],
+          ["返回列表", "仅返回当前用户实际可见的插件。"]
+        ],
+        write: ["业务结果", "只读列表", "MySQL", "无写入", "查询方式", "AccessScope 索引查询", "审计", "记录范围与结果数量"]
+      },
+      {
+        id: "create-plugin",
+        title: "小红在租户中创建新插件",
+        short: "父容器授权",
+        summary: "新插件尚不存在，关系路线检查 tenant-1 的插件集合；创建事务同时写插件和创建者 Owner Grant。",
+        actor: "user-red",
+        tenant: "tenant-1",
+        membership: "membership-red",
+        route: "POST /plugins",
+        action: "plugin:create",
+        actionName: "create",
+        resource: "plugin-collection:tenant-1",
+        roles: ["plugin-creator"],
+        subjects: ["m:membership-red", "r:plugin-creator", "t:tenant-1"],
+        functionalUse: ["create", "read"],
+        functionalDelegate: [],
+        relationshipUse: ["create"],
+        relationshipDelegate: [],
+        guards: ["call-current", "active-membership", "credential-ceiling", "tenant-scope", "collection-enabled"],
+        guardPass: true,
+        kind: "use",
+        result: "allow",
+        reason: "角色和父容器都允许 create",
+        nextTitle: "创建插件事务",
+        next: "插入 plugin-401，并为 membership-red 写入 intrinsic owner Grant 和初始 ACL revision。",
+        resourceFacts: "tenant collection / quota available",
+        functionalRows: [
+          ["dsh_authz_membership_roles", "membership-red → plugin-creator", "tenant-1", "-", "membership"],
+          ["dsh_authz_role_action_grants", "plugin-creator", "plugin", "create", "use"]
+        ],
+        relationshipRows: [
+          ["dsh_authz_resource_action_grants", "r:plugin-creator", "plugin-collection:tenant-1", "create", "use"]
+        ],
+        cache: [
+          ["authz:membership:tenant-1:membership-red:head", "stable@12"],
+          ["authz:membership:tenant-1:membership-red:v:12", "roles=[plugin-creator]"],
+          ["authz:role:tenant-1:plugin-creator:plugin:head", "stable@3"],
+          ["authz:role:tenant-1:plugin-creator:plugin:v:3", "use=[create, read]"],
+          ["authz:resource:tenant-1:plugin-collection:tenant-1:head", "stable@4"],
+          ["authz:resource:tenant-1:plugin-collection:tenant-1:subjects-b2:v:4", "r:plugin-creator → use=[create]"]
+        ],
+        timeline: [
+          ["认证用户", "获得 AuthenticatedCall(user-red)。"],
+          ["检查创建资格", "plugin-creator 角色包含 create。"],
+          ["检查父容器", "tenant-1 插件集合允许该角色创建。"],
+          ["业务配额", "租户插件数量仍在配额内。"],
+          ["原子创建", "写 plugin-401 与 owner-401 GrantId（intrinsic-owner，row revision=1）。"],
+          ["发布读取模型", "commit 后发布 ACL stable@1；增加权限无需 pre-fence。"]
+        ],
+        write: ["业务记录", "新增 plugin-401", "Owner Grant", "owner-401 → m:membership-red（intrinsic-owner）", "ACL revision", "初始化 stable@1", "缓存", "发布新集合 Scope；CDC 异步传播"]
+      }
+    ];
+
+    const byId = id => document.getElementById(id);
+    let current = cases[0];
+    let selectedStage = "merge";
+
+    function intersection(a, b) {
+      const other = new Set(b);
+      return a.filter(value => other.has(value));
+    }
+
+    function currentFunctionalSet(item) {
+      return item.kind === "delegate" ? item.functionalDelegate : item.functionalUse;
+    }
+
+    function currentRelationshipSet(item) {
+      return item.kind === "delegate" ? item.relationshipDelegate : item.relationshipUse;
+    }
+
+    function currentEffectiveSet(item) {
+      if (!item.guardPass) return [];
+      return intersection(currentFunctionalSet(item), currentRelationshipSet(item));
+    }
+
+    function resultFor(item) {
+      return currentEffectiveSet(item).includes(item.actionName) ? "allow" : "deny";
+    }
+
+    function makeToken(value) {
+      const token = document.createElement("span");
+      token.className = "action-token";
+      token.textContent = value;
+      return token;
+    }
+
+    function renderTokens(target, values) {
+      target.replaceChildren(...(values.length ? values.map(makeToken) : [makeToken("∅")]));
+    }
+
+    function renderCaseList() {
+      const list = byId("case-list");
+      list.replaceChildren(...cases.map((item, index) => {
+        const button = document.createElement("button");
+        button.className = "case-button" + (item.id === current.id ? " active" : "");
+        button.type = "button";
+        button.dataset.caseId = item.id;
+        button.setAttribute("aria-selected", String(item.id === current.id));
+
+        const number = document.createElement("span");
+        number.className = "case-index";
+        number.textContent = String(index + 1).padStart(2, "0");
+
+        const labels = document.createElement("span");
+        const title = document.createElement("span");
+        title.className = "case-title";
+        title.textContent = item.title;
+        const sub = document.createElement("span");
+        sub.className = "case-sub";
+        sub.textContent = item.short;
+        labels.append(title, sub);
+
+        const decision = resultFor(item);
+        const result = document.createElement("span");
+        result.className = "case-result " + decision;
+        result.textContent = decision.toUpperCase();
+        button.append(number, labels, result);
+        button.addEventListener("click", () => selectCase(item.id));
+        return button;
+      }));
+    }
+
+    function stageDetails(item) {
+      const functionalSet = currentFunctionalSet(item);
+      const relationshipSet = currentRelationshipSet(item);
+      const effective = currentEffectiveSet(item);
+      const decision = resultFor(item);
+      return {
+        request: {
+          title: "客户端请求",
+          stage: "INPUT",
+          rows: [["Token", "Bearer Access Token"], ["Route", item.route], ["客户端参数", item.resource]]
+        },
+        auth: {
+          title: "dsh-auth 输出",
+          stage: "AUTHENTICATION",
+          rows: [["principal", item.actor], ["credential", "access-token"], ["结果", "AuthenticatedCall"], ["不包含", "tenant / roles / ACL / sandbox capabilities"]]
+        },
+        context: {
+          title: "授权上下文",
+          stage: "RESOLVE",
+          rows: [["TenantScope", item.tenant], ["Action", item.action], ["Resource", item.resource], ["可信资源事实", item.resourceFacts], ["Subjects", item.subjects.join(", ")]]
+        },
+        functional: {
+          title: "功能资格路线",
+          stage: "FUNCTIONAL UNION",
+          rows: [["Active membership", item.membership], ["角色", item.roles.join(" ∪ ")], ["使用权限", item.functionalUse.join(", ") || "∅"], ["转授权限", item.functionalDelegate.join(", ") || "∅"], ["本次集合", functionalSet.join(", ") || "∅"]]
+        },
+        relationship: {
+          title: "资源关系路线",
+          stage: "RELATIONSHIP UNION",
+          rows: [["匹配主体", item.subjects.join(", ")], ["使用权限", item.relationshipUse.join(", ") || "∅"], ["转授权限", item.relationshipDelegate.join(", ") || "∅"], ["本次集合", relationshipSet.join(", ") || "∅"]]
+        },
+        guard: {
+          title: "Mandatory guards",
+          stage: "ALL MUST ALLOW",
+          rows: [["必选检查", item.guards.join(" ∧ ")], ["结果", item.guardPass ? "全部 allow" : "至少一项 deny / unavailable"], ["缺失或超时", "fail closed"], ["能否被 Grant 覆盖", "不能"]]
+        },
+        merge: {
+          title: "最终集合交集",
+          stage: "INTERSECTION",
+          rows: [["功能路线", `{${functionalSet.join(", ")}}`], ["关系路线", `{${relationshipSet.join(", ")}}`], ["GuardPass", String(item.guardPass)], ["有效集合", `{${effective.join(", ")}}`], ["请求 Action", item.actionName]]
+        },
+        outcome: {
+          title: decision === "allow" ? "授权通过" : "授权拒绝",
+          stage: "DECISION",
+          rows: [["Decision", decision.toUpperCase()], ["Reason", item.reason], ["错误语义", decision === "allow" ? "-" : "403 Forbidden"], ["默认策略", "fail closed"]]
+        },
+        next: {
+          title: item.nextTitle,
+          stage: "ENFORCEMENT",
+          rows: [["执行目标", item.nextTitle], ["动作", item.next], ["授权结果", decision.toUpperCase()], ["是否产生副作用", decision === "allow" ? "由业务事务决定" : "否"]]
+        }
+      };
+    }
+
+    function renderDetail(stage) {
+      selectedStage = stage;
+      document.querySelectorAll(".flow-node").forEach(node => node.classList.toggle("selected", node.dataset.stage === stage));
+      const detail = stageDetails(current)[stage];
+      byId("detail-title").textContent = detail.title;
+      byId("detail-stage").textContent = detail.stage;
+      const grid = byId("detail-grid");
+      const children = [];
+      detail.rows.forEach(([key, value]) => {
+        const dt = document.createElement("dt");
+        dt.textContent = key;
+        const dd = document.createElement("dd");
+        dd.textContent = value;
+        children.push(dt, dd);
+      });
+      grid.replaceChildren(...children);
+    }
+
+    function renderStorage(item) {
+      const rows = [...item.functionalRows, ...item.relationshipRows];
+      byId("mysql-rows").replaceChildren(...rows.map(row => {
+        const tr = document.createElement("tr");
+        tr.replaceChildren(...row.map(value => {
+          const td = document.createElement("td");
+          const code = document.createElement("code");
+          code.textContent = value;
+          td.append(code);
+          return td;
+        }));
+        return tr;
+      }));
+
+      byId("cache-list").replaceChildren(...item.cache.map(([key, value]) => {
+        const row = document.createElement("div");
+        row.className = "cache-row";
+        const code = document.createElement("code");
+        code.textContent = key;
+        const span = document.createElement("span");
+        span.textContent = value;
+        row.append(code, span);
+        return row;
+      }));
+    }
+
+    function renderWrite(item) {
+      byId("write-case-label").textContent = item.short;
+      const grid = byId("write-detail");
+      const children = [];
+      for (let index = 0; index < item.write.length; index += 2) {
+        const dt = document.createElement("dt");
+        dt.textContent = item.write[index];
+        const dd = document.createElement("dd");
+        dd.textContent = item.write[index + 1];
+        children.push(dt, dd);
+      }
+      grid.replaceChildren(...children);
+    }
+
+    function renderTimeline(item) {
+      byId("timeline").replaceChildren(...item.timeline.map(([title, body]) => {
+        const row = document.createElement("div");
+        row.className = "timeline-item";
+        const strong = document.createElement("strong");
+        strong.textContent = title;
+        row.append(strong, document.createTextNode(body));
+        return row;
+      }));
+    }
+
+    function renderCase() {
+      const item = current;
+      const functionalSet = currentFunctionalSet(item);
+      const relationshipSet = currentRelationshipSet(item);
+      const effective = currentEffectiveSet(item);
+      const functionalPass = functionalSet.includes(item.actionName);
+      const relationshipPass = relationshipSet.includes(item.actionName);
+      const allowed = effective.includes(item.actionName);
+      const decision = allowed ? "allow" : "deny";
+
+      byId("case-title").textContent = item.title;
+      byId("case-summary").textContent = item.summary;
+      byId("field-actor").textContent = item.actor;
+      byId("field-tenant").textContent = item.tenant;
+      byId("field-route").textContent = item.route;
+      byId("field-action").textContent = item.action;
+      byId("field-resource").textContent = item.resource;
+
+      const badge = byId("decision-badge");
+      badge.className = "decision-badge " + decision;
+      byId("decision-label").textContent = decision.toUpperCase();
+      byId("decision-reason").textContent = item.reason;
+
+      byId("node-request-text").textContent = `${item.actor} 请求 ${item.action}`;
+      byId("node-context-text").textContent = `${item.membership} · ${item.subjects.length} 个授权主体`;
+      byId("node-functional-text").textContent = `{${functionalSet.join(", ") || "∅"}}`;
+      byId("node-relationship-text").textContent = `{${relationshipSet.join(", ") || "∅"}}`;
+      byId("node-merge-text").textContent = `{${effective.join(", ") || "∅"}}`;
+
+      const functionalNode = byId("functional-node");
+      functionalNode.className = "flow-node " + (functionalPass ? "pass" : "fail");
+      byId("functional-status").textContent = functionalPass ? "包含 Action" : "缺少 Action";
+      const relationshipNode = byId("relationship-node");
+      relationshipNode.className = "flow-node " + (relationshipPass ? "pass" : "fail");
+      byId("relationship-status").textContent = relationshipPass ? "包含 Action" : "缺少 Action";
+      const guardNode = byId("guard-node");
+      guardNode.className = "flow-node " + (item.guardPass ? "pass" : "fail");
+      byId("guard-status").textContent = item.guardPass ? "全部通过" : "拒绝 / 不可用";
+
+      const mergeNode = byId("merge-node");
+      mergeNode.className = "flow-node " + (allowed ? "pass" : "fail");
+      byId("merge-status").textContent = allowed ? "交集命中" : (item.guardPass ? "交集未命中" : "Guard 否决");
+
+      const outcome = byId("outcome-node");
+      outcome.className = "flow-node " + (allowed ? "pass" : "fail");
+      byId("node-outcome-title").textContent = allowed ? "ALLOW" : "DENY";
+      byId("node-outcome-text").textContent = item.reason;
+      byId("outcome-status").textContent = allowed ? "继续执行" : "403 Forbidden";
+
+      const next = byId("next-node");
+      next.className = "flow-node " + (allowed ? "execute" : "fail");
+      byId("node-next-title").textContent = item.nextTitle;
+      byId("node-next-text").textContent = item.next;
+
+      byId("set-title").textContent = item.kind === "delegate" ? "转授权限集合运算" : (item.kind === "scope" ? "范围读取集合运算" : "操作权限集合运算");
+      byId("set-kind").textContent = item.kind === "delegate" ? "EffectiveDelegate" : "EffectiveUse";
+      renderTokens(byId("functional-set"), functionalSet);
+      renderTokens(byId("relationship-set"), relationshipSet);
+      renderTokens(byId("effective-set"), effective);
+      byId("effective-box").className = "set-box result" + (allowed ? "" : " deny");
+      byId("next-line").textContent = item.next;
+
+      renderStorage(item);
+      renderWrite(item);
+      renderTimeline(item);
+      renderDetail(selectedStage);
+    }
+
+    function selectCase(id) {
+      current = cases.find(item => item.id === id) || cases[0];
+      selectedStage = "merge";
+      renderCaseList();
+      renderCase();
+    }
+
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(item => item.classList.toggle("active", item === tab));
+        document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === tab.dataset.view));
+      });
+    });
+
+    document.querySelectorAll(".flow-node").forEach(node => {
+      node.addEventListener("click", () => renderDetail(node.dataset.stage));
+    });
+
+    cases.forEach(item => {
+      if (resultFor(item) !== item.result) {
+        throw new Error(`案例 ${item.id} 的期望结果与计算结果不一致`);
+      }
+    });
+
+    renderCaseList();
+    renderCase();
+  </script>
+</body>
+</html>
