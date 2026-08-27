@@ -471,7 +471,7 @@ describe('authority-acl validation', () => {
     await ctx.plugin(Authority)
     await ctx.plugin(MemoryTeamMembership)
     await ctx.plugin(AuthorityAcl)
-    const teams = ctx.get('teams') as MemoryTeamMembership
+    const teams = ctx.get('teams') as unknown as MemoryTeamMembership
     teams.add(TEAM_RD, USER)
     ctx.authorityAcl.registerSource({
       listGrants: async () => [

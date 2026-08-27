@@ -120,7 +120,7 @@ export async function setupAuthorityAcl(): Promise<{
   await ctx.plugin(AuthorityAcl)
   const source = new MemoryAclPolicySource()
   const roles = new MemoryAclRoleFactSource()
-  const teams = ctx.get('teams') as MemoryTeamMembership
+  const teams = ctx.get('teams') as unknown as MemoryTeamMembership
   seedStandardGrants(source, teams)
   const disposeSource = ctx.authorityAcl.registerSource(source)
   const disposeRoles = ctx.authorityAcl.registerRoleFacts(roles)
