@@ -1,0 +1,73 @@
+{
+  "name": "@deepseek-ai/dsh-authority-starter",
+  "description": "Composed MySQL and custom-provider authorization suites",
+  "version": "0.1.0-rc.7",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/identity/authority-starter"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./minimal": {
+      "types": "./lib/types/minimal.d.ts",
+      "default": "./lib/types/minimal.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-account-authority": "workspace:^",
+    "@deepseek-ai/dsh-auth-rbac": "workspace:^",
+    "@deepseek-ai/dsh-auth-rbac-mysql": "workspace:^",
+    "@deepseek-ai/dsh-authority": "workspace:^",
+    "@deepseek-ai/dsh-authority-acl": "workspace:^",
+    "@deepseek-ai/dsh-authority-acl-mysql": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-team-mysql": "workspace:^",
+    "@deepseek-ai/dsh-tenant-authority": "workspace:^",
+    "@deepseek-ai/dsh-tenant-mysql": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cordis-plugin-include": "workspace:^",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
+    "@deepseek-ai/dsh-account": "workspace:^",
+    "@deepseek-ai/dsh-account-authority": "workspace:^",
+    "@deepseek-ai/dsh-auth": "workspace:^",
+    "@deepseek-ai/dsh-auth-rbac": "workspace:^",
+    "@deepseek-ai/dsh-auth-rbac-mysql": "workspace:^",
+    "@deepseek-ai/dsh-authority": "workspace:^",
+    "@deepseek-ai/dsh-authority-acl": "workspace:^",
+    "@deepseek-ai/dsh-authority-acl-mysql": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-mysql": "workspace:^",
+    "@deepseek-ai/dsh-team": "workspace:^",
+    "@deepseek-ai/dsh-team-mysql": "workspace:^",
+    "@deepseek-ai/dsh-tenant": "workspace:^",
+    "@deepseek-ai/dsh-tenant-authority": "workspace:^",
+    "@deepseek-ai/dsh-tenant-mysql": "workspace:^",
+    "@deepseek-ai/dsh-user": "workspace:^"
+  }
+}

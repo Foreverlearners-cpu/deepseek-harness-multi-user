@@ -351,6 +351,16 @@
         "tests/**/*.ts"
       ]
     },
+    "packages/identity/authority-starter": {
+      "entry": [
+        "tests/**/*.spec.ts",
+        "tests/**/*.e2e.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ]
+    },
     "packages/identity/user-credential-mysql": {
       "entry": [
         "tests/**/*.spec.ts",

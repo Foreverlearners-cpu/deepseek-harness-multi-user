@@ -26,3 +26,4 @@ Identity values and authentication contracts shared across product domains. Anon
 | [`authority-acl-mysql/`](authority-acl-mysql/README.md) | Persists resource action grants, including durable team subjects, in MySQL | `authorityAclMysql` |
 | [`tenant-authority/`](tenant-authority/README.md) | Denies cross-tenant resource ids as unresolved and is the product decide entry | `tenantAuthority` |
 | [`account-authority/`](account-authority/README.md) | Wires account administration to authority require using the unique membership team | `accountAuthority` |
+| [`authority-starter/`](authority-starter/README.md) | Composes the MySQL authorization tree or its consumers over custom Providers | — |

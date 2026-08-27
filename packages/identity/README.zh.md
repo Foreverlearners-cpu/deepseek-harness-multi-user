@@ -26,3 +26,4 @@
 | [`authority-acl-mysql/`](authority-acl-mysql/README.md) | 在 MySQL 中持久化资源 Action 授权，包括持久的团队主体 | `authorityAclMysql` |
 | [`tenant-authority/`](tenant-authority/README.md) | 把跨租户资源 id 按未解析拒绝，并作为产品 decide 入口 | `tenantAuthority` |
 | [`account-authority/`](account-authority/README.md) | 把账号管理接到 authority require，并用唯一成员团队解析资源 | `accountAuthority` |
+| [`authority-starter/`](authority-starter/README.md) | 组合 MySQL 授权树，或在自定义 Provider 上组合其 Consumer | — |

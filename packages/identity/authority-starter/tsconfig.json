@@ -1,0 +1,45 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../runtime-diagnostics/invariants"
+    },
+    {
+      "path": "../account-authority"
+    },
+    {
+      "path": "../auth-rbac"
+    },
+    {
+      "path": "../auth-rbac-mysql"
+    },
+    {
+      "path": "../authority"
+    },
+    {
+      "path": "../authority-acl"
+    },
+    {
+      "path": "../authority-acl-mysql"
+    },
+    {
+      "path": "../team-mysql"
+    },
+    {
+      "path": "../tenant-authority"
+    },
+    {
+      "path": "../tenant-mysql"
+    }
+  ]
+}

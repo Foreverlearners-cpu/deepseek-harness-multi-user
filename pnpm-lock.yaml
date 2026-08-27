@@ -5402,6 +5402,66 @@ importers:
         specifier: ^3.23.3
         version: 3.23.3(@types/node@22.20.0)
 
+  packages/identity/authority-starter:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:^
+        version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-account':
+        specifier: workspace:^
+        version: link:../account
+      '@deepseek-ai/dsh-account-authority':
+        specifier: workspace:^
+        version: link:../account-authority
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-auth-rbac':
+        specifier: workspace:^
+        version: link:../auth-rbac
+      '@deepseek-ai/dsh-auth-rbac-mysql':
+        specifier: workspace:^
+        version: link:../auth-rbac-mysql
+      '@deepseek-ai/dsh-authority':
+        specifier: workspace:^
+        version: link:../authority
+      '@deepseek-ai/dsh-authority-acl':
+        specifier: workspace:^
+        version: link:../authority-acl
+      '@deepseek-ai/dsh-authority-acl-mysql':
+        specifier: workspace:^
+        version: link:../authority-acl-mysql
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      '@deepseek-ai/dsh-team':
+        specifier: workspace:^
+        version: link:../team
+      '@deepseek-ai/dsh-team-mysql':
+        specifier: workspace:^
+        version: link:../team-mysql
+      '@deepseek-ai/dsh-tenant':
+        specifier: workspace:^
+        version: link:../tenant
+      '@deepseek-ai/dsh-tenant-authority':
+        specifier: workspace:^
+        version: link:../tenant-authority
+      '@deepseek-ai/dsh-tenant-mysql':
+        specifier: workspace:^
+        version: link:../tenant-mysql
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+
   packages/identity/team:
     devDependencies:
       '@deepseek-ai/cordis':
