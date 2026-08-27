@@ -104,7 +104,7 @@ transport credential
 
 ## 已知限制与延期工作
 
-- **没有生产 Provider** - MySQL 包必须拥有 schema、migration、索引、事务、cursor 编码和数据库错误分类。
+- **MySQL 持久化是独立的包** - [`dsh-team-mysql`](../team-mysql/README.md) 拥有 schema、索引、事务、cursor 编码和数据库错误分类。
 - **没有角色或授权** - 角色绑定和对象 ACL 行属于后续的 `dsh-auth-rbac` 和 `dsh-authority-acl` 包。
 - **没有授权** - 调用者是否可以创建团队或修改成员关系，在调用该服务之前决定。
 - **没有租户目录查询** - 该服务接受品牌化 `TenantId` 和 `UserId`，不要求也不调用 `ctx.tenants` 或 `ctx.users`。

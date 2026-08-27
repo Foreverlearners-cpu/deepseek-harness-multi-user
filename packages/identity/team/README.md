@@ -104,7 +104,7 @@ Independent. Team directory changes do not alter a model-visible request prefix 
 
 ## Known Limitations and Deferred Work
 
-- **No production Provider** - a MySQL package must own the schema, migrations, indexes, transactions, cursor encoding, and database error classification.
+- **MySQL persistence is a separate package** - [`dsh-team-mysql`](../team-mysql/README.md) owns the schema, indexes, transactions, cursor encoding, and database error classification.
 - **No roles or grants** - role bindings and object ACL rows belong to later `dsh-auth-rbac` and `dsh-authority-acl` packages.
 - **No authorization** - whether a caller may create a team or change membership is decided before invoking this service.
 - **No tenant-directory lookup** - this service accepts branded `TenantId` and `UserId` values and does not require or call `ctx.tenants` or `ctx.users`.

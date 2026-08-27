@@ -4,7 +4,7 @@ English | [中文](team-directory.zh.md)
 
 The team-directory subsystem is [`@deepseek-ai/dsh-team`](../../packages/identity/team/README.md), a Host-only Service Definition for stable team records bound to one tenant and authoritative user-membership lifecycle state. A concrete Provider supplies `ctx.teams`; authentication, authorization, tenant lookup, credentials, and storage remain independent owners.
 
-This package is the Service Definition only. A later MySQL Provider will own the directory tables, schema version, row transactions, and cursor encoding while using the separate `ctx.mysql` connection service.
+[`@deepseek-ai/dsh-team-mysql`](../../packages/identity/team-mysql/README.md) is the durable MySQL Provider. It owns the directory tables, schema version, row transactions, and keyset cursor encoding while using the separate `ctx.mysql` connection service.
 
 ## Record and lifecycle
 
@@ -20,7 +20,7 @@ Status mutations include `expectedRevision`. The Provider compares and writes at
 
 ## Provider responsibilities
 
-One Provider implements team create/read/mutate, membership create/read/mutate, and bounded cursor pages. The base service validates and detaches results, normalizes unexpected failures, and emits sanitized events only after a commit. A MySQL Provider will own schema and transactions; it does not move roles or object grants into the directory record.
+One Provider implements team create/read/mutate, membership create/read/mutate, and bounded cursor pages. The base service validates and detaches results, normalizes unexpected failures, and emits sanitized events only after a commit. The MySQL Provider owns schema and transactions; it does not move roles or object grants into the directory record.
 
 ## Authorization and audit
 

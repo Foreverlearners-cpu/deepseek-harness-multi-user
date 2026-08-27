@@ -18,6 +18,7 @@ Identity values and authentication contracts shared across product domains. Anon
 | [`tenant/`](tenant/README.md) | Defines stable tenants, user membership records, lifecycle state, and Provider-independent management operations | `tenants` |
 | [`tenant-mysql/`](tenant-mysql/README.md) | Persists the tenant and membership directory in MySQL | `tenants` |
 | [`team/`](team/README.md) | Defines stable teams under one tenant, user membership records, lifecycle state, and Provider-independent management operations | `teams` |
+| [`team-mysql/`](team-mysql/README.md) | Persists the team and membership directory in MySQL | `teams` |
 | [`authority/`](authority/README.md) | Decides allow or deny by intersecting same-team role and object action sets | `authority` |
 | [`auth-rbac/`](auth-rbac/README.md) | Unions team-scoped role actions and registers the authority role route | `authRbac` |
 | [`authority-acl/`](authority-acl/README.md) | Unions object-grant actions and registers the authority object route | `authorityAcl` |

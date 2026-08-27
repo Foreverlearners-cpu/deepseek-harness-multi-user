@@ -296,7 +296,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'team',
     title: 'Team membership directory seam',
     mode: 'seam',
-    implementations: [],
+    implementations: ['team-mysql'],
     consumers: ['authority-acl'],
     note: 'Defines team records bound to one tenant, user membership lifecycle, optimistic revisions, bounded membership pages, and sanitized commit events; persistence, roles, and object grants remain separate.',
   },
