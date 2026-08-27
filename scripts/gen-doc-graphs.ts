@@ -323,7 +323,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'authority-acl',
     title: 'Object-grant route',
     mode: 'seam',
-    implementations: [],
+    implementations: ['authority-acl-mysql'],
     consumers: [],
     note: 'Unions ObjectUse or ObjectDelegate for one resource on the query team from grant rows; team subjects stay one row, and Effective remains separate.',
   },

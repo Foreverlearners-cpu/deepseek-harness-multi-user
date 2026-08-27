@@ -23,4 +23,5 @@ Identity values and authentication contracts shared across product domains. Anon
 | [`auth-rbac/`](auth-rbac/README.md) | Unions team-scoped role actions and registers the authority role route | `authRbac` |
 | [`auth-rbac-mysql/`](auth-rbac-mysql/README.md) | Persists team-scoped principal roles and role-action grants in MySQL | `authRbacMysql` |
 | [`authority-acl/`](authority-acl/README.md) | Unions object-grant actions and registers the authority object route | `authorityAcl` |
+| [`authority-acl-mysql/`](authority-acl-mysql/README.md) | Persists resource action grants, including durable team subjects, in MySQL | `authorityAclMysql` |
 | [`tenant-authority/`](tenant-authority/README.md) | Denies cross-tenant resource ids as unresolved and is the product decide entry | `tenantAuthority` |

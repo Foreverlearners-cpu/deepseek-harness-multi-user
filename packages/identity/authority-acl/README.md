@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 Object-grant catalog and the authority object-route Provider. The service reads grant rows from an `AclPolicySource`, unions ObjectUse or ObjectDelegate actions that match the query team and live subject facts, and registers the result on `ctx.authority`. It does not store `principal_roles`, does not compute Effective, and does not read MySQL.
 
-This package is the Service Definition, an in-memory policy source, and the object-route Consumer. A deployment mounts it as `ctx.authorityAcl` after `ctx.authority` and `ctx.teams`. Later `dsh-authority-acl-mysql` implements `AclPolicySource`.
+This package is the Service Definition, an in-memory policy source, and the object-route Consumer. A deployment mounts it as `ctx.authorityAcl` after `ctx.authority` and `ctx.teams`. [`dsh-authority-acl-mysql`](../authority-acl-mysql/README.md) implements `AclPolicySource`.
 
 ## Public API
 
@@ -72,7 +72,7 @@ Independent. Object-grant evaluations do not alter a model-visible request prefi
 
 ## Known Limitations and Deferred Work
 
-- **No production store** - `dsh-authority-acl-mysql` owns `resource_action_grants`, revisions, and durable team subjects.
+- **MySQL persistence is a separate package** - [`dsh-authority-acl-mysql`](../authority-acl-mysql/README.md) owns `resource_action_grants`, resource revisions, and durable team subjects.
 - **No role catalog** - role-subject matching asks a registered fact source; this package does not read `principal_roles`.
 - **No Effective computation** - same-team intersection stays in `dsh-authority`.
 - **No tenant-directory lookup** - tenant subjects match the query tenant id only.

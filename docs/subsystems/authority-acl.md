@@ -4,7 +4,7 @@ English | [中文](authority-acl.zh.md)
 
 The authority-acl subsystem is [`@deepseek-ai/dsh-authority-acl`](../../packages/identity/authority-acl/README.md), a Host-only object-grant catalog and the authority object-route Provider. It stores grants for `user`, `role`, `team`, `tenant`, and `everyone` subjects and unions ObjectUse or ObjectDelegate on the query team only. Team grants stay one row. Role catalogs, Effective, and MySQL remain independent owners.
 
-This package is the Service Definition, an in-memory policy source, and the object-route Consumer. Later MySQL implements `AclPolicySource`. A MySQL package will not belong here.
+This package is the Service Definition, an in-memory policy source, and the object-route Consumer. [`@deepseek-ai/dsh-authority-acl-mysql`](../../packages/identity/authority-acl-mysql/README.md) is the durable MySQL `AclPolicySource`. It owns resource-action-grant rows (including `g:team` subjects and resource revision) and does not compute Effective or expand team grants into user rows.
 
 ## Same-team object sets
 

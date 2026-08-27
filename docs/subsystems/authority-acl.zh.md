@@ -4,7 +4,7 @@
 
 授权 ACL 子系统是 [`@deepseek-ai/dsh-authority-acl`](../../packages/identity/authority-acl/README.md)，它是 Host-only 对象授权目录和 authority 对象路线 Provider。它为 `user`、`role`、`team`、`tenant` 和 `everyone` 主体保存授权，并只在查询团队上合并 ObjectUse 或 ObjectDelegate。团队授权保持一行。角色目录、Effective 和 MySQL 保持独立所有权。
 
-该包是 Service Definition、内存策略源，以及对象路线 Consumer。后续 MySQL 实现 `AclPolicySource`。MySQL 包不属于这里。
+该包是 Service Definition、内存策略源，以及对象路线 Consumer。[`@deepseek-ai/dsh-authority-acl-mysql`](../../packages/identity/authority-acl-mysql/README.md) 是持久 MySQL `AclPolicySource`。它拥有资源-Action 授权行（含 `g:team` 主体和 resource revision），不计算 Effective，也不把团队授权展开成用户行。
 
 ## 同一团队对象集合
 

@@ -4,7 +4,7 @@
 
 对象授权目录，以及 authority 的对象路线 Provider。该服务从 `AclPolicySource` 读取授权行，合并匹配查询团队和实时主体事实的 ObjectUse 或 ObjectDelegate Action，并把结果注册到 `ctx.authority`。它不保存 `principal_roles`，不计算 Effective，也不读取 MySQL。
 
-该包是 Service Definition、内存策略源，以及对象路线 Consumer。部署时在 `ctx.authority` 和 `ctx.teams` 之后把它挂载为 `ctx.authorityAcl`。后续的 `dsh-authority-acl-mysql` 实现 `AclPolicySource`。
+该包是 Service Definition、内存策略源，以及对象路线 Consumer。部署时在 `ctx.authority` 和 `ctx.teams` 之后把它挂载为 `ctx.authorityAcl`。[`dsh-authority-acl-mysql`](../authority-acl-mysql/README.md) 实现 `AclPolicySource`。
 
 ## 公共 API
 
@@ -72,7 +72,7 @@ AclPolicySource rows
 
 ## 已知限制与延期工作
 
-- **没有生产存储** - `dsh-authority-acl-mysql` 拥有 `resource_action_grants`、revision 和持久化团队主体。
+- **MySQL 持久化是独立的包** - [`dsh-authority-acl-mysql`](../authority-acl-mysql/README.md) 拥有 `resource_action_grants`、resource revision 和持久化团队主体。
 - **没有角色目录** - 角色主体匹配询问已注册的事实源；本包不读取 `principal_roles`。
 - **没有 Effective 计算** - 同一团队交差仍由 `dsh-authority` 负责。
 - **没有租户目录查询** - 租户主体只匹配查询中的租户 id。
