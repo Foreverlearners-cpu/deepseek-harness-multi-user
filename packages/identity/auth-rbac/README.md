@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 Team-scoped role catalog and the authority role-route Provider. The service reads `principal_roles = (user, tenant, team, role)` from a `RbacPolicySource`, unions that user's RoleUse or RoleDelegate actions on the query team only, and registers the result on `ctx.authority`. It does not store object grants, does not compute Effective, and does not read MySQL.
 
-This package is the Service Definition, an in-memory policy source, and the role-route Consumer. A deployment mounts it as `ctx.authRbac` after `ctx.authority`. Later `dsh-auth-rbac-mysql` implements `RbacPolicySource`.
+This package is the Service Definition, an in-memory policy source, and the role-route Consumer. A deployment mounts it as `ctx.authRbac` after `ctx.authority`. [`dsh-auth-rbac-mysql`](../auth-rbac-mysql/README.md) implements `RbacPolicySource`.
 
 ## Public API
 
@@ -70,7 +70,7 @@ Independent. Role evaluations do not alter a model-visible request prefix and th
 
 ## Known Limitations and Deferred Work
 
-- **No production store** - `dsh-auth-rbac-mysql` owns `principal_roles`, role-action grants, revisions, and kick-to-revoke.
+- **MySQL persistence is a separate package** - [`dsh-auth-rbac-mysql`](../auth-rbac-mysql/README.md) owns `principal_roles`, role-action grants, revisions, and revoke.
 - **No object grants** - resource ACL rows belong to `dsh-authority-acl`.
 - **No Effective computation** - same-team intersection stays in `dsh-authority`.
 - **No tenant-directory or team-directory lookup** - this service accepts branded ids from the authority query and does not call `ctx.tenants` or `ctx.teams`.

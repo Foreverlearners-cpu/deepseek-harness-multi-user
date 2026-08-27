@@ -1,6 +1,6 @@
 # Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write packages/identity/auth-rbac/README.md
-README.md: 9da99ba0f019358f5fa8a2c9d88bfe4291170679
-README.zh.md: a335aa8a521a5156ce9f5689a33d52748fa105e7
+#   pnpm run verify-translation-pairing --write packages/identity/auth-rbac-mysql/README.md
+README.md: badc7b2a1c7c6bbe291dc239300334ecc8b3080c
+README.zh.md: db5365fabe93b37e424f2dff29d11b0e03dde4e9

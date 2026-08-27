@@ -314,7 +314,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'auth-rbac',
     title: 'Team-scoped role route',
     mode: 'seam',
-    implementations: [],
+    implementations: ['auth-rbac-mysql'],
     consumers: [],
     note: 'Unions RoleUse or RoleDelegate for one user on the query team from principal-role bindings; object grants and Effective remain separate.',
   },

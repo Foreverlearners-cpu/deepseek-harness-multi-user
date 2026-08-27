@@ -21,5 +21,6 @@
 | [`team-mysql/`](team-mysql/README.md) | 在 MySQL 中持久化团队与成员目录 | `teams` |
 | [`authority/`](authority/README.md) | 通过对同一团队的角色与对象 Action 集合取交来决定允许或拒绝 | `authority` |
 | [`auth-rbac/`](auth-rbac/README.md) | 合并按团队绑定的角色 Action，并注册 authority 角色路线 | `authRbac` |
+| [`auth-rbac-mysql/`](auth-rbac-mysql/README.md) | 在 MySQL 中持久化按团队的主体角色和角色-Action 授权 | `authRbacMysql` |
 | [`authority-acl/`](authority-acl/README.md) | 合并对象授权 Action，并注册 authority 对象路线 | `authorityAcl` |
 | [`tenant-authority/`](tenant-authority/README.md) | 把跨租户资源 id 按未解析拒绝，并作为产品 decide 入口 | `tenantAuthority` |

@@ -1,0 +1,17 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../auth-rbac" },
+    { "path": "../team" },
+    { "path": "../tenant" },
+    { "path": "../user" },
+    { "path": "../../multi/mysql" },
+    { "path": "../../runtime-diagnostics/invariants" }
+  ]
+}

@@ -5155,6 +5155,39 @@ importers:
         specifier: workspace:^
         version: link:../user
 
+  packages/identity/auth-rbac-mysql:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-auth-rbac':
+        specifier: workspace:^
+        version: link:../auth-rbac
+      '@deepseek-ai/dsh-authority':
+        specifier: workspace:^
+        version: link:../authority
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-mysql':
+        specifier: workspace:^
+        version: link:../../multi/mysql
+      '@deepseek-ai/dsh-team':
+        specifier: workspace:^
+        version: link:../team
+      '@deepseek-ai/dsh-tenant':
+        specifier: workspace:^
+        version: link:../tenant
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@22.20.0)
+
   packages/identity/auth-starter:
     dependencies:
       '@deepseek-ai/schemastery':

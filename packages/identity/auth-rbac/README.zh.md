@@ -4,7 +4,7 @@
 
 按团队绑定的角色目录，以及 authority 的角色路线 Provider。该服务从 `RbacPolicySource` 读取 `principal_roles = (user, tenant, team, role)`，只合并该用户在查询团队上的 RoleUse 或 RoleDelegate Action，并把结果注册到 `ctx.authority`。它不保存对象授权，不计算 Effective，也不读取 MySQL。
 
-该包是 Service Definition、内存策略源，以及角色路线 Consumer。部署时在 `ctx.authority` 之后把它挂载为 `ctx.authRbac`。后续的 `dsh-auth-rbac-mysql` 实现 `RbacPolicySource`。
+该包是 Service Definition、内存策略源，以及角色路线 Consumer。部署时在 `ctx.authority` 之后把它挂载为 `ctx.authRbac`。[`dsh-auth-rbac-mysql`](../auth-rbac-mysql/README.md) 实现 `RbacPolicySource`。
 
 ## 公共 API
 
@@ -70,7 +70,7 @@ RbacPolicySource rows
 
 ## 已知限制与延期工作
 
-- **没有生产存储** - `dsh-auth-rbac-mysql` 拥有 `principal_roles`、角色-Action 授权、revision，以及踢人即失效。
+- **MySQL 持久化是独立的包** - [`dsh-auth-rbac-mysql`](../auth-rbac-mysql/README.md) 拥有 `principal_roles`、角色-Action 授权、revision 和撤销。
 - **没有对象授权** - 资源 ACL 行属于 `dsh-authority-acl`。
 - **没有 Effective 计算** - 同一团队交差仍由 `dsh-authority` 负责。
 - **没有租户目录或团队目录查询** - 该服务接受 authority 查询里的品牌化 id，不调用 `ctx.tenants` 或 `ctx.teams`。

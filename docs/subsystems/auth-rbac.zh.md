@@ -4,7 +4,7 @@
 
 认证 RBAC 子系统是 [`@deepseek-ai/dsh-auth-rbac`](../../packages/identity/auth-rbac/README.md)，它是 Host-only 角色目录和 authority 角色路线 Provider。它把角色绑到 `(user, tenant, team)`，并只在查询团队上合并 RoleUse 或 RoleDelegate。对象授权、Effective 和 MySQL 保持独立所有权。
 
-该包是 Service Definition、内存策略源，以及角色路线 Consumer。后续 MySQL 实现 `RbacPolicySource`。MySQL 包不属于这里。
+该包是 Service Definition、内存策略源，以及角色路线 Consumer。[`@deepseek-ai/dsh-auth-rbac-mysql`](../../packages/identity/auth-rbac-mysql/README.md) 是持久 MySQL `RbacPolicySource`。它拥有主体角色行（含 `team_id`）、角色-Action 授权和 revision；它不计算 Effective，也不存储对象授权。
 
 ## 同一团队角色集合
 

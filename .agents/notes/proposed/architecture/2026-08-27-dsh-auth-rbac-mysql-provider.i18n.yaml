@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-27-dsh-auth-rbac-mysql-provider.md
+2026-08-27-dsh-auth-rbac-mysql-provider.md: 23b4f5c7e1c7449390cde812fbb37199e1900853
+2026-08-27-dsh-auth-rbac-mysql-provider.zh.md: b564078e78e1394a03015ae8eb2cdcc5720e5d1b

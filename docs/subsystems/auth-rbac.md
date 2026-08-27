@@ -4,7 +4,7 @@ English | [中文](auth-rbac.zh.md)
 
 The auth-rbac subsystem is [`@deepseek-ai/dsh-auth-rbac`](../../packages/identity/auth-rbac/README.md), a Host-only role catalog and the authority role-route Provider. It binds roles to `(user, tenant, team)` and unions RoleUse or RoleDelegate on the query team only. Object grants, Effective, and MySQL remain independent owners.
 
-This package is the Service Definition, an in-memory policy source, and the role-route Consumer. Later MySQL implements `RbacPolicySource`. A MySQL package will not belong here.
+This package is the Service Definition, an in-memory policy source, and the role-route Consumer. [`@deepseek-ai/dsh-auth-rbac-mysql`](../../packages/identity/auth-rbac-mysql/README.md) is the durable MySQL `RbacPolicySource`. It owns principal-role rows (including `team_id`), role-action grants, and revisions; it does not compute Effective or store object grants.
 
 ## Same-team role sets
 

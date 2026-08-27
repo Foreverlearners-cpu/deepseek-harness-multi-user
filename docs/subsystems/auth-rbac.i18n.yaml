@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/auth-rbac.md
-auth-rbac.md: 57d869bc73778a700fb9e73db969d15ea53fedcf
-auth-rbac.zh.md: ed3d118ec080c3c748845c8105bef051fc128366
+auth-rbac.md: ca296a30ec9f83e72193f1c8fa34e5f21feaa24f
+auth-rbac.zh.md: d82ded9a58a08ff79a9c34f4aa4f2b5015c22182
