@@ -55,7 +55,7 @@ Independent. Account orchestration changes no model-visible request prefix.
 
 ## Known Limitations and Deferred Work
 
-- **Authorization policy is external** - the package requires one `AccountAdminAuthorizer`, but a policy plugin such as an RBAC integration must implement it.
+- **Authorization policy is external** - the package requires one `AccountAdminAuthorizer`; [`dsh-account-authority`](../account-authority/README.md) wires that Provider to `ctx.authority.require`.
 - **Logout covers all sessions** - the generic authenticated call does not carry a JWT family id, so self-service logout revokes every family for the user.
 - **No distributed transaction** - user, credential, and registration-operation Providers are separate services; registration uses durable staged progress, state reconciliation, best-effort compensation, and explicit recovery state.
 - **No recovery workflow** - email verification, forgotten-password challenges, lockout, and account recovery require dedicated policy and delivery plugins.

@@ -5006,6 +5006,45 @@ importers:
         specifier: workspace:^
         version: link:../user-credential
 
+  packages/identity/account-authority:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:^
+        version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-account':
+        specifier: workspace:^
+        version: link:../account
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-auth-rbac':
+        specifier: workspace:^
+        version: link:../auth-rbac
+      '@deepseek-ai/dsh-authority':
+        specifier: workspace:^
+        version: link:../authority
+      '@deepseek-ai/dsh-authority-acl':
+        specifier: workspace:^
+        version: link:../authority-acl
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-team':
+        specifier: workspace:^
+        version: link:../team
+      '@deepseek-ai/dsh-tenant':
+        specifier: workspace:^
+        version: link:../tenant
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+
   packages/identity/account-mysql:
     devDependencies:
       '@deepseek-ai/cordis':

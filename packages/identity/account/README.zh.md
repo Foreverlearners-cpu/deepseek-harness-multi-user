@@ -55,7 +55,7 @@ Provider 负责 request id 的唯一性与状态持久化。`begin(requestId)` �
 
 ## 已知限制与延期工作
 
-- **授权策略位于外部** - 本包要求唯一的 `AccountAdminAuthorizer`，但具体策略必须由 RBAC 集成等策略插件实现。
+- **授权策略位于外部** - 本包要求唯一的 `AccountAdminAuthorizer`；[`dsh-account-authority`](../account-authority/README.md) 把该 Provider 接到 `ctx.authority.require`。
 - **登出覆盖全部会话** - 通用认证 Call 不携带 JWT Family ID，因此自助登出会撤销该用户的全部 Family。
 - **没有分布式事务** - 用户、凭据和注册操作 Provider 是独立服务；注册使用持久化分阶段进度、状态核对、尽力补偿和显式恢复状态。
 - **没有找回流程** - 邮箱验证、忘记密码挑战、锁定与账号找回需要专用策略和消息投递插件。

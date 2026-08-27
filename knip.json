@@ -342,6 +342,15 @@
         "tests/**/*.ts"
       ]
     },
+    "packages/identity/account-authority": {
+      "entry": [
+        "tests/**/*.spec.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ]
+    },
     "packages/identity/user-credential-mysql": {
       "entry": [
         "tests/**/*.spec.ts",

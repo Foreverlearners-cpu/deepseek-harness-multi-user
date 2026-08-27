@@ -25,3 +25,4 @@ Identity values and authentication contracts shared across product domains. Anon
 | [`authority-acl/`](authority-acl/README.md) | Unions object-grant actions and registers the authority object route | `authorityAcl` |
 | [`authority-acl-mysql/`](authority-acl-mysql/README.md) | Persists resource action grants, including durable team subjects, in MySQL | `authorityAclMysql` |
 | [`tenant-authority/`](tenant-authority/README.md) | Denies cross-tenant resource ids as unresolved and is the product decide entry | `tenantAuthority` |
+| [`account-authority/`](account-authority/README.md) | Wires account administration to authority require using the unique membership team | `accountAuthority` |

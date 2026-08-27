@@ -196,6 +196,7 @@
     { "path": "./packages/identity/team-mysql" },
     { "path": "./packages/identity/auth-rbac-mysql" },
     { "path": "./packages/identity/authority-acl-mysql" },
+    { "path": "./packages/identity/account-authority" },
     { "path": "./packages/identity/user-mysql" },
     { "path": "./packages/identity/user-credential" },
     { "path": "./packages/identity/user-credential-mysql" },

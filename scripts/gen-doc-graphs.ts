@@ -240,7 +240,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Host authentication runtime',
     mode: 'seam',
     implementations: ['auth-password', 'auth-jwt'],
-    consumers: ['account', 'tenant-authority'],
+    consumers: ['account', 'tenant-authority', 'account-authority'],
     note: 'Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations.',
   },
   {
@@ -262,6 +262,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'account',
     title: 'Authorized account administration',
     mode: 'core',
+    consumers: ['account-authority'],
     note: 'Exposes administrator account mutations only after one explicit AccountAdminAuthorizer approves the exact actor, action, and target; missing or rejecting policy fails closed.',
   },
   {
@@ -288,7 +289,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Tenant membership directory seam',
     mode: 'seam',
     implementations: ['tenant-mysql'],
-    consumers: ['tenant-authority'],
+    consumers: ['tenant-authority', 'account-authority'],
     note: 'Defines tenant records, user membership lifecycle, optimistic revisions, bounded membership pages, and sanitized commit events; persistence, teams, and authorization remain separate.',
   },
   {
@@ -297,7 +298,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Team membership directory seam',
     mode: 'seam',
     implementations: ['team-mysql'],
-    consumers: ['authority-acl'],
+    consumers: ['authority-acl', 'account-authority'],
     note: 'Defines team records bound to one tenant, user membership lifecycle, optimistic revisions, bounded membership pages, and sanitized commit events; persistence, roles, and object grants remain separate.',
   },
   {
@@ -306,7 +307,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Authorization decision seam',
     mode: 'seam',
     implementations: [],
-    consumers: ['auth-rbac', 'authority-acl', 'tenant-authority'],
+    consumers: ['auth-rbac', 'authority-acl', 'tenant-authority', 'account-authority'],
     note: 'Decides allow or deny by intersecting per-team Use or Delegate sets from the role and object routes on the resolved resource team; role storage, object grants, and membership directories remain separate.',
   },
   {
@@ -335,6 +336,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: [],
     consumers: [],
     note: 'Compares trusted actor scope to the resolved resource tenant and hides foreign valid ids as unresolved; Effective remains separate.',
+  },
+  {
+    key: 'accountAuthority',
+    pkg: 'account-authority',
+    title: 'Account-administration authorizer wiring',
+    mode: 'seam',
+    implementations: [],
+    consumers: [],
+    note: 'Registers the unique account authorizer, maps administrator actions to account catalog entries, and resolves the unique membership team; Effective remains separate.',
   },
   {
     key: 'userCredentials',
