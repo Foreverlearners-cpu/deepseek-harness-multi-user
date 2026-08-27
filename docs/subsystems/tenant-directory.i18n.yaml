@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/tenant-directory.md
-tenant-directory.md: f2d38fae0efa4d09cd70f21b3cd6d50334c02b33
-tenant-directory.zh.md: d88826278610a253d2ef8ff2e7dda26c9b9c61f3
+tenant-directory.md: d721c550e705ee77cee2b6d2f310d68381cceda2
+tenant-directory.zh.md: 410f363758dd208d91ee207cb97cf150f6324467

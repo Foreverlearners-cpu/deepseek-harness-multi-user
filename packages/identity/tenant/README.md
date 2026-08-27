@@ -101,7 +101,7 @@ Independent. Tenant directory changes do not alter a model-visible request prefi
 
 ## Known Limitations and Deferred Work
 
-- **No production Provider** - a MySQL package must own the schema, migrations, indexes, transactions, cursor encoding, and database error classification.
+- **MySQL persistence is a separate package** - [`dsh-tenant-mysql`](../tenant-mysql/README.md) owns the schema, indexes, transactions, cursor encoding, and database error classification.
 - **No teams or roles** - team records and role bindings belong to later `dsh-team` and `dsh-auth-rbac` packages.
 - **No authorization** - whether a caller may create a tenant or change membership is decided before invoking this service.
 - **No user-directory lookup** - this service accepts branded `UserId` values and does not require or call `ctx.users`.

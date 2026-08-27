@@ -16,6 +16,7 @@
 | [`user-credential/`](user-credential/README.md) | 定义登录标识、密码验证和 Credential 生命周期操作 | `userCredentials` |
 | [`user-credential-mysql/`](user-credential-mysql/README.md) | 在 MySQL 中持久化登录标识和 scrypt 密码 verifier | `userCredentials` |
 | [`tenant/`](tenant/README.md) | 定义稳定租户、用户成员记录、生命周期状态和与 Provider 无关的管理操作 | `tenants` |
+| [`tenant-mysql/`](tenant-mysql/README.md) | 在 MySQL 中持久化租户与成员目录 | `tenants` |
 | [`team/`](team/README.md) | 定义从属于一个租户的稳定团队、用户成员记录、生命周期状态和与 Provider 无关的管理操作 | `teams` |
 | [`authority/`](authority/README.md) | 通过对同一团队的角色与对象 Action 集合取交来决定允许或拒绝 | `authority` |
 | [`auth-rbac/`](auth-rbac/README.md) | 合并按团队绑定的角色 Action，并注册 authority 角色路线 | `authRbac` |

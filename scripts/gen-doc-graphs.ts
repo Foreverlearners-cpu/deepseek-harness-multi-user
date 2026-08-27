@@ -287,7 +287,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'tenant',
     title: 'Tenant membership directory seam',
     mode: 'seam',
-    implementations: [],
+    implementations: ['tenant-mysql'],
     consumers: ['tenant-authority'],
     note: 'Defines tenant records, user membership lifecycle, optimistic revisions, bounded membership pages, and sanitized commit events; persistence, teams, and authorization remain separate.',
   },

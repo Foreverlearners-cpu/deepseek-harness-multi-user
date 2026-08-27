@@ -4,7 +4,7 @@
 
 租户目录子系统是 [`@deepseek-ai/dsh-tenant`](../../packages/identity/tenant/README.md)，它是用于稳定租户记录和权威用户成员生命周期状态的 Host-only Service Definition。具体 Provider 提供 `ctx.tenants`；认证、授权、团队、Credential 和存储保持独立所有权。
 
-该包只是 Service Definition。后续的 MySQL Provider 将拥有目录表、schema version、行事务和 cursor 编码，并使用独立的 `ctx.mysql` 连接服务。
+[`@deepseek-ai/dsh-tenant-mysql`](../../packages/identity/tenant-mysql/README.md) 是持久 MySQL Provider。它拥有目录表、schema version、行事务和 keyset cursor 编码，并使用独立的 `ctx.mysql` 连接服务。
 
 ## 记录与生命周期
 
@@ -20,7 +20,7 @@
 
 ## Provider 职责
 
-一个 Provider 实现租户的创建/读取/修改、成员关系的创建/读取/修改，以及有界 cursor 分页。基础服务校验并分离结果、归一化意外失败，而且只在提交后发出脱敏事件。MySQL Provider 将拥有 schema 和事务；它不会把角色或团队所有权移入目录记录。
+一个 Provider 实现租户的创建/读取/修改、成员关系的创建/读取/修改，以及有界 cursor 分页。基础服务校验并分离结果、归一化意外失败，而且只在提交后发出脱敏事件。MySQL Provider 拥有 schema 和事务；它不会把角色或团队所有权移入目录记录。
 
 ## 授权与审计
 
