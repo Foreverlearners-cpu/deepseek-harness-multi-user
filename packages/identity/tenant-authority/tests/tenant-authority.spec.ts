@@ -2,6 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AuthenticationRuntime, {
   authenticationMethod,
   authenticationRequestId,
+  serviceAccountId,
 } from '@deepseek-ai/dsh-auth'
 import Authority, { actionCode, resourceId, resourceType } from '@deepseek-ai/dsh-authority'
 import { describe, expect, it } from 'vitest'
@@ -41,7 +42,7 @@ async function authenticate(ctx: Context, user = USER) {
   })
 }
 
-function tenantRequest(call: Awaited<ReturnType<typeof authenticate>>, id = RESOURCE, owner = TENANT) {
+function tenantRequest(call: Awaited<ReturnType<typeof authenticate>>, id: string = RESOURCE, owner = TENANT) {
   return {
     call,
     action: EXECUTE,
@@ -245,7 +246,7 @@ describe('tenant-authority validation', () => {
     ctx.auth.providers.register('in-process', {
       method: authenticationMethod('local-service'),
       verify: async () => ({
-        principal: { kind: 'service-account', id: 'svc-1' },
+        principal: { kind: 'service-account', id: serviceAccountId('svc-1') },
         authenticatedAt: Date.now(),
       }),
     })
