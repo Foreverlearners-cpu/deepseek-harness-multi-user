@@ -297,7 +297,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Team membership directory seam',
     mode: 'seam',
     implementations: [],
-    consumers: [],
+    consumers: ['authority-acl'],
     note: 'Defines team records bound to one tenant, user membership lifecycle, optimistic revisions, bounded membership pages, and sanitized commit events; persistence, roles, and object grants remain separate.',
   },
   {
@@ -306,7 +306,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Authorization decision seam',
     mode: 'seam',
     implementations: [],
-    consumers: ['auth-rbac'],
+    consumers: ['auth-rbac', 'authority-acl'],
     note: 'Decides allow or deny by intersecting per-team Use or Delegate sets from the role and object routes on the resolved resource team; role storage, object grants, and membership directories remain separate.',
   },
   {
@@ -317,6 +317,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: [],
     consumers: [],
     note: 'Unions RoleUse or RoleDelegate for one user on the query team from principal-role bindings; object grants and Effective remain separate.',
+  },
+  {
+    key: 'authorityAcl',
+    pkg: 'authority-acl',
+    title: 'Object-grant route',
+    mode: 'seam',
+    implementations: [],
+    consumers: [],
+    note: 'Unions ObjectUse or ObjectDelegate for one resource on the query team from grant rows; team subjects stay one row, and Effective remains separate.',
   },
   {
     key: 'userCredentials',

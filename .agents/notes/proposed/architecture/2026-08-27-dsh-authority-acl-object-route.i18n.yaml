@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-08-27-dsh-authority-acl-object-route.md
+2026-08-27-dsh-authority-acl-object-route.md: 44dd9747a7f145d0f6a26060d8a802b3763d0b79
+2026-08-27-dsh-authority-acl-object-route.zh.md: 90eaa468d2e988fe8b660b3c5c73124c319d4fb2
