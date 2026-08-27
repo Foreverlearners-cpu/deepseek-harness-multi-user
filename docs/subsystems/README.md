@@ -27,6 +27,7 @@ One page per subsystem of the DeepSeek Harness: what it is, the data structures 
 | [authority.md](authority.md) | action catalogue, resource resolvers, role and object route Providers, and same-team allow or deny decisions |
 | [auth-rbac.md](auth-rbac.md) | team-scoped principal-role bindings, RoleUse and RoleDelegate aggregation, and the authority role route |
 | [authority-acl.md](authority-acl.md) | object-grant subjects, ObjectUse and ObjectDelegate aggregation, and the authority object route |
+| [tenant-authority.md](tenant-authority.md) | trusted actor scope, cross-tenant hidden deny, and the product authority decide entry |
 | [user-credentials.md](user-credentials.md) | login identifier normalization and lookup, password verification, aggregate revision, and sanitized credential events |
 | [session-query.md](session-query.md) | logical records, bounded exact-event reads, relationship traces, semantic filters/documents, and full-text result pages |
 | [feedback.md](feedback.md) | lifecycle-bound per-message feedback records, optimistic versions, sidecar persistence, and the Host Remote contract |

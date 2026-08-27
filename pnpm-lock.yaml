@@ -5330,6 +5330,30 @@ importers:
         specifier: workspace:^
         version: link:../user
 
+  packages/identity/tenant-authority:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-auth':
+        specifier: workspace:^
+        version: link:../auth
+      '@deepseek-ai/dsh-authority':
+        specifier: workspace:^
+        version: link:../authority
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-tenant':
+        specifier: workspace:^
+        version: link:../tenant
+      '@deepseek-ai/dsh-user':
+        specifier: workspace:^
+        version: link:../user
+
   packages/identity/user:
     devDependencies:
       '@deepseek-ai/cordis':

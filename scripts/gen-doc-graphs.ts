@@ -240,7 +240,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Host authentication runtime',
     mode: 'seam',
     implementations: ['auth-password', 'auth-jwt'],
-    consumers: ['account'],
+    consumers: ['account', 'tenant-authority'],
     note: 'Selects one provider by evidence kind, mints process-local authenticated calls, and dispatches optional credential lifecycle operations.',
   },
   {
@@ -288,7 +288,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Tenant membership directory seam',
     mode: 'seam',
     implementations: [],
-    consumers: [],
+    consumers: ['tenant-authority'],
     note: 'Defines tenant records, user membership lifecycle, optimistic revisions, bounded membership pages, and sanitized commit events; persistence, teams, and authorization remain separate.',
   },
   {
@@ -306,7 +306,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Authorization decision seam',
     mode: 'seam',
     implementations: [],
-    consumers: ['auth-rbac', 'authority-acl'],
+    consumers: ['auth-rbac', 'authority-acl', 'tenant-authority'],
     note: 'Decides allow or deny by intersecting per-team Use or Delegate sets from the role and object routes on the resolved resource team; role storage, object grants, and membership directories remain separate.',
   },
   {
@@ -326,6 +326,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: [],
     consumers: [],
     note: 'Unions ObjectUse or ObjectDelegate for one resource on the query team from grant rows; team subjects stay one row, and Effective remains separate.',
+  },
+  {
+    key: 'tenantAuthority',
+    pkg: 'tenant-authority',
+    title: 'Cross-tenant decide guard',
+    mode: 'seam',
+    implementations: [],
+    consumers: [],
+    note: 'Compares trusted actor scope to the resolved resource tenant and hides foreign valid ids as unresolved; Effective remains separate.',
   },
   {
     key: 'userCredentials',

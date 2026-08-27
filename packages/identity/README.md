@@ -20,3 +20,4 @@ Identity values and authentication contracts shared across product domains. Anon
 | [`authority/`](authority/README.md) | Decides allow or deny by intersecting same-team role and object action sets | `authority` |
 | [`auth-rbac/`](auth-rbac/README.md) | Unions team-scoped role actions and registers the authority role route | `authRbac` |
 | [`authority-acl/`](authority-acl/README.md) | Unions object-grant actions and registers the authority object route | `authorityAcl` |
+| [`tenant-authority/`](tenant-authority/README.md) | Denies cross-tenant resource ids as unresolved and is the product decide entry | `tenantAuthority` |

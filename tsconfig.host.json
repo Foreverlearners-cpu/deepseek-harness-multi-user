@@ -191,6 +191,7 @@
     { "path": "./packages/identity/authority" },
     { "path": "./packages/identity/auth-rbac" },
     { "path": "./packages/identity/authority-acl" },
+    { "path": "./packages/identity/tenant-authority" },
     { "path": "./packages/identity/user-mysql" },
     { "path": "./packages/identity/user-credential" },
     { "path": "./packages/identity/user-credential-mysql" },
